@@ -72,7 +72,8 @@ ALTER TYPE app.inbox_status OWNER TO newsroom_owner;
 
 CREATE TYPE app.post_type AS ENUM (
     'breve',
-    'article'
+    'article',
+    'page'
 );
 
 
@@ -329,7 +330,7 @@ CREATE UNIQUE INDEX inbox_items_url_normalized_key ON app.inbox_items USING btre
 -- Name: posts_published; Type: INDEX; Schema: app; Owner: newsroom_owner
 --
 
-CREATE INDEX posts_published ON app.posts USING btree (published_at DESC) WHERE (unpublished_at IS NULL);
+CREATE INDEX posts_published ON app.posts USING btree (published_at DESC) WHERE ((unpublished_at IS NULL) AND (type <> 'page'::app.post_type));
 
 
 --

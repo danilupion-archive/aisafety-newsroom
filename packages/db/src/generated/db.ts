@@ -9,7 +9,7 @@ export type AppFetchStatus = 'failed' | 'ok' | 'pending' | 'skipped';
 
 export type AppInboxStatus = 'discarded' | 'logged' | 'needs_review' | 'queued' | 'ready';
 
-export type AppPostType = 'article' | 'breve';
+export type AppPostType = 'article' | 'breve' | 'page';
 
 export type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>

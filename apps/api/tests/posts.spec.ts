@@ -103,6 +103,25 @@ describe('PUT /api/v1/posts/:slug (§13)', () => {
   });
 });
 
+describe('pages', () => {
+  it('takes the site’s own pages without sources, readable by slug but never listed', async () => {
+    const about = {
+      ...BREVE,
+      type: 'page',
+      title: 'Sobre este sitio',
+      body_md: 'Texto de ejemplo.',
+      sources: [],
+    };
+    expect((await put('sobre', about)).statusCode).toBe(201);
+    expect((await read('/public/posts/sobre')).json()).toMatchObject({
+      type: 'page',
+      title: 'Sobre este sitio',
+    });
+    expect((await read('/public/posts')).json()).toEqual([]);
+    expect((await read('/public/tags')).json()).toEqual([]);
+  });
+});
+
 describe('DELETE /api/v1/posts/:slug (AC-7)', () => {
   it('unpublishes a post: its page answers 410 and it leaves the lists; pushing it again restores it', async () => {
     await put('informe-de-ejemplo', BREVE);
@@ -111,6 +130,7 @@ describe('DELETE /api/v1/posts/:slug (AC-7)', () => {
     expect(deleted.json()).toMatchObject({ slug: 'informe-de-ejemplo' });
 
     expect((await read('/public/posts/informe-de-ejemplo')).statusCode).toBe(410);
+    expect((await read('/public/unpublished')).json()).toEqual(['informe-de-ejemplo']);
     expect((await read('/public/posts')).json()).toEqual([]);
     expect((await remove('informe-de-ejemplo')).statusCode).toBe(200);
 

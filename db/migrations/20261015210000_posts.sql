@@ -1,8 +1,9 @@
 -- migrate:up
 
 -- What the public site shows (SPEC §13): breves and articles approved in aisafety-media and pushed through the posts
--- API, which is their only way in (R-WEB-2). aisafety-media is the record: every row can be pushed again (R-WEB-8).
-CREATE TYPE app.post_type AS ENUM ('breve', 'article');
+-- API, which is their only way in (R-WEB-2), and the site's own pages (the about page), pushed the same way and never
+-- listed. aisafety-media is the record: every row can be pushed again (R-WEB-8).
+CREATE TYPE app.post_type AS ENUM ('breve', 'article', 'page');
 
 CREATE TABLE app.posts (
   slug text PRIMARY KEY
@@ -24,7 +25,7 @@ CREATE TABLE app.posts (
   unpublished_at timestamptz
 );
 
-CREATE INDEX posts_published ON app.posts (published_at DESC) WHERE unpublished_at IS NULL;
+CREATE INDEX posts_published ON app.posts (published_at DESC) WHERE unpublished_at IS NULL AND type <> 'page';
 CREATE INDEX posts_tags ON app.posts USING gin (tags) WHERE unpublished_at IS NULL;
 
 CREATE TRIGGER posts_touch_updated_at

@@ -7,7 +7,7 @@ import type { PostBody } from './schemas.js';
 /** A post as the posts API returns it: everything, where it came from included. */
 export interface Post {
   slug: string;
-  type: 'breve' | 'article';
+  type: 'breve' | 'article' | 'page';
   title: string;
   summary: string;
   body_md: string;

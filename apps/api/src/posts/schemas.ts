@@ -16,14 +16,17 @@ const source = z.strictObject({
   accessed: z.iso.date(),
 });
 
-/** R-WEB-1: a breve is 80 to 150 words with 1 to 3 sources; an article is long form and lists its sources too. */
+/**
+ * R-WEB-1: a breve is 80 to 150 words with 1 to 3 sources; an article is long form and lists its sources too. A page
+ * (the about page) is the site's own text: no sources, never listed.
+ */
 const BREVE_WORDS = { min: 80, max: 150 };
 const BREVE_SOURCES = { min: 1, max: 3 };
 
 /** `PUT /posts/:slug` (§13): what aisafety-media's `/post` pushes. */
 export const postBody = z
   .strictObject({
-    type: z.enum(['breve', 'article']),
+    type: z.enum(['breve', 'article', 'page']),
     title: z.string().trim().min(1).max(300),
     summary: z.string().trim().max(600).default(''),
     body_md: z.string().min(1).max(200_000),
@@ -39,7 +42,7 @@ export const postBody = z
     }),
   })
   .superRefine((post, context) => {
-    if (post.sources.length === 0) {
+    if (post.type !== 'page' && post.sources.length === 0) {
       context.addIssue({
         code: 'custom',
         path: ['sources'],

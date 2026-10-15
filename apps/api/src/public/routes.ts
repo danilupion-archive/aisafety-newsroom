@@ -25,7 +25,7 @@ export const publicRoutes =
       return;
     }
 
-    /** Latest first, without their body: for the home page, a tag's page, the feed and the sitemap. */
+    /** Latest first, without their body: for the home page, a tag's page, the feed and the sitemap. No pages. */
     app.get('/public/posts', async (request, reply) => {
       const query = parse(publicListQuery, request.query, reply);
       if (!query) {
@@ -34,6 +34,7 @@ export const publicRoutes =
       let select = db
         .selectFrom('app.published_posts')
         .select(['slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .where('type', '<>', 'page')
         .orderBy('published_at', 'desc')
         .orderBy('slug')
         .limit(query.limit);
@@ -46,7 +47,7 @@ export const publicRoutes =
       return select.execute();
     });
 
-    /** One post with its body and sources; 410 once unpublished (§13), 404 if it never was. */
+    /** One post (or page) with its body and sources; 410 once unpublished (§13), 404 if it never was. */
     app.get<{ Params: { slug: string } }>('/public/posts/:slug', async (request, reply) => {
       const name = parse(slug, request.params.slug, reply);
       if (name === undefined) {
@@ -72,10 +73,21 @@ export const publicRoutes =
         : reply.code(404).send({ error: `No post ${name}` });
     });
 
+    /** The slugs of unpublished posts, for the site's proxy to answer 410 without asking for each page (AC-7). */
+    app.get('/public/unpublished', async () => {
+      const rows = await db
+        .selectFrom('app.unpublished_posts')
+        .select('slug')
+        .orderBy('slug')
+        .execute();
+      return rows.map((row) => row.slug);
+    });
+
     /** Every tag with its count of published posts, for the tag pages. */
     app.get('/public/tags', async () => {
       const rows = await sql<{ tag: string; posts: string }>`
-        SELECT tag, count(*) AS posts FROM app.published_posts, unnest(tags) AS tag GROUP BY tag ORDER BY tag
+        SELECT tag, count(*) AS posts FROM app.published_posts, unnest(tags) AS tag
+        WHERE type <> 'page' GROUP BY tag ORDER BY tag
       `.execute(db);
       return rows.rows.map((row) => ({ tag: row.tag, posts: Number(row.posts) }));
     });
