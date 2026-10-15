@@ -69,3 +69,18 @@ curl -s -H "Authorization: Bearer $(security find-generic-password -s aisafety-n
 ```
 
 In the cluster: the migration Job succeeded, two API pods are ready, and `newsroom` has the `app` schema.
+
+## If the migration Job can't pull its image
+
+`kubectl -n aisafety-newsroom get events` showing `401 Unauthorized` on `registry.example.test/v2/aisafety-newsroom/…`
+means the registry refuses the sealed pull credentials: the robot's secret was refreshed (or mistyped) after sealing, or the
+robot lacks "pull repository" on the project. Check the robot in the registry (Projects → aisafety-newsroom → Robot
+Accounts), refresh its secret if unsure, then re-seal the pull secret alone, which leaves the passwords and the API
+token as they are:
+
+```sh
+scripts/seal-registry-pull-secret.sh <gitops>
+```
+
+Commit and push it in gitops. Argo CD retries the sync once the secret changes; if it has given up, sync the
+Application by hand (the whole app, so the migration hook runs).
