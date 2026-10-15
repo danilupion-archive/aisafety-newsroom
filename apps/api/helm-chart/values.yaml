@@ -78,6 +78,19 @@ worker:
       namespace: ''
       port: 5432
 
+# Who may reach the API's pods (SPEC §5): the gateways' Envoy pods (/api/v1, the webhook) and the site's pods (/public);
+# nothing else in the cluster. Ingress only. Gitops turns it on with the gateways of its environment.
+networkPolicy:
+  enabled: false
+  # Each gateway whose Envoy pods bring requests: their namespace and their pods' labels, e.g.
+  #   - namespace: envoy-gateway-system
+  #     podLabels:
+  #       gateway.envoyproxy.io/owning-gateway-name: example-gateway
+  #       gateway.envoyproxy.io/owning-gateway-namespace: example-gateway
+  gateways: []
+  # The site's pods' app.kubernetes.io/name: the web chart's nameOverride in the umbrella (web). They must match.
+  webName: web
+
 # Extra environment (plain values, or secretKeyRef for credentials sealed in gitops).
 env: []
 envFrom: []

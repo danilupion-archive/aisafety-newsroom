@@ -7,6 +7,12 @@ aisafety-newsroom-api:
   apiTokenSecret: { name: aisafety-newsroom-api-token }
   databaseUrlSecret: { name: aisafety-newsroom-app-db }
   publicDatabaseUrlSecret: { name: aisafety-newsroom-public-db }
+  # Renders the API's network policy, so lint covers it.
+  networkPolicy:
+    enabled: true
+    gateways:
+      - namespace: example-gateways
+        podLabels: { gateway.envoyproxy.io/owning-gateway-name: example-gateway }
   # Renders the worker and its network policy, so lint covers them.
   worker:
     enabled: true
