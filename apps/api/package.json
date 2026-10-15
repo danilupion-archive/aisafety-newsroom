@@ -15,12 +15,15 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "docker:build": "docker buildx build ${DOCKER_PLATFORM:+--platform=$DOCKER_PLATFORM} -t \"${DOCKER_REGISTRY:+${DOCKER_REGISTRY}/}aisafety-newsroom/api:${npm_package_version}${DOCKER_TAG_SUFFIX:+.${DOCKER_TAG_SUFFIX}}\" -f Dockerfile ../..",
-    "docker:push": "docker push \"${DOCKER_REGISTRY:+${DOCKER_REGISTRY}/}aisafety-newsroom/api:${npm_package_version}${DOCKER_TAG_SUFFIX:+.${DOCKER_TAG_SUFFIX}}\""
+    "docker:push": "docker push \"${DOCKER_REGISTRY:+${DOCKER_REGISTRY}/}aisafety-newsroom/api:${npm_package_version}${DOCKER_TAG_SUFFIX:+.${DOCKER_TAG_SUFFIX}}\"",
+    "test:db": "vitest --run --config vitest.db.config.ts"
   },
   "dependencies": {
     "@aisafety-newsroom/db": "workspace:*",
     "@aisafety-newsroom/domain": "workspace:*",
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "kysely": "0.29.6",
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@slango.configs/lint-staged": "2.0.8",
@@ -28,10 +31,12 @@
     "@slango.configs/typescript": "3.0.0",
     "@slango.configs/vitest": "2.1.2",
     "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
     "@vitest/coverage-v8": "5.0.3",
     "@vitest/ui": "5.0.3",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2004",
+    "pg": "8.23.1",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
   }
