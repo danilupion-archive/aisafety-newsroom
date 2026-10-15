@@ -1,0 +1,147 @@
+{{- if .Values.worker.enabled }}
+{{- $name := printf "%s-worker" (include "aisafety-newsroom-api.fullname" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "aisafety-newsroom-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  # One worker: claims never overlap anyway (FOR UPDATE SKIP LOCKED), but one is all the queue needs.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "aisafety-newsroom-api.workerSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aisafety-newsroom-api.workerSelectorLabels" . | nindent 8 }}
+    spec:
+      # Lets the item in progress finish (a fetch gives up after 15 s).
+      terminationGracePeriodSeconds: 45
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "dist/worker.js"]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: health
+              containerPort: {{ .Values.worker.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.worker.port | quote }}
+            - name: APP_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "databaseUrlSecret.name is required" .Values.databaseUrlSecret.name }}
+                  key: {{ .Values.databaseUrlSecret.key }}
+            - name: SKIP_FETCH_HOSTS
+              value: {{ .Values.worker.skipHosts | quote }}
+            - name: WORKER_INTERVAL_SECONDS
+              value: {{ .Values.worker.intervalSeconds | quote }}
+            {{- if .Values.telegram.secret.name }}
+            # To edit the bot's "Saved #n" replies once an item is fetched (R-CAP-7).
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.telegram.secret.name }}
+                  key: TELEGRAM_BOT_TOKEN
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- if .Values.worker.networkPolicy.enabled }}
+---
+# The worker fetches untrusted links (R-FET-4): nothing reaches it, and it reaches only DNS, the database and the public
+# internet on ports 80 and 443 (Telegram's API included). The code checks every address too, since a policy can't see
+# names. The ranges are aiontheballot's fetcher's.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "aisafety-newsroom-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aisafety-newsroom-api.workerSelectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ required "worker.networkPolicy.database.namespace is required with the network policy" .Values.worker.networkPolicy.database.namespace }}
+      ports:
+        - port: {{ .Values.worker.networkPolicy.database.port }}
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 0.0.0.0/8
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.0.0.0/24
+              - 192.0.2.0/24
+              - 192.88.99.0/24
+              - 192.168.0.0/16
+              - 198.18.0.0/15
+              - 198.51.100.0/24
+              - 203.0.113.0/24
+              - 224.0.0.0/4
+              - 240.0.0.0/4
+        - ipBlock:
+            cidr: 2000::/3
+            except:
+              - 2001::/32
+              - 2001:2::/48
+              - 2001:10::/28
+              - 2001:20::/28
+              - 2001:db8::/32
+              - 2002::/16
+              - 3fff::/20
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+{{- end }}
+{{- end }}

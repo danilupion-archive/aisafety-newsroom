@@ -55,8 +55,9 @@ especially:
 - _who reads it decides the language_: internal text in English, audience-facing text in
   the piece's language, usually Spain Spanish.
 
-The news log is `news/YYYY-MM.md`, one entry per item, written by `/news` and `/sweep`.
-Tags and alert rules live in `news/watchlist.md`.
+The news log is one file per item, `news/YYYY/MM/YYYY-MM-DD-slug.md`, written by `/news`
+and `/sweep` and indexed by `tools/news.py` there. Tags and alert rules live in
+`news/watchlist.md`.
 
 **The site is Dani's own.** Its about page says who Dani is, including that Dani
 co-leads Pausemos la IA (PauseAI Spain), but the site doesn't speak for the organisation
@@ -258,7 +259,9 @@ queued ──fetched, or host skipped──▶ ready ─────┐
     `og:site_name`, `article:published_time`, `<time>`); PDF text and title with
     pdfjs-dist. These are the libraries aiontheballot uses (its ADR-0003 §9).
 
-  3 failed fetches, with backoff between them → `needs_review`.
+  3 failed fetches, 1 and then 10 minutes apart → `needs_review`. A page that's gone (`404`,
+  `410`), or a link R-FET-4 refuses, goes there at once. The bot's "Saved #n" reply is edited
+  either way (R-CAP-7).
 
 - **R-FET-3** Must: hosts that block fetching, starting with `x.com`, are skipped
   (`fetch_status: skipped`). The item goes to `ready` and relies on the note. The host
@@ -343,10 +346,10 @@ These are requirements on the content repo, implemented there.
 - **R-MED-2** Must: `/news` with no arguments runs in queue mode. For each pending item:
   1. use the stored title, outlet, date and text; fetch again only if the text is
      missing (skipped or failed) or isn't the article (a cookie wall, a login page);
-  2. deduplicate against `news/` and `sources/`;
-  3. write the entry in English in our own words (`origin: telegram`). A follow-up
-     (R-CAP-6) adds its note to the original's entry, found through its `logged_ref`,
-     instead of writing a new one;
+  2. deduplicate against `news/` and `sources/` (`tools/news.py dup`);
+  3. write the item file in English in our own words (`origin: telegram`,
+     `newsroom: <id>`). A follow-up (R-CAP-6) adds its note to the original's item file,
+     found through its `logged_ref`, instead of writing a new one;
   4. run the alert check;
   5. mark the item `logged`, or `discarded` with a reason.
 
@@ -387,6 +390,7 @@ These are requirements on the content repo, implemented there.
 | D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                            | —            |
 | D7  | The inbox and posts API are on a public host behind a bearer token, not on the private network                      | —            |
 | D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`; the site may share it | Q1 (in part) |
+| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file       | —            |
 
 ## 12. Miniflux for `/sweep`
 

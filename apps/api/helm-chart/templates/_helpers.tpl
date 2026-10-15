@@ -28,3 +28,9 @@ app.kubernetes.io/name: {{ include "aisafety-newsroom-api.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+
+{{/* The worker's own selector labels: never the API's, which its Service selects. */}}
+{{- define "aisafety-newsroom-api.workerSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "aisafety-newsroom-api.name" . }}-worker
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

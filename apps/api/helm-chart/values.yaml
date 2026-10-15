@@ -45,6 +45,32 @@ telegram:
   # The webhook's public address; when set, the API registers it with Telegram on every start.
   webhookUrl: ''
 
+# The worker (SPEC §8): claims queued items, fetches and extracts them, and edits the bot's replies. The API's image,
+# `node dist/worker.js`, with newsroom_app's connection (databaseUrlSecret) and, when the bot is configured, its token.
+# One replica, replaced by recreating it. Its NetworkPolicy admits nothing and lets it reach only DNS, the database
+# and the public internet on ports 80 and 443 (R-FET-4). Off until gitops turns it on with the database's namespace.
+worker:
+  enabled: false
+  port: 3002
+  # Hosts never fetched, separated by commas (R-FET-3).
+  skipHosts: x.com
+  # Between rounds (R-FET-1: at least once a minute).
+  intervalSeconds: 30
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    # jsdom on a 5 MB page or PDF.js on a 30 MB PDF, one at a time.
+    limits:
+      cpu: '1'
+      memory: 1Gi
+  networkPolicy:
+    enabled: true
+    # The database's namespace and port.
+    database:
+      namespace: ''
+      port: 5432
+
 # Extra environment (plain values, or secretKeyRef for credentials sealed in gitops).
 env: []
 envFrom: []
