@@ -1,27 +1,71 @@
 #!/usr/bin/env bash
-# Seals the Telegram bot's secret for the cluster into a gitops checkout (SPEC §6, §14): the bot token
-# from BotFather, and a webhook secret generated here, which Telegram sends back on every update (R-CAP-2). Nothing
-# secret is printed or written unencrypted: both live in shell variables and reach kubectl through /dev/fd.
+# Sets up the Telegram bot (SPEC §6) in one run, for the cluster:
+#   1. checks the bot token with Telegram (getMe) before anything is sealed, and says which bot it belongs to;
+#   2. sets the bot's command list (setMyCommands), so BotFather needs no /setcommands;
+#   3. asks for the Telegram user ids allowed to use it (R-CAP-1: everyone else is ignored);
+#   4. seals the token and a new webhook secret (R-CAP-2) into a gitops checkout;
+#   5. writes the bot's settings into the app's gitops values, for you to review, commit and push.
+# Nothing secret is printed or written unencrypted: the token lives in a shell variable, reaches curl through stdin and
+# kubectl through /dev/fd, never argv or a file.
 #
 # Usage: scripts/seal-telegram-secret.sh <path-to-gitops>
-# Run it in a terminal: it asks for the bot token (input hidden). Refuses to overwrite: to rotate, delete the file
-# first (docs/runbooks/telegram-bot.md). The API registers the webhook with the new secret on its next start.
+# Run it in a terminal: it asks for the token (input hidden). Refuses to overwrite: to rotate, delete the sealed file
+# and the `telegram:` block of the values first (docs/runbooks/telegram-bot.md). The API registers the webhook on its
+# next start.
 set -euo pipefail
 
 GITOPS="${1:?usage: $0 <path-to-gitops>}"
-# Overridable for a dry run against a throwaway certificate (KUBESEAL_ARGS="--cert cert.pem").
+# Overridable for a dry run against a throwaway certificate and a stand-in Bot API.
 read -r -a KUBESEAL_ARGS <<<"${KUBESEAL_ARGS:---context "$KUBE_CONTEXT" --controller-namespace sealed-secrets --controller-name sealed-secrets}"
+TELEGRAM_API="${TELEGRAM_API:-https://api.telegram.org}"
+WEBHOOK_URL="${WEBHOOK_URL:-https://newsroom.danilupion.com/telegram/webhook}"
 
 DIR="$GITOPS/clusters/example/resources/apps/aisafety-newsroom/secrets"
 OUT="$DIR/aisafety-newsroom-telegram.yaml"
+VALUES="$GITOPS/clusters/example/values/apps/aisafety-newsroom.yaml"
 [ -d "$DIR" ] || { echo "Not a gitops checkout with aisafety-newsroom: $DIR is missing" >&2; exit 1; }
+[ -f "$VALUES" ] || { echo "No values file: $VALUES is missing" >&2; exit 1; }
 [ ! -e "$OUT" ] || { echo "Refusing to overwrite $OUT" >&2; exit 1; }
+if grep -q '^  telegram:' "$VALUES"; then
+  echo "The values already have a telegram: block; remove it first to set the bot up again" >&2
+  exit 1
+fi
+
+# bot_api <method> <json body>: the Bot API's answer. The URL, which holds the token, goes to curl as a config line on
+# stdin, never as an argument.
+bot_api() {
+  printf 'url = "%s/bot%s/%s"\n' "$TELEGRAM_API" "$BOT_TOKEN" "$1" |
+    curl -sS --max-time 15 -K - -H 'content-type: application/json' -d "$2"
+}
 
 printf 'Bot token from BotFather: '
 IFS= read -rs BOT_TOKEN
 echo
-# BotFather's tokens look like 123456789:AA…; checked so a stray paste doesn't get sealed.
+# BotFather's tokens look like 123456789:AA…; checked so a stray paste doesn't go anywhere.
 [[ "$BOT_TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]{30,}$ ]] || { echo "That doesn't look like a bot token" >&2; exit 1; }
+
+username="$(bot_api getMe '{}' | jq -r 'if .ok then .result.username else empty end' 2>/dev/null || true)"
+[ -n "$username" ] || { echo "Telegram doesn't accept that token: check it in BotFather" >&2; exit 1; }
+echo "Telegram knows this token as @$username"
+
+printf 'Telegram user ids allowed to use it, separated by commas (yours: ask @userinfobot): '
+IFS= read -r allowed
+allowed="${allowed// /}"
+[[ "$allowed" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "Those aren't Telegram user ids" >&2; exit 1; }
+
+# The commands of R-CAP-8, as Telegram's menu shows them.
+commands='{"commands":[
+  {"command":"pending","description":"What is waiting for /news"},
+  {"command":"discard","description":"Drop an item: /discard <id> [reason]"},
+  {"command":"restore","description":"Bring a discarded item back: /restore <id>"},
+  {"command":"note","description":"Add to an item’s note: /note <id> <text>"},
+  {"command":"help","description":"How to use the bot"}]}'
+if [ "$(bot_api setMyCommands "$commands" | jq -r '.ok' 2>/dev/null || true)" = true ]; then
+  echo "set @$username's command list"
+else
+  echo "Couldn't set the command list (BotFather's /setcommands can do it); carrying on" >&2
+fi
+
 # 64 hex characters: within what Telegram takes as a secret_token (1 to 256 of A-Z, a-z, 0-9, '_', '-').
 WEBHOOK_SECRET="$(openssl rand -hex 32)"
 
@@ -29,7 +73,7 @@ tmp="$OUT.tmp"
 if ! {
   printf '# yamllint disable rule:line-length\n'
   printf '# SealedSecret encryptedData contains long base64 strings that cannot be wrapped.\n'
-  printf '# TELEGRAM_BOT_TOKEN (BotFather) and TELEGRAM_WEBHOOK_SECRET (openssl rand -hex 32) for the API (SPEC §6).\n'
+  printf '# TELEGRAM_BOT_TOKEN (BotFather, @%s) and TELEGRAM_WEBHOOK_SECRET (openssl rand -hex 32) for the API.\n' "$username"
   printf '# Generated by scripts/seal-telegram-secret.sh in danilupion/aisafety-newsroom.\n'
   kubectl create secret generic aisafety-newsroom-telegram -n aisafety-newsroom \
     --from-file=TELEGRAM_BOT_TOKEN=<(printf %s "$BOT_TOKEN") \
@@ -44,4 +88,26 @@ fi
 mv "$tmp" "$OUT"
 unset BOT_TOKEN WEBHOOK_SECRET
 echo "sealed $OUT"
-echo "Done. Review with: git -C \"$GITOPS\" status"
+
+# The bot's settings, right under aisafety-newsroom-api: (the chart's telegram block). Nothing in them is secret.
+python3 - "$VALUES" "$username" "$allowed" "$WEBHOOK_URL" <<'EOF'
+import sys
+path, username, allowed, webhook = sys.argv[1:]
+lines = open(path).read().splitlines(keepends=True)
+anchor = next((i for i, line in enumerate(lines) if line.rstrip() == 'aisafety-newsroom-api:'), None)
+if anchor is None:
+    sys.exit('No aisafety-newsroom-api: key in ' + path)
+block = [
+    f'  # The bot (app repo SPEC §6), @{username}: its token and webhook secret sealed by\n',
+    '  # scripts/seal-telegram-secret.sh; only these Telegram user ids are listened to (R-CAP-1).\n',
+    '  telegram:\n',
+    '    secret:\n',
+    '      name: aisafety-newsroom-telegram\n',
+    f"    allowedUserIds: '{allowed}'\n",
+    f'    webhookUrl: {webhook}\n',
+]
+lines[anchor + 1:anchor + 1] = block
+open(path, 'w').write(''.join(lines))
+EOF
+echo "wrote the bot's settings into $VALUES"
+echo "Done. Review with: git -C \"$GITOPS\" diff; then commit both files and push."
