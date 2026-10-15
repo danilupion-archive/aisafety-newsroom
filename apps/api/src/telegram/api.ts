@@ -27,13 +27,28 @@ interface BotApiAnswer {
   result?: unknown;
   error_code?: number;
   description?: string;
+  parameters?: { retry_after?: number };
 }
+
+/**
+ * Telegram answers 429 with how long to wait (`retry_after`, in seconds) when we send too fast: both replicas setting
+ * the webhook as they start, or a burst of replies. A call waits that long and tries again, a few times and only for
+ * short waits; a longer one fails as any other error does.
+ */
+const RETRIES = 3;
+const MAX_RETRY_AFTER_SECONDS = 10;
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 export const createTelegramApi = (
   botToken: string,
   fetchImpl: typeof fetch = fetch,
+  wait: (ms: number) => Promise<void> = sleep,
 ): TelegramApi => {
-  const call = async (method: string, body: object): Promise<unknown> => {
+  const call = async (method: string, body: object, attempt = 1): Promise<unknown> => {
     let answer: BotApiAnswer;
     try {
       const response = await fetchImpl(`https://api.telegram.org/bot${botToken}/${method}`, {
@@ -50,6 +65,17 @@ export const createTelegramApi = (
         undefined,
         error instanceof Error ? error.name : 'request failed',
       );
+    }
+    const retryAfter = answer.parameters?.retry_after;
+    if (
+      !answer.ok &&
+      answer.error_code === 429 &&
+      attempt <= RETRIES &&
+      retryAfter !== undefined &&
+      retryAfter <= MAX_RETRY_AFTER_SECONDS
+    ) {
+      await wait(retryAfter * 1000);
+      return call(method, body, attempt + 1);
     }
     if (!answer.ok) {
       throw new TelegramError(method, answer.error_code, answer.description ?? 'no description');

@@ -12,6 +12,7 @@ describe('loadWorkerConfig', () => {
       skipHosts: ['x.com'],
       userAgent: DEFAULT_USER_AGENT,
       intervalMs: 30_000,
+      pageTextRetentionDays: 90,
       port: 3002,
     });
   });
@@ -23,11 +24,13 @@ describe('loadWorkerConfig', () => {
         SKIP_FETCH_HOSTS: 'x.com, Instagram.com',
         TELEGRAM_BOT_TOKEN: '123:abc',
         WORKER_INTERVAL_SECONDS: '10',
+        PAGE_TEXT_RETENTION_DAYS: '30',
       }),
     ).toMatchObject({
       skipHosts: ['x.com', 'instagram.com'],
       botToken: '123:abc',
       intervalMs: 10_000,
+      pageTextRetentionDays: 30,
     });
   });
 
@@ -40,5 +43,8 @@ describe('loadWorkerConfig', () => {
     expect(() =>
       loadWorkerConfig({ APP_DATABASE_URL: DATABASE, WORKER_INTERVAL_SECONDS: '300' }),
     ).toThrow('WORKER_INTERVAL_SECONDS must be a whole number from 5 to 60');
+    expect(() =>
+      loadWorkerConfig({ APP_DATABASE_URL: DATABASE, PAGE_TEXT_RETENTION_DAYS: '0' }),
+    ).toThrow('PAGE_TEXT_RETENTION_DAYS must be a whole number from 1 to 3650');
   });
 });

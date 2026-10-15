@@ -6,10 +6,10 @@ import type { TelegramApi } from '../src/telegram/api.js';
 import type { Fetched } from '../src/worker/fetch-url.js';
 
 import { FetchRefused } from '../src/worker/fetch-url.js';
-import { claimDue } from '../src/worker/jobs.js';
+import { claimDue, clearOldPageText } from '../src/worker/jobs.js';
 import { runOnce } from '../src/worker/loop.js';
 import { type WorkerDeps } from '../src/worker/process.js';
-import { appDatabase, asSuperuser, emptyTables } from './db.js';
+import { appDatabase, asSuperuser, emptyTables, insertItem } from './db.js';
 
 let db: Database;
 
@@ -261,5 +261,38 @@ describe('a round (R-FET-2)', () => {
     };
     await runOnce(failingEdit);
     expect(await item(id)).toMatchObject({ status: 'ready' });
+  });
+});
+
+/** Sets when an item last changed, past the trigger that keeps updated_at current (session_replication_role). */
+const lastChanged = (id: number, daysAgo: number) =>
+  asSuperuser(`SET session_replication_role = replica;
+    UPDATE app.inbox_items SET updated_at = now() - make_interval(days => ${daysAgo}) WHERE id = ${id};`);
+
+describe('clearing old page text (Q9)', () => {
+  it('clears the text of items logged or discarded long enough ago, and keeps everything else', async () => {
+    const old = { page_text: 'Texto completo de la página.', page_title: 'Un título' };
+    const logged = await insertItem({ ...old, status: 'logged' });
+    const discarded = await insertItem({ ...old, status: 'discarded' });
+    const recent = await insertItem({ ...old, status: 'logged' });
+    const open = await insertItem({ ...old, status: 'ready' });
+    await lastChanged(logged, 91);
+    await lastChanged(discarded, 120);
+    await lastChanged(recent, 89);
+    await lastChanged(open, 400);
+
+    expect(await clearOldPageText(db, 90)).toBe(2);
+    expect(await item(logged)).toMatchObject({
+      status: 'logged',
+      page_text: null,
+      page_title: 'Un título',
+    });
+    expect(await item(discarded)).toMatchObject({ status: 'discarded', page_text: null });
+    expect(await item(recent)).toMatchObject({ page_text: old.page_text });
+    // Still waiting for /news: its text is what /news reads.
+    expect(await item(open)).toMatchObject({ page_text: old.page_text });
+
+    // Nothing left to clear: an item already without text isn't touched again.
+    expect(await clearOldPageText(db, 90)).toBe(0);
   });
 });

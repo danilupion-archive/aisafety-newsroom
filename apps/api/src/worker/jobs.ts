@@ -134,3 +134,20 @@ export const staleQueued = async (db: Database): Promise<number> => {
     .executeTakeFirstOrThrow();
   return Number(row.count);
 };
+
+/**
+ * Q9: a page's text is kept only while `/news` may need it. Once an item has been logged or discarded, and hasn't
+ * changed for `days`, its text is cleared; its title, outlet, date and addresses stay, and the news log in aisafety-media
+ * is the record (P1). An item restored after that has no text, and `/news` fetches the page again (R-MED-2). Returns how
+ * many items it cleared.
+ */
+export const clearOldPageText = async (db: Database, days: number): Promise<number> => {
+  const result = await db
+    .updateTable('app.inbox_items')
+    .set({ page_text: null })
+    .where('page_text', 'is not', null)
+    .where('status', 'in', ['logged', 'discarded'])
+    .where('updated_at', '<', sql<Date>`now() - make_interval(days => ${days})`)
+    .executeTakeFirst();
+  return Number(result.numUpdatedRows);
+};

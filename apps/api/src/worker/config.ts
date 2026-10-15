@@ -11,6 +11,8 @@ export interface WorkerConfig {
   skipHosts: string[];
   userAgent: string;
   intervalMs: number;
+  /** Q9: days a logged or discarded item keeps its page's text. */
+  pageTextRetentionDays: number;
   /** For the kubelet's /healthz. */
   port: number;
 }
@@ -60,6 +62,13 @@ export const loadWorkerConfig = (env: Env): WorkerConfig => {
     // R-FET-1: at least once a minute.
     intervalMs:
       readNumber('WORKER_INTERVAL_SECONDS', env.WORKER_INTERVAL_SECONDS, 30, 5, 60) * 1000,
+    pageTextRetentionDays: readNumber(
+      'PAGE_TEXT_RETENTION_DAYS',
+      env.PAGE_TEXT_RETENTION_DAYS,
+      90,
+      1,
+      3650,
+    ),
     port: readNumber('PORT', env.PORT, 3002, 1, 65535),
   };
 };

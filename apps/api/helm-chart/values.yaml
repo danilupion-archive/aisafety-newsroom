@@ -56,6 +56,8 @@ worker:
   skipHosts: x.com
   # Between rounds (R-FET-1: at least once a minute).
   intervalSeconds: 30
+  # Days a logged or discarded item keeps its page's text (SPEC Q9); its title and links stay.
+  pageTextRetentionDays: 90
   resources:
     requests:
       cpu: 50m

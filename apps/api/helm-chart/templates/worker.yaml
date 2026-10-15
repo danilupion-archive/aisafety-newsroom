@@ -48,6 +48,8 @@ spec:
               value: {{ .Values.worker.skipHosts | quote }}
             - name: WORKER_INTERVAL_SECONDS
               value: {{ .Values.worker.intervalSeconds | quote }}
+            - name: PAGE_TEXT_RETENTION_DAYS
+              value: {{ .Values.worker.pageTextRetentionDays | quote }}
             {{- if .Values.telegram.secret.name }}
             # To edit the bot's "Saved #n" replies once an item is fetched (R-CAP-7).
             - name: TELEGRAM_BOT_TOKEN

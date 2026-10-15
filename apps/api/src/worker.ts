@@ -51,6 +51,14 @@ const loop = startLoop(
     onError: (error) => log('error', 'a round failed', errorClass(error)),
     onStale: (count) =>
       log('warn', 'items have waited in the queue for more than an hour', { count }),
+    pageText: {
+      retentionDays: config.pageTextRetentionDays,
+      onCleared: (count) =>
+        log('info', 'cleared the page text of old items', {
+          count,
+          days: config.pageTextRetentionDays,
+        }),
+    },
   },
 );
 
