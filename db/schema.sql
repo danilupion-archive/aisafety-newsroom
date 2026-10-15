@@ -67,6 +67,18 @@ CREATE TYPE app.inbox_status AS ENUM (
 ALTER TYPE app.inbox_status OWNER TO newsroom_owner;
 
 --
+-- Name: post_type; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.post_type AS ENUM (
+    'breve',
+    'article'
+);
+
+
+ALTER TYPE app.post_type OWNER TO newsroom_owner;
+
+--
 -- Name: inbox_items_transition(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
 --
 
@@ -170,6 +182,54 @@ ALTER TABLE app.inbox_items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: posts; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.posts (
+    slug text NOT NULL,
+    type app.post_type NOT NULL,
+    title text NOT NULL,
+    summary text DEFAULT ''::text NOT NULL,
+    body_md text NOT NULL,
+    sources jsonb DEFAULT '[]'::jsonb NOT NULL,
+    tags text[] DEFAULT '{}'::text[] NOT NULL,
+    published_at timestamp with time zone NOT NULL,
+    content_ref jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    unpublished_at timestamp with time zone,
+    CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
+    CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
+    CONSTRAINT posts_slug_format CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 120))),
+    CONSTRAINT posts_sources_array CHECK ((jsonb_typeof(sources) = 'array'::text)),
+    CONSTRAINT posts_summary_length CHECK ((char_length(summary) <= 600)),
+    CONSTRAINT posts_title_length CHECK (((char_length(title) >= 1) AND (char_length(title) <= 300)))
+);
+
+
+ALTER TABLE app.posts OWNER TO newsroom_owner;
+
+--
+-- Name: published_posts; Type: VIEW; Schema: app; Owner: newsroom_owner
+--
+
+CREATE VIEW app.published_posts WITH (security_barrier='true') AS
+ SELECT slug,
+    type,
+    title,
+    summary,
+    body_md,
+    sources,
+    tags,
+    published_at,
+    updated_at
+   FROM app.posts
+  WHERE ((unpublished_at IS NULL) AND (published_at <= now()));
+
+
+ALTER VIEW app.published_posts OWNER TO newsroom_owner;
+
+--
 -- Name: telegram_updates; Type: TABLE; Schema: app; Owner: newsroom_owner
 --
 
@@ -180,6 +240,19 @@ CREATE TABLE app.telegram_updates (
 
 
 ALTER TABLE app.telegram_updates OWNER TO newsroom_owner;
+
+--
+-- Name: unpublished_posts; Type: VIEW; Schema: app; Owner: newsroom_owner
+--
+
+CREATE VIEW app.unpublished_posts WITH (security_barrier='true') AS
+ SELECT slug,
+    unpublished_at
+   FROM app.posts
+  WHERE (unpublished_at IS NOT NULL);
+
+
+ALTER VIEW app.unpublished_posts OWNER TO newsroom_owner;
 
 --
 -- Name: schema_migrations; Type: TABLE; Schema: public; Owner: newsroom_owner
@@ -198,6 +271,14 @@ ALTER TABLE public.schema_migrations OWNER TO newsroom_owner;
 
 ALTER TABLE ONLY app.inbox_items
     ADD CONSTRAINT inbox_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: posts posts_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.posts
+    ADD CONSTRAINT posts_pkey PRIMARY KEY (slug);
 
 
 --
@@ -245,6 +326,20 @@ CREATE UNIQUE INDEX inbox_items_url_normalized_key ON app.inbox_items USING btre
 
 
 --
+-- Name: posts_published; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX posts_published ON app.posts USING btree (published_at DESC) WHERE (unpublished_at IS NULL);
+
+
+--
+-- Name: posts_tags; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX posts_tags ON app.posts USING gin (tags) WHERE (unpublished_at IS NULL);
+
+
+--
 -- Name: inbox_items inbox_items_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
 --
 
@@ -256,6 +351,13 @@ CREATE TRIGGER inbox_items_touch_updated_at BEFORE UPDATE ON app.inbox_items FOR
 --
 
 CREATE TRIGGER inbox_items_transition BEFORE UPDATE OF status ON app.inbox_items FOR EACH ROW EXECUTE FUNCTION private.inbox_items_transition();
+
+
+--
+-- Name: posts posts_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER posts_touch_updated_at BEFORE UPDATE ON app.posts FOR EACH ROW EXECUTE FUNCTION private.touch_updated_at();
 
 
 --
@@ -303,10 +405,31 @@ GRANT SELECT,INSERT,UPDATE ON TABLE app.inbox_items TO newsroom_app;
 
 
 --
+-- Name: TABLE posts; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE app.posts TO newsroom_app;
+
+
+--
+-- Name: TABLE published_posts; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT ON TABLE app.published_posts TO newsroom_public;
+
+
+--
 -- Name: TABLE telegram_updates; Type: ACL; Schema: app; Owner: newsroom_owner
 --
 
 GRANT SELECT,INSERT ON TABLE app.telegram_updates TO newsroom_app;
+
+
+--
+-- Name: TABLE unpublished_posts; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT ON TABLE app.unpublished_posts TO newsroom_public;
 
 
 --

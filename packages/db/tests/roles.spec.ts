@@ -11,10 +11,14 @@ const EXPECTED_GRANTS: Record<(typeof RUNTIME_ROLES)[number], string[]> = {
     'app.inbox_items: INSERT',
     'app.inbox_items: SELECT',
     'app.inbox_items: UPDATE',
+    'app.posts: INSERT',
+    'app.posts: SELECT',
+    'app.posts: UPDATE',
     'app.telegram_updates: INSERT',
     'app.telegram_updates: SELECT',
   ],
-  newsroom_public: [],
+  // Published posts only, through views; never the table (SPEC §7, §13).
+  newsroom_public: ['app.published_posts: SELECT', 'app.unpublished_posts: SELECT'],
 };
 
 describe('runtime roles', () => {

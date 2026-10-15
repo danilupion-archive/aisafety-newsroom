@@ -2,7 +2,7 @@
   "name": "@aisafety-newsroom/domain",
   "version": "0.1.0",
   "private": true,
-  "description": "Pure shared logic: URL normalisation, Telegram messages, inbox states",
+  "description": "Pure shared logic: URL normalisation, Telegram messages, inbox states, notes, Markdown",
   "type": "module",
   "exports": {
     "./*": {
@@ -19,6 +19,9 @@
     "test": "vitest --run",
     "test:watch": "vitest",
     "prepare": "[ \"$PACKAGED\" = true ] && echo 'Skipping prepare for packaged production dependencies install' || tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "markdown-it": "15.0.2"
   },
   "devDependencies": {
     "@slango.configs/lint-staged": "2.0.8",

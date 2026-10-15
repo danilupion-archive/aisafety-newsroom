@@ -42,6 +42,15 @@ spec:
                 secretKeyRef:
                   name: {{ required "databaseUrlSecret.name is required" .Values.databaseUrlSecret.name }}
                   key: {{ .Values.databaseUrlSecret.key }}
+            {{- with .Values.publicDatabaseUrlSecret }}
+            {{- if .name }}
+            - name: PUBLIC_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- end }}
             {{- if or .Values.telegram.secret.name .Values.telegram.allowedUserIds }}
             # The bot takes its secret and its allowlist together (src/config.ts), so one without the other fails here.
             - name: TELEGRAM_BOT_TOKEN

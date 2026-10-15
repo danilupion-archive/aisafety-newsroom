@@ -21,6 +21,8 @@ export interface ApiConfig {
   apiToken: string;
   /** newsroom_app's connection (SPEC §7). Never the owner's. */
   appDatabaseUrl: string;
+  /** newsroom_public's, for the site's reads (R-WEB-6); undefined, /public answers 503. */
+  publicDatabaseUrl: string | undefined;
   /** The bot (SPEC §6). Undefined until it's created: the webhook then answers 503. */
   telegram: TelegramConfig | undefined;
 }
@@ -93,6 +95,7 @@ export const loadConfig = (env: Env): ApiConfig => {
     logLevel: env.LOG_LEVEL ?? 'info',
     apiToken: readApiToken(env.API_TOKEN),
     appDatabaseUrl: env.APP_DATABASE_URL,
+    publicDatabaseUrl: env.PUBLIC_DATABASE_URL || undefined,
     telegram: readTelegram(env),
   };
 };

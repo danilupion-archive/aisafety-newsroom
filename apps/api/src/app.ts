@@ -5,6 +5,8 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type { TelegramApi } from './telegram/api.js';
 
 import { inboxRoutes } from './inbox/routes.js';
+import { postsRoutes } from './posts/routes.js';
+import { publicRoutes } from './public/routes.js';
 import { telegramRoutes } from './telegram/routes.js';
 import { bearerMatches } from './token.js';
 
@@ -22,6 +24,8 @@ export interface AppOptions {
   db?: Database;
   /** The bot (SPEC §6), which needs the database. Without it, the webhook answers 503. */
   bot?: BotOptions;
+  /** newsroom_public's connection, for the site's reads (R-WEB-6). Without it, /public answers 503. */
+  publicDb?: Database;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -48,7 +52,13 @@ const constraintOf = (error: unknown): string | undefined =>
     ? error.constraint
     : undefined;
 
-export const buildApp = ({ apiToken, db, bot, logger = false }: AppOptions): FastifyInstance => {
+export const buildApp = ({
+  apiToken,
+  db,
+  bot,
+  publicDb,
+  logger = false,
+}: AppOptions): FastifyInstance => {
   const app = Fastify({
     logger,
     // Longer than the Envoy Gateway idle timeout (60s), so the gateway closes idle connections first.
@@ -74,7 +84,9 @@ export const buildApp = ({ apiToken, db, bot, logger = false }: AppOptions): Fas
 
   if (db) {
     void app.register(inboxRoutes(db));
+    void app.register(postsRoutes(db));
   }
+  void app.register(publicRoutes(publicDb));
   void app.register(
     telegramRoutes(
       db && bot

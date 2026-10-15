@@ -9,10 +9,18 @@ const db = createDatabase({
   connectionString: config.appDatabaseUrl,
   applicationName: 'aisafety-newsroom-api',
 });
+// The site's reads run as newsroom_public, which reaches published posts only (R-WEB-6).
+const publicDb = config.publicDatabaseUrl
+  ? createDatabase({
+      connectionString: config.publicDatabaseUrl,
+      applicationName: 'aisafety-newsroom-api-public',
+    })
+  : undefined;
 const telegram = config.telegram ? createTelegramApi(config.telegram.botToken) : undefined;
 const app = buildApp({
   apiToken: config.apiToken,
   db,
+  publicDb,
   bot:
     config.telegram && telegram
       ? {
@@ -30,6 +38,7 @@ const app = buildApp({
 const shutdown = async (): Promise<void> => {
   await app.close();
   await db.destroy();
+  await publicDb?.destroy();
   process.exit(0);
 };
 

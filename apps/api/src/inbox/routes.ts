@@ -1,7 +1,7 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
-import type { z } from 'zod';
 
+import { parse } from '../parse.js';
 import {
   addNote,
   getItem,
@@ -11,20 +11,7 @@ import {
   type Outcome,
   restore,
 } from './items.js';
-import { describe, discardedBody, itemId, listQuery, loggedBody, noteBody } from './schemas.js';
-
-const parse = <S extends z.ZodType>(
-  schema: S,
-  value: unknown,
-  reply: FastifyReply,
-): z.output<S> | undefined => {
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    void reply.code(400).send({ error: describe(result.error) });
-    return undefined;
-  }
-  return result.data;
-};
+import { discardedBody, itemId, listQuery, loggedBody, noteBody } from './schemas.js';
 
 const send = (reply: FastifyReply, outcome: Outcome) => {
   if (outcome.ok) {

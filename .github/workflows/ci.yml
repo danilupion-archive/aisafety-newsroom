@@ -146,6 +146,7 @@ jobs:
             echo "TEST_DATABASE_URL=postgres://newsroom_owner:ci-owner@localhost:$PG_PORT/newsroom_test?sslmode=disable"
             echo "TEST_SUPERUSER_DATABASE_URL=postgres://postgres:postgres@localhost:$PG_PORT/newsroom_test?sslmode=disable"
             echo "TEST_APP_DATABASE_URL=postgres://newsroom_app:ci-app@localhost:$PG_PORT/newsroom_test?sslmode=disable"
+            echo "TEST_PUBLIC_DATABASE_URL=postgres://newsroom_public:ci-public@localhost:$PG_PORT/newsroom_test?sslmode=disable"
           } >> "$GITHUB_ENV"
 
       # Rebuilds newsroom_test from the migrations, then runs the transition, role and constraint tests.

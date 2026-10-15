@@ -9,6 +9,8 @@ export type AppFetchStatus = 'failed' | 'ok' | 'pending' | 'skipped';
 
 export type AppInboxStatus = 'discarded' | 'logged' | 'needs_review' | 'queued' | 'ready';
 
+export type AppPostType = 'article' | 'breve';
+
 export type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
@@ -61,12 +63,47 @@ export interface AppInboxItems {
   url_normalized: string | null;
 }
 
+export interface AppPosts {
+  body_md: string;
+  content_ref: Json;
+  created_at: Generated<Timestamp>;
+  published_at: Timestamp;
+  slug: string;
+  sources: Generated<Json>;
+  summary: Generated<string>;
+  tags: Generated<string[]>;
+  title: string;
+  type: AppPostType;
+  unpublished_at: Timestamp | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface AppPublishedPosts {
+  body_md: string | null;
+  published_at: Timestamp | null;
+  slug: string | null;
+  sources: Json | null;
+  summary: string | null;
+  tags: string[] | null;
+  title: string | null;
+  type: AppPostType | null;
+  updated_at: Timestamp | null;
+}
+
 export interface AppTelegramUpdates {
   received_at: Generated<Timestamp>;
   update_id: Int8;
 }
 
+export interface AppUnpublishedPosts {
+  slug: string | null;
+  unpublished_at: Timestamp | null;
+}
+
 export interface DB {
   'app.inbox_items': AppInboxItems;
+  'app.posts': AppPosts;
+  'app.published_posts': AppPublishedPosts;
   'app.telegram_updates': AppTelegramUpdates;
+  'app.unpublished_posts': AppUnpublishedPosts;
 }

@@ -33,6 +33,11 @@ apiTokenSecret:
 databaseUrlSecret:
   name: ''
   key: DATABASE_URL
+# newsroom_public's connection, for the site's reads (R-WEB-6), sealed by scripts/seal-gitops-secrets.sh. Unset, /public
+# answers 503.
+publicDatabaseUrlSecret:
+  name: ''
+  key: DATABASE_URL
 
 # The Telegram bot (SPEC §6). Set the secret and the allowlist together, or neither: without them the webhook answers
 # 503, and Telegram keeps the updates.

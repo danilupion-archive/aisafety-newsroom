@@ -16,6 +16,7 @@ describe('loadConfig', () => {
       logLevel: 'info',
       apiToken: TOKEN,
       appDatabaseUrl: DATABASE,
+      publicDatabaseUrl: undefined,
       telegram: undefined,
     });
   });

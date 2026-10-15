@@ -1,11 +1,15 @@
 import { createDatabase, type Database } from '@aisafety-newsroom/db/client';
 import pg from 'pg';
 
-import { appUrl, superuserUrl } from './env.js';
+import { appUrl, publicUrl, superuserUrl } from './env.js';
 
 /** The API's database, as newsroom_app. Close it in afterAll. */
 export const appDatabase = (): Database =>
   createDatabase({ connectionString: appUrl(), maxConnections: 4 });
+
+/** The site's database, as newsroom_public. Close it in afterAll. */
+export const publicDatabase = (): Database =>
+  createDatabase({ connectionString: publicUrl(), maxConnections: 2 });
 
 /** Runs SQL as the superuser, outside the API: emptying tables, or putting rows in states the API can't reach. */
 export const asSuperuser = async <T extends pg.QueryResultRow>(
@@ -22,7 +26,7 @@ export const asSuperuser = async <T extends pg.QueryResultRow>(
 };
 
 export const emptyTables = (): Promise<unknown> =>
-  asSuperuser('TRUNCATE app.inbox_items, app.telegram_updates RESTART IDENTITY CASCADE');
+  asSuperuser('TRUNCATE app.inbox_items, app.telegram_updates, app.posts RESTART IDENTITY CASCADE');
 
 export interface Fixture {
   url?: string | null;

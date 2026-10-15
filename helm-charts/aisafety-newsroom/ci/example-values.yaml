@@ -6,6 +6,7 @@ aisafety-newsroom-api:
   image: { repository: registry.example/aisafety-newsroom/api, tag: 0.1.0.abc1234 }
   apiTokenSecret: { name: aisafety-newsroom-api-token }
   databaseUrlSecret: { name: aisafety-newsroom-app-db }
+  publicDatabaseUrlSecret: { name: aisafety-newsroom-public-db }
   # Renders the worker and its network policy, so lint covers them.
   worker:
     enabled: true

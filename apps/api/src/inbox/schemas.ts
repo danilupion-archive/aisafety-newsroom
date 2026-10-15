@@ -2,7 +2,7 @@ import { INBOX_STATUSES } from '@aisafety-newsroom/domain/inbox';
 import { z } from 'zod';
 
 /** A watchlist tag, without its `#`: lowercase words joined by hyphens (aisafety-media `news/watchlist.md`). */
-const tag = z
+export const tag = z
   .string()
   .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'a tag is lowercase words joined by hyphens, without #');
 
