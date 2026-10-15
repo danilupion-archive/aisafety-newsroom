@@ -63,10 +63,13 @@ the host, and the gateway's `*.example.test` certificate covers it.
 ```sh
 # 401: no token
 curl -si https://newsroom.danilupion.com/api/v1/items | head -1
-# 404 {"error":"Not found"}: the token works, and the inbox routes come with M1
-curl -s -H "Authorization: Bearer $(security find-generic-password -s aisafety-newsroom -a api-token -w)" \
-  https://newsroom.danilupion.com/api/v1/items
+# 200: the token works. It reaches curl through stdin, never its arguments (which `ps` shows).
+token="$(security find-generic-password -s aisafety-newsroom -a api-token -w)"
+printf 'header = "Authorization: Bearer %s"\n' "$token" | curl -s -K - https://newsroom.danilupion.com/api/v1/items
+unset token
 ```
+
+From aisafety-media, `python3 tools/newsroom.py pending` does the same.
 
 In the cluster: the migration Job succeeded, two API pods are ready, and `newsroom` has the `app` schema.
 

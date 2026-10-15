@@ -38,8 +38,14 @@ don't change on their own: restart them so they read the new secret and register
 
 ## When nothing answers
 
-- `curl -s -K - <<< "url = \"https://api.telegram.org/bot<token>/getWebhookInfo\""` shows the webhook's address, its
-  last error and how many updates are waiting (Telegram keeps undelivered updates for 24 hours).
+- Telegram's view of the webhook: its address, its last error and how many updates are waiting (it keeps undelivered
+  updates for 24 hours). The token is read hidden and reaches curl through stdin, so it's in neither the shell's
+  history nor `ps`:
+
+  ```sh
+  read -rs token && printf 'url = "https://api.telegram.org/bot%s/getWebhookInfo"\n' "$token" | curl -s -K -; unset token
+  ```
+
 - The API's logs show a 401 for each update if the webhook's secret doesn't match the sealed one: restart the API, which
   registers the webhook again with the sealed secret.
 - Messages from a user id that isn't on the allowlist, or from a group, are ignored without a reply, on purpose.
