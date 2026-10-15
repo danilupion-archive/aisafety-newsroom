@@ -34,6 +34,17 @@ databaseUrlSecret:
   name: ''
   key: DATABASE_URL
 
+# The Telegram bot (SPEC §6). Set the secret and the allowlist together, or neither: without them the webhook answers
+# 503, and Telegram keeps the updates.
+telegram:
+  # TELEGRAM_BOT_TOKEN (from BotFather) and TELEGRAM_WEBHOOK_SECRET, sealed in gitops by scripts/seal-telegram-secret.sh.
+  secret:
+    name: ''
+  # Telegram user ids whose messages count, separated by commas (R-CAP-1).
+  allowedUserIds: ''
+  # The webhook's public address; when set, the API registers it with Telegram on every start.
+  webhookUrl: ''
+
 # Extra environment (plain values, or secretKeyRef for credentials sealed in gitops).
 env: []
 envFrom: []

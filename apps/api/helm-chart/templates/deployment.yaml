@@ -42,6 +42,25 @@ spec:
                 secretKeyRef:
                   name: {{ required "databaseUrlSecret.name is required" .Values.databaseUrlSecret.name }}
                   key: {{ .Values.databaseUrlSecret.key }}
+            {{- if or .Values.telegram.secret.name .Values.telegram.allowedUserIds }}
+            # The bot takes its secret and its allowlist together (src/config.ts), so one without the other fails here.
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "telegram.secret.name is required with telegram.allowedUserIds" .Values.telegram.secret.name }}
+                  key: TELEGRAM_BOT_TOKEN
+            - name: TELEGRAM_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.telegram.secret.name }}
+                  key: TELEGRAM_WEBHOOK_SECRET
+            - name: TELEGRAM_ALLOWED_USER_IDS
+              value: {{ required "telegram.allowedUserIds is required with telegram.secret.name" .Values.telegram.allowedUserIds | quote }}
+            {{- with .Values.telegram.webhookUrl }}
+            - name: TELEGRAM_WEBHOOK_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

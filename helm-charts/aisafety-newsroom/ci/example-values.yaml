@@ -6,6 +6,11 @@ aisafety-newsroom-api:
   image: { repository: registry.example/aisafety-newsroom/api, tag: 0.1.0.abc1234 }
   apiTokenSecret: { name: aisafety-newsroom-api-token }
   databaseUrlSecret: { name: aisafety-newsroom-app-db }
+  # Renders the bot's settings, so lint covers them.
+  telegram:
+    secret: { name: aisafety-newsroom-telegram }
+    allowedUserIds: '123456789'
+    webhookUrl: https://newsroom-api.example.test/telegram/webhook
   route:
     enabled: true
     parentRefs: [{ name: example-gateway, namespace: example-gateway }]

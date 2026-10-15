@@ -2,14 +2,26 @@ import type { Database } from '@aisafety-newsroom/db/client';
 
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 
+import type { TelegramApi } from './telegram/api.js';
+
 import { inboxRoutes } from './inbox/routes.js';
+import { telegramRoutes } from './telegram/routes.js';
 import { bearerMatches } from './token.js';
+
+export interface BotOptions {
+  webhookSecret: string;
+  allowedUserIds: readonly number[];
+  api: TelegramApi;
+  onReplyError?: (error: unknown) => void;
+}
 
 export interface AppOptions {
   /** The bearer token for everything under /api (R-API-1). */
   apiToken: string;
   /** newsroom_app's connection (SPEC §7). Without it, only /healthz answers: tests of the guard need nothing else. */
   db?: Database;
+  /** The bot (SPEC §6), which needs the database. Without it, the webhook answers 503. */
+  bot?: BotOptions;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -22,7 +34,7 @@ const constraintOf = (error: unknown): string | undefined =>
     ? error.constraint
     : undefined;
 
-export const buildApp = ({ apiToken, db, logger = false }: AppOptions): FastifyInstance => {
+export const buildApp = ({ apiToken, db, bot, logger = false }: AppOptions): FastifyInstance => {
   const app = Fastify({
     logger,
     // Longer than the Envoy Gateway idle timeout (60s), so the gateway closes idle connections first.
@@ -49,6 +61,21 @@ export const buildApp = ({ apiToken, db, logger = false }: AppOptions): FastifyI
   if (db) {
     void app.register(inboxRoutes(db));
   }
+  void app.register(
+    telegramRoutes(
+      db && bot
+        ? {
+            webhookSecret: bot.webhookSecret,
+            deps: {
+              db,
+              api: bot.api,
+              allowedUserIds: bot.allowedUserIds,
+              onReplyError: bot.onReplyError,
+            },
+          }
+        : undefined,
+    ),
+  );
 
   app.setNotFoundHandler(async (_request, reply) => reply.code(404).send({ error: 'Not found' }));
 

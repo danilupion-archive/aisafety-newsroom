@@ -41,7 +41,28 @@ describe('loadConfig', () => {
         TELEGRAM_WEBHOOK_SECRET: SECRET,
         TELEGRAM_ALLOWED_USER_IDS: '111, 222',
       }).telegram,
-    ).toEqual({ botToken: '123456:ABC-def', webhookSecret: SECRET, allowedUserIds: [111, 222] });
+    ).toEqual({
+      botToken: '123456:ABC-def',
+      webhookSecret: SECRET,
+      allowedUserIds: [111, 222],
+      webhookUrl: undefined,
+    });
+  });
+
+  it("reads the webhook's address, https only", () => {
+    const bot = {
+      ...base,
+      TELEGRAM_BOT_TOKEN: '123456:ABC-def',
+      TELEGRAM_WEBHOOK_SECRET: SECRET,
+      TELEGRAM_ALLOWED_USER_IDS: '111',
+    };
+    expect(
+      loadConfig({ ...bot, TELEGRAM_WEBHOOK_URL: 'https://newsroom.example/telegram/webhook' })
+        .telegram?.webhookUrl,
+    ).toBe('https://newsroom.example/telegram/webhook');
+    expect(() =>
+      loadConfig({ ...bot, TELEGRAM_WEBHOOK_URL: 'http://newsroom.example/telegram/webhook' }),
+    ).toThrow('TELEGRAM_WEBHOOK_URL must be an https address');
   });
 
   it('refuses half a bot, so a missing secret never leaves the webhook open', () => {
