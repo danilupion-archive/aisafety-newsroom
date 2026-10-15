@@ -4,6 +4,7 @@ import type { PostSummary } from './api';
 
 import { atomFeed, xml } from './feed';
 import { calendarDate, longDate } from './format';
+import { nextPage, readCursor } from './paging';
 import { contentSecurityPolicy, gonePage } from './security';
 import { readSite } from './site';
 
@@ -108,5 +109,29 @@ describe('gonePage (AC-7)', () => {
     expect(page).toContain('Esta publicación se ha retirado');
     expect(page).toContain('name="robots" content="noindex"');
     expect(page).toContain('Noticias &lt;de ejemplo&gt;');
+  });
+});
+
+describe('paging', () => {
+  it('reads the cursor the API gives out, and nothing else', () => {
+    expect(readCursor('2026-10-15T08:00:00.000Z', 'informe-de-ejemplo')).toEqual({
+      before: '2026-10-15T08:00:00.000Z',
+      beforeSlug: 'informe-de-ejemplo',
+    });
+    expect(readCursor('2026-10-15T08:00:00Z', undefined)).toEqual({
+      before: '2026-10-15T08:00:00Z',
+      beforeSlug: undefined,
+    });
+    // A year past 9999 that Date.parse takes but the API refuses; a date with no time; a list; a bad slug.
+    expect(readCursor('+275760-01-01T00:00:00.000Z', undefined)).toBeUndefined();
+    expect(readCursor('2026-10-15', undefined)).toBeUndefined();
+    expect(readCursor(['2026-10-15T08:00:00.000Z'], undefined)).toBeUndefined();
+    expect(readCursor('2026-10-15T08:00:00.000Z', '<script>')?.beforeSlug).toBeUndefined();
+  });
+
+  it('links the next page from the last post shown', () => {
+    expect(nextPage('/etiqueta/evals', POST)).toBe(
+      '/etiqueta/evals?antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo',
+    );
   });
 });

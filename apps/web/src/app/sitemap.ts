@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-import { latestPosts } from '@/api';
+import { allPosts } from '@/api';
 import { site } from '@/site';
 
 export const dynamic = 'force-dynamic';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** Every published post, plus the home, topics and about pages (SPEC §13 pages). */
 const sitemap = async (): Promise<MetadataRoute.Sitemap> => {
   const { url } = site();
-  const posts = await latestPosts({ limit: 500 });
+  const posts = await allPosts();
   return [
     { url: `${url}/` },
     { url: `${url}/temas` },

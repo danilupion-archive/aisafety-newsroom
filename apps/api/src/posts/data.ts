@@ -20,6 +20,20 @@ export interface Post {
   unpublished_at: Date | null;
 }
 
+/** The site's clock: a post dated without a time is published at midnight there. */
+export const SITE_TIME_ZONE = 'Europe/Madrid';
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * `published_at` as given, or for a date alone, midnight on the site's clock. Read as UTC, a breve dated today and
+ * pushed just after midnight in Madrid would stay hidden for two hours (the views show what's published by now()).
+ */
+const publishedAt = (value: string) =>
+  DATE_ONLY.test(value)
+    ? sql<Date>`(${value}::date)::timestamp AT TIME ZONE ${SITE_TIME_ZONE}`
+    : value;
+
 /**
  * Creates or replaces a post (§13 `PUT /posts/:slug`). Pushing an unpublished post publishes it again. The same push
  * twice gives the same post (R-API-3); `created` says whether it's new.
@@ -36,7 +50,7 @@ export const upsertPost = async (
     body_md: body.body_md,
     sources: JSON.stringify(body.sources),
     tags: body.tags,
-    published_at: body.published_at,
+    published_at: publishedAt(body.published_at),
     content_ref: JSON.stringify(body.content_ref),
   };
   const row = await db

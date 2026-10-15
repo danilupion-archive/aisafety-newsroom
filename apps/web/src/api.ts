@@ -1,3 +1,5 @@
+import type { Cursor } from './paging';
+
 import { site } from './site';
 
 /** A source as the site lists it (R-WEB-1). */
@@ -27,11 +29,13 @@ export interface TagCount {
   posts: number;
 }
 
-/** Each answer is kept for at most 60 s (R-WEB-6), so a post appears or leaves within a minute of `/post` (AC-7). */
-const REVALIDATE_SECONDS = 60;
-
+/**
+ * Never cached here: reads stay inside the cluster and are cheap, and a cache that revalidates in the background would
+ * serve an answer past its 60 s to the first visitor after it (R-WEB-6, AC-7). The feed's own `max-age=60` is the
+ * only wait.
+ */
 const read = async (path: string): Promise<Response> =>
-  fetch(`${site().apiUrl}${path}`, { next: { revalidate: REVALIDATE_SECONDS } });
+  fetch(`${site().apiUrl}${path}`, { cache: 'no-store' });
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await read(path);
@@ -41,16 +45,38 @@ const json = async <T>(path: string): Promise<T> => {
   return (await response.json()) as T;
 };
 
-export const latestPosts = (options: { tag?: string; before?: string; limit?: number } = {}) => {
+export const latestPosts = (options: { tag?: string; after?: Cursor; limit?: number } = {}) => {
   const query = new URLSearchParams();
   if (options.tag !== undefined) {
     query.set('tag', options.tag);
   }
-  if (options.before !== undefined) {
-    query.set('before', options.before);
+  if (options.after !== undefined) {
+    query.set('before', options.after.before);
+    if (options.after.beforeSlug !== undefined) {
+      query.set('before_slug', options.after.beforeSlug);
+    }
   }
   query.set('limit', String(options.limit ?? 20));
   return json<PostSummary[]>(`/public/posts?${query.toString()}`);
+};
+
+/** The API's largest page. */
+const MAX_PAGE = 500;
+
+/** Every published post, page by page: for the sitemap. */
+export const allPosts = async (): Promise<PostSummary[]> => {
+  const posts: PostSummary[] = [];
+  for (;;) {
+    const last = posts.at(-1);
+    const page = await latestPosts({
+      limit: MAX_PAGE,
+      after: last ? { before: last.published_at, beforeSlug: last.slug } : undefined,
+    });
+    posts.push(...page);
+    if (page.length < MAX_PAGE) {
+      return posts;
+    }
+  }
 };
 
 /** One post or page; 'gone' once unpublished, undefined if it never was. */

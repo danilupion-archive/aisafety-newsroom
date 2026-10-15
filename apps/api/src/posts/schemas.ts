@@ -82,9 +82,18 @@ export const postBody = z
 
 export type PostBody = z.output<typeof postBody>;
 
-export const publicListQuery = z.object({
-  tag: tag.optional(),
-  limit: z.coerce.number().int().min(1).max(500).default(20),
-  /** Posts published before this instant, for the next page. */
-  before: z.iso.datetime({ offset: true }).optional(),
-});
+export const publicListQuery = z
+  .object({
+    tag: tag.optional(),
+    limit: z.coerce.number().int().min(1).max(500).default(20),
+    /**
+     * The next page starts after the last post shown: its `published_at`, and its slug for posts that share that
+     * instant (a list is ordered by both). `before` alone gives the posts published before it.
+     */
+    before: z.iso.datetime({ offset: true }).optional(),
+    before_slug: slug.optional(),
+  })
+  .refine((query) => query.before_slug === undefined || query.before !== undefined, {
+    path: ['before_slug'],
+    message: 'before_slug goes with before',
+  });

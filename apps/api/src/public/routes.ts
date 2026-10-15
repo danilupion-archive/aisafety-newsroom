@@ -42,7 +42,14 @@ export const publicRoutes =
         select = select.where(sql<boolean>`${query.tag} = ANY(tags)`);
       }
       if (query.before !== undefined) {
-        select = select.where('published_at', '<', new Date(query.before));
+        // Compared at the millisecond, the precision the cursor came out with.
+        const at = sql`date_trunc('milliseconds', published_at)`;
+        const before = new Date(query.before);
+        select = select.where(
+          query.before_slug === undefined
+            ? sql<boolean>`${at} < ${before}`
+            : sql<boolean>`(${at} < ${before} OR (${at} = ${before} AND slug > ${query.before_slug}))`,
+        );
       }
       return select.execute();
     });

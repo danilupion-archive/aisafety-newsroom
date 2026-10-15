@@ -188,6 +188,42 @@ describe('the site’s reads (R-WEB-6)', () => {
     ).toEqual(['antigua']);
   });
 
+  it('pages through posts that share an instant without skipping any (before, before_slug)', async () => {
+    for (const name of ['c-tercera', 'a-primera', 'b-segunda']) {
+      await put(name, { ...BREVE, published_at: '2026-10-01T09:00:00Z' });
+    }
+    await put('d-anterior', { ...BREVE, published_at: '2026-09-30T09:00:00Z' });
+    const slugs = async (url: string) =>
+      (await read(url)).json<{ slug: string; published_at: string }[]>();
+
+    const first = await slugs('/public/posts?limit=2');
+    expect(first.map((post) => post.slug)).toEqual(['a-primera', 'b-segunda']);
+    const last = first.at(-1);
+    const next = await slugs(
+      `/public/posts?limit=2&before=${last?.published_at}&before_slug=${last?.slug}`,
+    );
+    expect(next.map((post) => post.slug)).toEqual(['c-tercera', 'd-anterior']);
+    // `before` alone still means "published before".
+    expect(
+      (await slugs(`/public/posts?before=${last?.published_at}`)).map((post) => post.slug),
+    ).toEqual(['d-anterior']);
+    expect((await read('/public/posts?before_slug=a-primera')).statusCode).toBe(400);
+    expect((await read('/public/posts?before=%2B275760-01-01T00:00:00Z')).statusCode).toBe(400);
+  });
+
+  it('publishes a post dated without a time at midnight in Madrid, not UTC', async () => {
+    await put('verano', { ...BREVE, published_at: '2026-10-15' });
+    await put('invierno', { ...BREVE, published_at: '2026-12-01' });
+    const posts = (await app.inject({ method: 'GET', url: '/api/v1/posts', headers: auth })).json<
+      { slug: string; published_at: string }[]
+    >();
+    const at = Object.fromEntries(posts.map((post) => [post.slug, post.published_at]));
+    expect(at).toEqual({
+      verano: '2026-10-14T22:00:00.000Z',
+      invierno: '2026-11-30T23:00:00.000Z',
+    });
+  });
+
   it('gives one post with its body and sources, never its origin; 404 if it never was', async () => {
     await put('informe-de-ejemplo', BREVE);
     const post = await read('/public/posts/informe-de-ejemplo');
