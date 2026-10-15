@@ -22,8 +22,9 @@ Spanish site, on the the cluster cluster. The stack follows aiontheballot (`../a
 
 ## Layout
 
-- `apps/api`: Fastify API (`dist/server.js`); the worker will be its second entrypoint
-- `packages/domain`: pure logic (URL normalisation, Telegram messages, inbox states)
+- `apps/api`: Fastify API (`dist/server.js`): the inbox API (`src/inbox`) and the Telegram webhook (`src/telegram`);
+  the worker (`dist/worker.js`, `src/worker`) fetches and extracts captured links. Database tests in `tests/`
+- `packages/domain`: pure logic (URL normalisation, Telegram messages, inbox states, notes)
 - `packages/db`: Kysely, generated types, the pool; database tests in `tests/`
 - `db/migrations/*.sql` (dbmate) and `db/schema.sql` (generated dump, review it in every PR)
 - `helm-charts/aisafety-newsroom`: umbrella chart (subcharts in `apps/api/helm-chart`, `db/helm-chart`); the release
