@@ -3,8 +3,8 @@
 aisafety-newsroom-migrations:
   nameOverride: migrations
   image:
-    tag: ''
+    tag: '0.0.0.d2dbd14'
 aisafety-newsroom-api:
   nameOverride: api
   image:
-    tag: ''
+    tag: '0.0.0.d2dbd14'
