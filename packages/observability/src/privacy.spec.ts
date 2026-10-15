@@ -3,6 +3,7 @@ import type { ErrorEvent } from '@sentry/core';
 import { describe, expect, it } from 'vitest';
 
 import {
+  breadcrumbUrl,
   DATA_COLLECTION,
   privacyOptions,
   redactText,
@@ -159,7 +160,7 @@ describe('scrubEvent', () => {
 });
 
 describe('scrubBreadcrumb', () => {
-  it('strips queries from navigation and request URLs and redacts messages', () => {
+  it('strips queries from our own routes, keeps only the host of other URLs, and redacts messages', () => {
     expect(
       scrubBreadcrumb({
         category: 'navigation',
@@ -169,8 +170,40 @@ describe('scrubBreadcrumb', () => {
     ).toEqual({
       category: 'navigation',
       message: 'from [email]',
-      data: { from: '/a', to: '/b', url: 'https://x.test/c', status_code: 200 },
+      data: { from: '/a', to: '/b', url: 'https://x.test', status_code: 200 },
     });
+  });
+
+  it('never keeps a path that holds a token, or the page a request fetched', () => {
+    const telegram = scrubBreadcrumb({
+      category: 'http',
+      type: 'http',
+      data: {
+        url: 'https://api.telegram.org/bot123456:AAsecret-token/sendMessage',
+        'http.method': 'POST',
+        'url.query': 'chat_id=1',
+        'url.fragment': 'x',
+        status_code: 400,
+      },
+    });
+    expect(telegram.data).toEqual({
+      url: 'https://api.telegram.org',
+      'http.method': 'POST',
+      status_code: 400,
+    });
+    expect(JSON.stringify(telegram)).not.toContain('secret-token');
+
+    expect(
+      scrubBreadcrumb({ category: 'http', data: { url: 'https://example.com/a/private/path' } })
+        .data,
+    ).toEqual({ url: 'https://example.com' });
+  });
+
+  it('drops a URL it can’t read rather than keep it whole', () => {
+    expect(scrubBreadcrumb({ category: 'http', data: { url: 'not a url/bot1:x/y' } }).data).toEqual(
+      {},
+    );
+    expect(breadcrumbUrl('//example.com/bot1:x/y')).toBeUndefined();
   });
 });
 
@@ -185,5 +218,7 @@ describe('SDK options', () => {
     });
     expect(privacyOptions.beforeSend).toBe(scrubEvent);
     expect(privacyOptions.beforeBreadcrumb).toBe(scrubBreadcrumb);
+    // No outgoing request carries sentry-trace or baggage (R-FET-4).
+    expect(privacyOptions.tracePropagationTargets).toEqual([]);
   });
 });

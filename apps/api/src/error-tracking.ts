@@ -1,7 +1,7 @@
 import type { Dsn } from '@aisafety-newsroom/observability/dsn';
 
 import { privacyOptions } from '@aisafety-newsroom/observability/privacy';
-import { init, type NodeOptions } from '@sentry/node';
+import { init, type NodeOptions, onUnhandledRejectionIntegration } from '@sentry/node';
 import { readFileSync } from 'node:fs';
 
 /** `api@<version>` or `worker@<version>`, read at runtime so it works from `src` (tests) and `dist` (the image). */
@@ -25,6 +25,9 @@ export const initErrorTracking = (
     dsn: dsn?.value,
     enabled: dsn !== undefined,
     release: readRelease(component),
+    // The SDK's default ("warn") keeps a process alive after an unhandled rejection, which Node would end; ending it
+    // lets Kubernetes restart it in a known state. Reported first, as fatal.
+    integrations: [onUnhandledRejectionIntegration({ mode: 'strict' })],
     ...overrides,
   });
 };

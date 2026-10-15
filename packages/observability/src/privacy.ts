@@ -52,6 +52,26 @@ const redactDeep = (value: unknown, depth = 0): unknown => {
 
 const URL_KEYS = ['url', 'from', 'to'];
 
+/** A breadcrumb's query and fragment attributes (`url.query`, `http.fragment`), which the SDKs record apart. */
+const QUERY_KEY = /(?:^|\.)(?:query|fragment)$/;
+
+/**
+ * A URL as a breadcrumb may keep it. An absolute one is cut to its scheme and host: its path can hold a token (the
+ * Bot API's is in the path: /bot<token>/sendMessage) or say which page a reader saved, and the SDKs record a
+ * breadcrumb for every outgoing request. A relative one is our own route and loses its query only. Undefined drops it.
+ */
+export const breadcrumbUrl = (url: string): string | undefined => {
+  if (url.startsWith('/') && !url.startsWith('//')) {
+    return stripQuery(url);
+  }
+  try {
+    const { origin } = new URL(url);
+    return origin === 'null' ? undefined : origin;
+  } catch {
+    return undefined;
+  }
+};
+
 export const scrubBreadcrumb = (breadcrumb: Breadcrumb): Breadcrumb => {
   const scrubbed = redactDeep(breadcrumb) as Breadcrumb;
   const { data } = scrubbed;
@@ -59,7 +79,17 @@ export const scrubBreadcrumb = (breadcrumb: Breadcrumb): Breadcrumb => {
     for (const key of URL_KEYS) {
       const value: unknown = data[key];
       if (typeof value === 'string') {
-        data[key] = stripQuery(value);
+        const kept = breadcrumbUrl(value);
+        if (kept === undefined) {
+          delete data[key];
+        } else {
+          data[key] = kept;
+        }
+      }
+    }
+    for (const key of Object.keys(data)) {
+      if (QUERY_KEY.test(key)) {
+        delete data[key];
       }
     }
   }
@@ -160,7 +190,15 @@ export const privacyOptions = {
   beforeBreadcrumb: scrubBreadcrumb,
   // Outcome statistics: extra envelopes on every page hide, which GlitchTip doesn't use.
   sendClientReports: false,
+  // Unset, the SDKs add `sentry-trace` and `baggage` (which names the DSN's public key and the release) to every
+  // outgoing request, tracing or not: to Telegram, and to every page the worker fetches (R-FET-4: nothing of ours
+  // goes with a fetch). No target gets them.
+  tracePropagationTargets: [],
 } satisfies Pick<
   Options,
-  'beforeBreadcrumb' | 'beforeSend' | 'dataCollection' | 'sendClientReports'
+  | 'beforeBreadcrumb'
+  | 'beforeSend'
+  | 'dataCollection'
+  | 'sendClientReports'
+  | 'tracePropagationTargets'
 >;
