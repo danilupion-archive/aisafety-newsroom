@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@aisafety-newsroom/domain": "workspace:*",
+    "@aisafety-newsroom/observability": "workspace:*",
+    "@sentry/node": "11.7.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

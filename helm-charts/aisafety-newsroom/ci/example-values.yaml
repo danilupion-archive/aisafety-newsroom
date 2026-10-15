@@ -14,10 +14,17 @@ aisafety-newsroom-api:
       - namespace: example-gateways
         podLabels: { gateway.envoyproxy.io/owning-gateway-name: example-gateway }
   # Renders the worker and its network policy, so lint covers them.
+  errorTracking:
+    dsnSecret: { name: aisafety-newsroom-api-glitchtip }
   worker:
     enabled: true
+    errorTracking:
+      dsnSecret: { name: aisafety-newsroom-worker-glitchtip }
     networkPolicy:
       database: { namespace: example-postgres }
+      errorTracking:
+        namespace: example-glitchtip
+        podLabels: { app.kubernetes.io/name: glitchtip, app.kubernetes.io/component: web }
   # Renders the bot's settings, so lint covers them.
   telegram:
     secret: { name: aisafety-newsroom-telegram }
@@ -32,6 +39,8 @@ aisafety-newsroom-web:
   image: { repository: registry.example/aisafety-newsroom/web, tag: 0.1.0.abc1234 }
   site:
     { url: https://newsroom-site.example.test, name: Sitio de ejemplo, author: Autora de ejemplo }
+  errorTracking:
+    dsnSecret: { name: aisafety-newsroom-web-glitchtip }
   # Renders analytics and the route, so lint covers them.
   analytics:
     { scriptUrl: https://plausible.example.test/js/script.js, domain: newsroom-site.example.test }

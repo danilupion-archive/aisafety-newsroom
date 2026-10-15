@@ -26,6 +26,8 @@ export interface AppOptions {
   bot?: BotOptions;
   /** newsroom_public's connection, for the site's reads (R-WEB-6). Without it, /public answers 503. */
   publicDb?: Database;
+  /** Told of every 5xx, to report it (SPEC §15); the client gets no message either way. */
+  onServerError?: (error: Error) => void;
   logger?: FastifyServerOptions['logger'];
 }
 
@@ -57,6 +59,7 @@ export const buildApp = ({
   db,
   bot,
   publicDb,
+  onServerError,
   logger = false,
 }: AppOptions): FastifyInstance => {
   const app = Fastify({
@@ -117,6 +120,7 @@ export const buildApp = ({
       return reply.code(status).send({ error: error.message });
     }
     request.log.error({ err: error }, 'request failed');
+    onServerError?.(error);
     return reply.code(500).send({ error: 'Internal error' });
   });
 

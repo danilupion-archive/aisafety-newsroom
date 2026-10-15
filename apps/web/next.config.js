@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const appDir = dirname(fileURLToPath(import.meta.url));
+const { version } = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
 
 /**
  * Headers on every response, as aiontheballot's site sets them. The Content Security Policy is the proxy's (proxy.ts),
@@ -30,6 +32,10 @@ const nextConfig = {
   // Metadata in <head> for every client, not streamed into the body: crawlers Next doesn't recognise read only the head.
   htmlLimitedBots: /.*/,
   reactStrictMode: true,
+  // Error tracking's SDK (instrumentation.ts) loads from node_modules at run time, not bundled.
+  serverExternalPackages: ['@sentry/node'],
+  // The release that error reports are tagged with: a build fact, so it is inlined.
+  env: { APP_RELEASE: `web@${version}` },
   headers: async () => [{ source: '/:path*', headers: SECURITY_HEADERS }],
 };
 

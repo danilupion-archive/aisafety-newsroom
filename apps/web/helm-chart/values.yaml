@@ -43,6 +43,13 @@ analytics:
   scriptUrl: ''
   domain: ''
 
+# Error tracking for the site's server (SPEC §15): SENTRY_DSN of the GlitchTip project aisafety-newsroom-web, sealed by
+# scripts/seal-glitchtip-dsns.sh. Unset, nothing is reported. Nothing runs in the browser (R-WEB-7).
+errorTracking:
+  dsnSecret:
+    name: ''
+    key: SENTRY_DSN
+
 # Extra environment.
 env: []
 

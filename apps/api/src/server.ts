@@ -1,10 +1,14 @@
 import { createDatabase } from '@aisafety-newsroom/db/client';
+import { readDsn } from '@aisafety-newsroom/observability/dsn';
+import { captureException, flush } from '@sentry/node';
 
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
+import { initErrorTracking } from './error-tracking.js';
 import { createTelegramApi } from './telegram/api.js';
 
 const config = loadConfig(process.env);
+initErrorTracking(readDsn(process.env), 'api');
 const db = createDatabase({
   connectionString: config.appDatabaseUrl,
   applicationName: 'aisafety-newsroom-api',
@@ -28,10 +32,13 @@ const app = buildApp({
           allowedUserIds: config.telegram.allowedUserIds,
           api: telegram,
           // The item is saved either way; only the error's message is logged (it never carries the token).
-          onReplyError: (error) =>
-            app.log.warn({ err: error }, 'a Telegram reply could not be sent'),
+          onReplyError: (error) => {
+            app.log.warn({ err: error }, 'a Telegram reply could not be sent');
+            captureException(error);
+          },
         }
       : undefined,
+  onServerError: (error) => captureException(error),
   logger: { level: config.logLevel },
 });
 
@@ -39,6 +46,7 @@ const shutdown = async (): Promise<void> => {
   await app.close();
   await db.destroy();
   await publicDb?.destroy();
+  await flush(2000);
   process.exit(0);
 };
 
@@ -55,7 +63,9 @@ await app.listen({ host: config.host, port: config.port });
 if (config.telegram?.webhookUrl && telegram) {
   telegram.setWebhook(config.telegram.webhookUrl, config.telegram.webhookSecret).then(
     () => app.log.info('Telegram webhook registered'),
-    (error: unknown) =>
-      app.log.warn({ err: error }, 'the Telegram webhook could not be registered'),
+    (error: unknown) => {
+      app.log.warn({ err: error }, 'the Telegram webhook could not be registered');
+      captureException(error);
+    },
   );
 }

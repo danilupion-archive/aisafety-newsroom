@@ -47,6 +47,15 @@ spec:
             - name: PLAUSIBLE_DOMAIN
               value: {{ required "analytics.domain is required with analytics.scriptUrl" .Values.analytics.domain | quote }}
             {{- end }}
+            {{- with .Values.errorTracking.dsnSecret }}
+            {{- if .name }}
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

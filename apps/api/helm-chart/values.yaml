@@ -71,12 +71,31 @@ worker:
     limits:
       cpu: '1'
       memory: 1Gi
+  # SENTRY_DSN of the GlitchTip project aisafety-newsroom-worker (its own, never the API's). Set
+  # networkPolicy.errorTracking too, or its reports can't leave.
+  errorTracking:
+    dsnSecret:
+      name: ''
+      key: SENTRY_DSN
   networkPolicy:
     enabled: true
     # The database's namespace and port.
     database:
       namespace: ''
       port: 5432
+    # Error tracking inside the cluster (GlitchTip): its namespace, its web pods' labels and their port (the pods',
+    # not the Service's: a policy sees the connection after the Service). Without a namespace, no error tracking.
+    errorTracking:
+      namespace: ''
+      podLabels: {}
+      port: 8000
+
+# Error tracking (SPEC §15): SENTRY_DSN of the GlitchTip project aisafety-newsroom-api, sealed by
+# scripts/seal-glitchtip-dsns.sh. Unset, nothing is reported.
+errorTracking:
+  dsnSecret:
+    name: ''
+    key: SENTRY_DSN
 
 # Who may reach the API's pods (SPEC §5): the gateways' Envoy pods (/api/v1, the webhook) and the site's pods (/public);
 # nothing else in the cluster. Ingress only. Gitops turns it on with the gateways of its environment.

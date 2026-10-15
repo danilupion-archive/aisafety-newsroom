@@ -51,6 +51,15 @@ spec:
                   key: {{ .key }}
             {{- end }}
             {{- end }}
+            {{- with .Values.errorTracking.dsnSecret }}
+            {{- if .name }}
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- end }}
             {{- if or .Values.telegram.secret.name .Values.telegram.allowedUserIds }}
             # The bot takes its secret and its allowlist together (src/config.ts), so one without the other fails here.
             - name: TELEGRAM_BOT_TOKEN

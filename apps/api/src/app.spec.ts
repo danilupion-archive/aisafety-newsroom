@@ -47,7 +47,8 @@ describe('the API', () => {
 });
 
 describe('errors', () => {
-  const failing = buildApp({ apiToken: TOKEN });
+  const reported: Error[] = [];
+  const failing = buildApp({ apiToken: TOKEN, onServerError: (error) => reported.push(error) });
   const headers = { authorization: `Bearer ${TOKEN}` };
   failing.get('/api/v1/refused-move', async () => {
     throw Object.assign(new Error('item 7 can’t move from logged to ready'), {
@@ -74,6 +75,10 @@ describe('errors', () => {
     const response = await failing.inject({ method: 'GET', url: '/api/v1/broken', headers });
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'Internal error' });
+    // Reported for error tracking (SPEC §15); a 409 or a 400 is not.
+    expect(reported.map((error) => error.message)).toEqual([
+      'connection to postgres://user:secret@host failed',
+    ]);
   });
 
   it('answers a body that is not JSON with 400, in the API shape', async () => {

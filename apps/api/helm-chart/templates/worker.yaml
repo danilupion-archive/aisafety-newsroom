@@ -50,6 +50,15 @@ spec:
               value: {{ .Values.worker.intervalSeconds | quote }}
             - name: PAGE_TEXT_RETENTION_DAYS
               value: {{ .Values.worker.pageTextRetentionDays | quote }}
+            {{- with .Values.worker.errorTracking.dsnSecret }}
+            {{- if .name }}
+            - name: SENTRY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .name }}
+                  key: {{ .key }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.telegram.secret.name }}
             # To edit the bot's "Saved #n" replies once an item is fetched (R-CAP-7).
             - name: TELEGRAM_BOT_TOKEN
@@ -145,5 +154,22 @@ spec:
           protocol: TCP
         - port: 443
           protocol: TCP
+    {{- with .Values.worker.networkPolicy.errorTracking }}
+    {{- if .namespace }}
+    # Error tracking's in-cluster Service: the port is its pods' (a policy sees the connection after the Service).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          {{- with .podLabels }}
+          podSelector:
+            matchLabels:
+              {{- toYaml . | nindent 14 }}
+          {{- end }}
+      ports:
+        - port: {{ .port }}
+          protocol: TCP
+    {{- end }}
+    {{- end }}
 {{- end }}
 {{- end }}
