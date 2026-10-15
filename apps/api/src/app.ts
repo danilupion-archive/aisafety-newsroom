@@ -25,6 +25,20 @@ export interface AppOptions {
   logger?: FastifyServerOptions['logger'];
 }
 
+/**
+ * The path the router sees: without an absolute-form request's scheme and host, without the query, percent-decoded.
+ * find-my-way routes `/%61pi/v1/items` and `GET http://x/api/v1/items` to /api/v1/items, so the guard must read the
+ * path the same way, not as it was written.
+ */
+export const routedPath = (url: string): string => {
+  const path = url.replace(/^[a-z][a-z\d+.-]*:\/\/[^/?#]*/i, '').split('?', 1)[0] ?? '';
+  try {
+    return decodeURIComponent(path);
+  } catch {
+    return path;
+  }
+};
+
 /** A database error that names the constraint it broke, as pg reports it. */
 const constraintOf = (error: unknown): string | undefined =>
   typeof error === 'object' &&
@@ -43,13 +57,13 @@ export const buildApp = ({ apiToken, db, bot, logger = false }: AppOptions): Fas
     bodyLimit: 64 * 1024,
   });
 
-  // Before routing, so a caller without the token can't tell which routes exist. The token is never logged: Fastify's
-  // request logs carry no headers.
+  // Every request routed to /api, and every one whose path reads as /api, so a caller without the token can't tell
+  // which routes exist. The token is never logged: Fastify's request logs carry no headers.
   app.addHook('onRequest', async (request, reply) => {
-    if (
-      request.url.startsWith('/api/') &&
-      !bearerMatches(request.headers.authorization, apiToken)
-    ) {
+    const guarded =
+      request.routeOptions.url?.startsWith('/api/') === true ||
+      routedPath(request.url).startsWith('/api/');
+    if (guarded && !bearerMatches(request.headers.authorization, apiToken)) {
       return reply.code(401).send({ error: 'Unauthorized' });
     }
   });
