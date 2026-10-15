@@ -1,4 +1,4 @@
-import { normalizeUrl } from './url.js';
+import { normalizeUrl, withScheme } from './url.js';
 
 /** The parts of a Telegram entity this system reads. Offsets and lengths are in UTF-16 code units. */
 export interface TelegramEntity {
@@ -23,7 +23,7 @@ export interface TelegramMessage {
 }
 
 export interface CapturedLink {
-  /** The link as sent. */
+  /** The link as sent, with `https://` in front if it had no scheme ("example.com/a"): what the worker fetches. */
   url: string;
   normalized: string;
 }
@@ -36,6 +36,13 @@ export interface Capture {
   rawText: string;
 }
 
+/**
+ * Longer links aren't captured as links: they stay in the note. The unique index on the normalised link can't hold a
+ * row much past 2.7 KB, and an insert that fails every time would leave Telegram redelivering the message for a day,
+ * then dropping it with no reply.
+ */
+export const MAX_URL_LENGTH = 2048;
+
 const tidy = (text: string): string =>
   text
     .split('\n')
@@ -46,8 +53,8 @@ const tidy = (text: string): string =>
 
 /**
  * The links and the note in a message or its caption (R-CAP-3), forwarded or not. A `url` entity's text is the link
- * and leaves the note; a `text_link` keeps its visible text in the note. A link that isn't http or https stays in the
- * note.
+ * and leaves the note; a `text_link` keeps its visible text in the note. A link that isn't http or https, or is longer
+ * than MAX_URL_LENGTH, stays in the note.
  */
 export const extractCapture = (message: TelegramMessage): Capture => {
   const rawText = message.text ?? message.caption ?? '';
@@ -62,8 +69,8 @@ export const extractCapture = (message: TelegramMessage): Capture => {
           ? entity.url
           : undefined;
     const normalized = url === undefined ? null : normalizeUrl(url);
-    if (url !== undefined && normalized !== null) {
-      found.push({ url, normalized, entity });
+    if (url !== undefined && normalized !== null && normalized.length <= MAX_URL_LENGTH) {
+      found.push({ url: withScheme(url), normalized, entity });
     }
   }
 

@@ -16,7 +16,15 @@ export interface Labelled {
 export const label = ({ id, page_title, url }: Labelled): string => {
   const title = page_title?.replace(/\s+/g, ' ').trim();
   const name = title ? title : ((url === null ? null : hostOf(url)) ?? 'note');
-  const short = name.length > MAX_TITLE ? `${name.slice(0, MAX_TITLE - 1).trimEnd()}…` : name;
+  // By code points, so an emoji at the cut isn't split into half a surrogate pair, which Telegram refuses.
+  const chars = Array.from(name);
+  const short =
+    chars.length > MAX_TITLE
+      ? `${chars
+          .slice(0, MAX_TITLE - 1)
+          .join('')
+          .trimEnd()}…`
+      : name;
   return `#${id} · ${short}`;
 };
 

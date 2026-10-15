@@ -1,5 +1,6 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 
+import { isOpen } from '@aisafety-newsroom/domain/inbox';
 import {
   type Command,
   extractCapture,
@@ -9,8 +10,16 @@ import {
 
 import type { TelegramApi } from './api.js';
 
-import { addNote, type ItemDetail, markDiscarded, type Outcome, restore } from '../inbox/items.js';
 import {
+  addNote,
+  getItem,
+  type ItemDetail,
+  markDiscarded,
+  type Outcome,
+  restore,
+} from '../inbox/items.js';
+import {
+  captureFollowUp,
   captureLink,
   captureNote,
   type CaptureResult,
@@ -64,8 +73,33 @@ const idArgs = (args: string): { id: number | undefined; rest: string } => {
 const outcomeReply = (outcome: Outcome, done: (item: ItemDetail) => string): string =>
   outcome.ok ? done(outcome.item) : outcome.message;
 
+/**
+ * `/note`: added to an open item's note; for one already logged or discarded, a follow-up that `/news` will see, as
+ * when its link comes again (R-CAP-6).
+ */
+const noteCommand = async (
+  db: Database,
+  id: number,
+  text: string,
+  sender: Omit<Sender, 'note'>,
+): Promise<string> => {
+  const item = await getItem(db, id);
+  if (item && !isOpen(item.status)) {
+    const followUp = await captureFollowUp(db, id, { ...sender, note: text });
+    return `${label(item)} is ${item.status}; your note is #${followUp}, for /news`;
+  }
+  return outcomeReply(
+    await addNote(db, id, text, sender.at),
+    (noted) => `Noted on ${label(noted)}`,
+  );
+};
+
 /** Runs a bot command (R-CAP-8) and returns the reply. */
-const runCommand = async (command: Command, db: Database): Promise<string> => {
+const runCommand = async (
+  command: Command,
+  db: Database,
+  sender: Omit<Sender, 'note'>,
+): Promise<string> => {
   const { id, rest } = idArgs(command.args);
   switch (command.name) {
     case 'pending':
@@ -88,7 +122,7 @@ const runCommand = async (command: Command, db: Database): Promise<string> => {
     case 'note':
       return id === undefined || rest === ''
         ? 'Usage: /note <id> <text>'
-        : outcomeReply(await addNote(db, id, rest), (item) => `Noted on ${label(item)}`);
+        : noteCommand(db, id, rest, sender);
     case 'help':
     case 'start':
       return HELP;
@@ -126,7 +160,11 @@ export const handleUpdate = async (update: TelegramUpdate, deps: BotDeps): Promi
     if (await wasProcessed(deps.db, update.update_id)) {
       return;
     }
-    const text = await runCommand(command, deps.db);
+    const text = await runCommand(command, deps.db, {
+      submittedBy: message.from.id,
+      rawText: message.text ?? '',
+      at: deps.now?.() ?? new Date(),
+    });
     await recordUpdate(deps.db, update.update_id);
     await reply(text);
     return;

@@ -24,6 +24,12 @@ export type CaptureResult =
   | { kind: 'follow_up'; id: number; original: number; originalStatus: InboxStatus }
   | { kind: 'already'; id: number; status: InboxStatus };
 
+/**
+ * A new item waits this long before the worker may claim it, so the "Saved #n" reply goes out and is remembered
+ * first, and the worker can edit it (R-CAP-7). Well inside the 2 minutes of AC-1.
+ */
+export const REPLY_GRACE_SECONDS = 10;
+
 /** Records an update; false if it was already processed, so a redelivery changes nothing (R-CAP-2). */
 export const recordUpdate = async (db: Executor, updateId: number): Promise<boolean> => {
   const row = await db
@@ -73,7 +79,7 @@ export const captureLink = async (
       url_normalized: link.normalized,
       note: appendNote('', sender.note, sender.at),
       status: 'queued',
-      next_fetch_at: sql<Date>`now()`,
+      next_fetch_at: sql<Date>`now() + make_interval(secs => ${REPLY_GRACE_SECONDS})`,
     })
     .onConflict((conflict) =>
       conflict.column('url_normalized').where('url_normalized', 'is not', null).doNothing(),
@@ -116,6 +122,19 @@ export const captureLink = async (
       return { kind: 'already', id, status: existing.status };
   }
 };
+
+/**
+ * A note about an item already logged or discarded (the bot's `/note`): a follow-up, as when its link comes again
+ * (R-CAP-6), since `/news` only reads open items. Returns the follow-up's id.
+ */
+export const captureFollowUp = (
+  db: Database,
+  originalId: number,
+  sender: Sender,
+): Promise<number> =>
+  db
+    .transaction()
+    .execute(async (trx) => Number((await noteOnly(trx, sender, String(originalId))).id));
 
 /** Saves a message without a link as a note, straight to needs_review (R-CAP-4). */
 export const captureNote = async (trx: Transaction<DB>, sender: Sender): Promise<CaptureResult> => {

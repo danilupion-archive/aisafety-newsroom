@@ -255,6 +255,17 @@ describe('capture (R-CAP-3 to R-CAP-7)', () => {
     expect(texts()).toEqual([`Already logged as #${original}; your note is #${saved[1]?.id}`]);
   });
 
+  it('stores a link sent without a scheme as https, and gives the reply time to be remembered', async () => {
+    await deliver(message('nytimes.com/2026/x', ['nytimes.com/2026/x']));
+    const [row] = await asSuperuser<{ url: string; due_in: number }>(
+      `SELECT url, round(extract(epoch FROM next_fetch_at - now()))::int AS due_in FROM app.inbox_items`,
+    );
+    expect(row?.url).toBe('https://nytimes.com/2026/x');
+    // The worker can't claim it before the "Saved #n" reply is remembered (R-CAP-7).
+    expect(row?.due_in).toBeGreaterThanOrEqual(8);
+    expect(row?.due_in).toBeLessThanOrEqual(10);
+  });
+
   it('saves the item even when the reply can’t be sent', async () => {
     telegram.failing = true;
     await deliver(message('https://example.com/a', ['https://example.com/a']));
@@ -292,6 +303,26 @@ describe('commands (R-CAP-8)', () => {
     await deliver(command(`/note #${id} see also the BOE`));
     expect(texts()).toEqual([`Noted on #${id} · example.com`]);
     expect((await items())[0]?.note).toMatch(/\] see also the BOE$/);
+  });
+
+  it('/note on a logged item makes a follow-up, so /news sees the note (R-CAP-6)', async () => {
+    const id = await insertItem({ url: 'https://example.com/a', status: 'logged' });
+    await deliver(command(`/note ${id} correction: it was 2025`));
+    const saved = await items();
+    expect(saved).toHaveLength(2);
+    expect(saved[1]).toMatchObject({ url: null, status: 'needs_review', follows_up: String(id) });
+    expect(saved[1]?.note).toMatch(/\] correction: it was 2025$/);
+    expect(saved[0]?.note).toBe('');
+    expect(texts()).toEqual([
+      `#${id} · example.com is logged; your note is #${saved[1]?.id}, for /news`,
+    ]);
+  });
+
+  it('/discard again without a reason keeps the reason', async () => {
+    const id = await insertItem({ url: 'https://example.com/a' });
+    await deliver(command(`/discard ${id} paywalled`));
+    await deliver(command(`/discard ${id}`));
+    expect(await items()).toMatchObject([{ status: 'discarded', discard_reason: 'paywalled' }]);
   });
 
   it('explains how to use a command, and what went wrong', async () => {

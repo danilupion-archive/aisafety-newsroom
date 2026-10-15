@@ -227,9 +227,14 @@ export const markDiscarded = (db: Database, id: number, reason: string | null): 
     if (!canTransition(row.status, 'discarded')) {
       return conflict(id, row.status, 'discarded');
     }
+    // Discarding it again without a reason keeps the reason it has.
     await trx
       .updateTable('app.inbox_items')
-      .set({ status: 'discarded', discard_reason: reason })
+      .set({
+        status: 'discarded',
+        discard_reason:
+          reason === null && row.status === 'discarded' ? sql<string>`discard_reason` : reason,
+      })
       .where('id', '=', String(id))
       .execute();
     return done(trx, id);

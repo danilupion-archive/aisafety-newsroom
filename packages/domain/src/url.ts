@@ -13,15 +13,21 @@ const X_ALIASES = new Set([
   'mobile.x.com',
 ]);
 
-const parse = (input: string): URL | null => {
+/**
+ * The link with `https://` in front if it has none: Telegram marks "example.com/a" as a link too. A colon followed by
+ * a digit is a port ("example.com:8080"), not a scheme.
+ */
+export const withScheme = (input: string): string => {
   const trimmed = input.trim();
-  // Telegram marks "example.com/a" as a link too: such links are taken as https. A colon followed by a digit is a
-  // port ("example.com:8080"), not a scheme.
-  const withScheme = /^[a-z][a-z\d+.-]*:(?!\d)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  if (!URL.canParse(withScheme)) {
+  return /^[a-z][a-z\d+.-]*:(?!\d)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+const parse = (input: string): URL | null => {
+  const completed = withScheme(input);
+  if (!URL.canParse(completed)) {
     return null;
   }
-  const url = new URL(withScheme);
+  const url = new URL(completed);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     return null;
   }

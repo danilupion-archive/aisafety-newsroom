@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractCapture, parseCommand, type TelegramMessage } from './telegram.js';
+import { extractCapture, MAX_URL_LENGTH, parseCommand, type TelegramMessage } from './telegram.js';
 
 const message = (fields: Partial<TelegramMessage>): TelegramMessage => ({
   message_id: 1,
@@ -95,6 +95,36 @@ describe('extractCapture (R-CAP-3)', () => {
     );
     expect(capture.links).toEqual([]);
     expect(capture.note).toBe('see tg://resolve?domain=x');
+  });
+
+  it('gives a link sent without a scheme its https, so the worker can fetch it', () => {
+    const text = 'mira nytimes.com/2026/10/15/ai.html';
+    const capture = extractCapture({
+      message_id: 1,
+      chat: { id: 1, type: 'private' },
+      text,
+      entities: [{ type: 'url', offset: 5, length: text.length - 5 }],
+    });
+    expect(capture.links).toEqual([
+      {
+        url: 'https://nytimes.com/2026/10/15/ai.html',
+        normalized: 'https://nytimes.com/2026/10/15/ai.html',
+      },
+    ]);
+    expect(capture.note).toBe('mira');
+  });
+
+  it('leaves a link too long for the index in the note', () => {
+    const url = `https://example.com/?q=${'x'.repeat(MAX_URL_LENGTH)}`;
+    const text = `largo ${url}`;
+    const capture = extractCapture({
+      message_id: 1,
+      chat: { id: 1, type: 'private' },
+      text,
+      entities: [{ type: 'url', offset: 6, length: url.length }],
+    });
+    expect(capture.links).toEqual([]);
+    expect(capture.note).toBe(text);
   });
 
   it('returns no links for a note-only message (R-CAP-4)', () => {

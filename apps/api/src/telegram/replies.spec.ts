@@ -19,6 +19,13 @@ describe('label', () => {
     expect(text.endsWith('…')).toBe(true);
   });
 
+  it('never cuts an emoji in half', () => {
+    const text = label({ id: 8, page_title: `${'x'.repeat(78)}🤖🤖 y`, url: null });
+    expect(text).toBe(`#8 · ${'x'.repeat(78)}🤖…`);
+    // A lone surrogate can't be encoded as UTF-8.
+    expect(() => encodeURIComponent(text)).not.toThrow();
+  });
+
   it('shows a title on one line', () => {
     expect(label({ id: 8, page_title: 'Two\nlines', url: null })).toBe('#8 · Two lines');
   });
