@@ -47,6 +47,8 @@ export class FetchRefused extends Error {
 export interface Fetched {
   /** The type the site declared, lowercase and without parameters; undefined when it declared none. */
   contentType: string | undefined;
+  /** The charset the site declared with it (`text/html; charset=…`), lowercase; undefined when it declared none. */
+  charset?: string | undefined;
   /** The address the bytes came from, after redirects. */
   finalUrl: string;
   /** The final response's status, a 2xx. */
@@ -152,6 +154,9 @@ const bareType = (header: string | undefined): string | undefined => {
   return type ? type : undefined;
 };
 
+const charsetOf = (header: string | undefined): string | undefined =>
+  /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(header ?? '')?.[1]?.toLowerCase();
+
 /** One request, no redirect followed: the response, or a refusal. */
 const get = (
   url: URL,
@@ -256,6 +261,7 @@ const fetchWithin = async (value: string, options: FetchOptions): Promise<Fetche
     const bytes = await readCapped(response, maxBytes, signal);
     return {
       contentType: bareType(response.headers['content-type']),
+      charset: charsetOf(response.headers['content-type']),
       finalUrl: url.href,
       status,
       bytes,

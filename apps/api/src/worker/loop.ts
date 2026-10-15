@@ -1,19 +1,31 @@
-import { claimDue, clearOldPageText, staleQueued } from './jobs.js';
-import { processItem, type WorkerDeps } from './process.js';
+import { abandonCrashed, claimDue, clearOldPageText, staleQueued } from './jobs.js';
+import { editReply, failedReply, processItem, type WorkerDeps } from './process.js';
 
-/** Items claimed per round (R-FET-1). */
+/** Items fetched per round at most (R-FET-1). */
 export const BATCH = 10;
 
 /** How often the loop clears old pages' text (Q9): it has days to do it, so once an hour is plenty. */
 export const CLEAR_EVERY_MS = 60 * 60 * 1000;
 
-/** One round: claims what's due and fetches it, one at a time. Returns how many it claimed. */
+/**
+ * One round: gives up on items that crashed the worker on every attempt, then claims what's due and fetches it. One
+ * claim per item, so a page that crashes the worker costs only its own attempt, not those of a whole batch (R-FET-5).
+ * Returns how many it fetched.
+ */
 export const runOnce = async (deps: WorkerDeps): Promise<number> => {
-  const claimed = await claimDue(deps.db, BATCH);
-  for (const item of claimed) {
-    await processItem(item, deps);
+  for (const crashed of await abandonCrashed(deps.db)) {
+    await editReply(crashed.reply, failedReply(crashed.id, 'crashed'), deps);
   }
-  return claimed.length;
+  let fetched = 0;
+  while (fetched < BATCH) {
+    const [item] = await claimDue(deps.db);
+    if (!item) {
+      break;
+    }
+    await processItem(item, deps);
+    fetched += 1;
+  }
+  return fetched;
 };
 
 export interface LoopOptions {

@@ -6,7 +6,7 @@ import type { TelegramApi } from '../src/telegram/api.js';
 import type { Fetched } from '../src/worker/fetch-url.js';
 
 import { FetchRefused } from '../src/worker/fetch-url.js';
-import { claimDue, clearOldPageText } from '../src/worker/jobs.js';
+import { claimDue, clearOldPageText, MAX_ATTEMPTS } from '../src/worker/jobs.js';
 import { runOnce } from '../src/worker/loop.js';
 import { type WorkerDeps } from '../src/worker/process.js';
 import { appDatabase, asSuperuser, emptyTables, insertItem } from './db.js';
@@ -106,15 +106,7 @@ describe('claiming (R-FET-1, R-FET-5)', () => {
       VALUES ('https://example.com/ready', 'https://example.com/ready', 'ready')`);
 
     const claimed = await claimDue(db);
-    expect(claimed).toEqual([
-      {
-        id: due,
-        url: 'https://example.com/a',
-        attempts: 1,
-        replyChatId: 500,
-        replyMessageId: 9001,
-      },
-    ]);
+    expect(claimed).toEqual([{ id: due, url: 'https://example.com/a', attempts: 1 }]);
     // Held for the lease: a second claim right away finds nothing.
     expect(await claimDue(db)).toEqual([]);
     expect((await item(due))?.retry_in_seconds).toBeGreaterThan(9 * 60);
@@ -135,6 +127,54 @@ describe('claiming (R-FET-1, R-FET-5)', () => {
     await claimDue(db);
     await makeDue(id);
     expect(await claimDue(db)).toMatchObject([{ id, attempts: 2 }]);
+  });
+
+  it('claims one item at a time unless asked for more', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await queue(`https://example.com/${i}`);
+    }
+    expect(await claimDue(db)).toHaveLength(1);
+  });
+
+  it('gives up on an item that crashed the worker on every attempt, once its last lease runs out (R-FET-5)', async () => {
+    const crashed = await queue('https://example.com/crashes');
+    const next = await queue('https://example.com/fine');
+    await asSuperuser(
+      `UPDATE app.inbox_items SET fetch_attempts = ${MAX_ATTEMPTS} WHERE id = ${crashed}`,
+    );
+    const edits: Edit[] = [];
+    const fetched: string[] = [];
+
+    expect(
+      await runOnce(
+        deps(async (url) => {
+          fetched.push(url);
+          return page();
+        }, edits),
+      ),
+    ).toBe(1);
+    expect(fetched).toEqual(['https://example.com/fine']);
+    expect(await item(crashed)).toMatchObject({
+      status: 'needs_review',
+      fetch_status: 'failed',
+      last_error: 'crashed',
+      fetch_attempts: MAX_ATTEMPTS,
+    });
+    expect(edits).toContainEqual({
+      chatId: 500,
+      messageId: 9001,
+      text: `#${crashed} · couldn't fetch it (crashed); your note goes to /news`,
+    });
+    expect(await item(next)).toMatchObject({ status: 'ready' });
+  });
+
+  it('waits out a crashed item’s last lease before giving up on it', async () => {
+    const id = await queue();
+    await asSuperuser(
+      `UPDATE app.inbox_items SET fetch_attempts = ${MAX_ATTEMPTS}, next_fetch_at = now() + interval '5 minutes' WHERE id = ${id}`,
+    );
+    expect(await runOnce(deps(async () => page()))).toBe(0);
+    expect(await item(id)).toMatchObject({ status: 'queued' });
   });
 });
 
@@ -245,6 +285,27 @@ describe('a round (R-FET-2)', () => {
     );
     expect(await item(id)).toMatchObject({ status: 'discarded', page_title: null });
     expect(edits).toEqual([]);
+  });
+
+  it('edits a reply remembered after the claim: the bot stores it once Telegram has sent it (R-CAP-7)', async () => {
+    const [row] = await asSuperuser<{ id: string }>(
+      `INSERT INTO app.inbox_items (url, url_normalized, status, next_fetch_at)
+       VALUES ('https://example.com/late', 'https://example.com/late', 'queued', now()) RETURNING id`,
+    );
+    const id = Number(row?.id);
+    const edits: Edit[] = [];
+    await runOnce(
+      deps(async () => {
+        await asSuperuser(
+          `UPDATE app.inbox_items SET reply_chat_id = 500, reply_message_id = 9002 WHERE id = $1`,
+          [id],
+        );
+        return page();
+      }, edits),
+    );
+    expect(edits).toEqual([
+      { chatId: 500, messageId: 9002, text: `#${id} · Un informe de ejemplo` },
+    ]);
   });
 
   it('stores the page even when the reply can’t be edited', async () => {

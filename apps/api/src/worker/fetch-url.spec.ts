@@ -60,6 +60,7 @@ describe('fetching a link (R-FET-4)', () => {
     const fetched = await fetchUrl(site('/programa.pdf'), options());
     expect(fetched).toEqual({
       contentType: 'application/pdf',
+      charset: 'binary',
       finalUrl: site('/programa.pdf'),
       status: 200,
       bytes: Buffer.from('%PDF-1.7 programa de ejemplo'),

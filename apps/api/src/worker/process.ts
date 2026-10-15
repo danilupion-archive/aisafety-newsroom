@@ -7,10 +7,15 @@ import type { TelegramApi } from '../telegram/api.js';
 import { label } from '../telegram/replies.js';
 import { extract } from './extract.js';
 import { type Fetched, FetchRefused, pageType } from './fetch-url.js';
-import { type Claimed, markSkipped, saveFailure, saveFetched } from './jobs.js';
-
-/** Attempts before an item goes to needs_review (R-FET-2). */
-export const MAX_ATTEMPTS = 3;
+import {
+  type Claimed,
+  markSkipped,
+  MAX_ATTEMPTS,
+  type ReplyTarget,
+  type Saved,
+  saveFailure,
+  saveFetched,
+} from './jobs.js';
 /** HTML past this is refused even though PDFs may be larger (R-FET-2: HTML up to 5 MB, PDFs up to 30 MB). */
 export const HTML_MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_BYTES = 30 * 1024 * 1024;
@@ -50,24 +55,38 @@ const describe = (error: unknown): { reason: string; final: boolean } => {
   return { reason: `unreadable (${error instanceof Error ? error.name : 'error'})`, final: false };
 };
 
-const editReply = async (item: Claimed, text: string, deps: WorkerDeps): Promise<void> => {
-  if (!deps.telegram || item.replyChatId === null || item.replyMessageId === null) {
+/** Edits the item's "Saved #n" reply, if it was stored and its reply is known (R-CAP-7). */
+export const editReply = async (
+  reply: ReplyTarget | null | undefined,
+  text: string,
+  deps: WorkerDeps,
+): Promise<void> => {
+  if (!deps.telegram || !reply) {
     return;
   }
   try {
-    await deps.telegram.editMessageText(item.replyChatId, item.replyMessageId, text);
+    await deps.telegram.editMessageText(reply.chatId, reply.messageId, text);
   } catch (error) {
     deps.onEditError?.(error);
   }
 };
 
+/** The reply for an item the worker gave up on. */
+export const failedReply = (id: number, reason: string): string =>
+  `#${id} · couldn't fetch it (${reason}); your note goes to /news`;
+
+const replyOf = (stored: Saved): ReplyTarget | null | undefined => stored?.reply;
+
 /** Fetches one claimed item and records what came of it: ready, skipped, a retry, or needs_review. */
 export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void> => {
   const host = hostOf(item.url);
   if (host !== null && isSkipped(host, deps.skipHosts)) {
-    if (await markSkipped(deps.db, item.id)) {
-      await editReply(item, `#${item.id} · ${host} (not fetched; your note goes to /news)`, deps);
-    }
+    const stored = await markSkipped(deps.db, item.id);
+    await editReply(
+      replyOf(stored),
+      `#${item.id} · ${host} (not fetched; your note goes to /news)`,
+      deps,
+    );
     return;
   }
 
@@ -77,31 +96,25 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     if (type === 'text/html' && fetched.bytes.byteLength > HTML_MAX_BYTES) {
       throw new FetchRefused('tooLarge');
     }
-    const extracted = await extract(type, fetched.bytes);
+    const extracted = await extract(type, fetched.bytes, fetched.charset);
     const stored = await saveFetched(deps.db, item.id, {
       status: fetched.status,
       finalUrl: fetched.finalUrl,
       contentType: type,
       extracted,
     });
-    if (stored) {
-      await editReply(
-        item,
-        label({ id: item.id, page_title: extracted.title, url: item.url }),
-        deps,
-      );
-    }
+    await editReply(
+      replyOf(stored),
+      label({ id: item.id, page_title: extracted.title, url: item.url }),
+      deps,
+    );
   } catch (error) {
     const { reason, final } = describe(error);
     const lastTry = final || item.attempts >= MAX_ATTEMPTS;
     const retryIn = lastTry ? undefined : RETRY_IN_MINUTES[item.attempts - 1];
     const stored = await saveFailure(deps.db, item.id, reason, retryIn);
-    if (stored && lastTry) {
-      await editReply(
-        item,
-        `#${item.id} · couldn't fetch it (${reason}); your note goes to /news`,
-        deps,
-      );
+    if (lastTry) {
+      await editReply(replyOf(stored), failedReply(item.id, reason), deps);
     }
   }
 };

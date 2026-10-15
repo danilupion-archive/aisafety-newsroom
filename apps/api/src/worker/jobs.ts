@@ -10,47 +10,81 @@ export interface Claimed {
   url: string;
   /** This one included. */
   attempts: number;
-  replyChatId: number | null;
-  replyMessageId: number | null;
 }
+
+/** Attempts before an item goes to needs_review (R-FET-2), counting the ones a crash cut short (R-FET-5). */
+export const MAX_ATTEMPTS = 3;
 
 /** How long a claim holds an item: past it, an item a crashed worker held is due again, its attempt counted. */
 export const LEASE_MINUTES = 10;
 
 /**
+ * Where an item's "Saved #n" reply is, to edit it (R-CAP-7). Read when the item is stored, not when it's claimed: the
+ * bot remembers the reply only once Telegram has sent it.
+ */
+export interface ReplyTarget {
+  chatId: number;
+  messageId: number;
+}
+
+/** A save that went through, with the reply to edit if there is one; undefined if the item had left the queue. */
+export type Saved = { reply: ReplyTarget | null } | undefined;
+
+interface ReplyColumns {
+  reply_chat_id: string | null;
+  reply_message_id: string | null;
+}
+
+const replyOf = (row: ReplyColumns): ReplyTarget | null =>
+  row.reply_chat_id === null || row.reply_message_id === null
+    ? null
+    : { chatId: Number(row.reply_chat_id), messageId: Number(row.reply_message_id) };
+
+const saved = (row: ReplyColumns | undefined): Saved =>
+  row === undefined ? undefined : { reply: replyOf(row) };
+
+/**
  * Claims up to `limit` queued items that are due (R-FET-1): `FOR UPDATE SKIP LOCKED`, so overlapping claims never take
  * the same item. Each claim counts an attempt and holds the item for LEASE_MINUTES, before anything is fetched, so a
- * page that crashes the worker runs out of attempts instead of looping (R-FET-5).
+ * page that crashes the worker runs out of attempts instead of looping (R-FET-5): an item with none left isn't
+ * claimed, and `abandonCrashed` takes it out of the queue.
  */
-export const claimDue = async (db: Database, limit = 10): Promise<Claimed[]> => {
-  const { rows } = await sql<{
-    id: string;
-    url: string;
-    fetch_attempts: number;
-    reply_chat_id: string | null;
-    reply_message_id: string | null;
-  }>`
+export const claimDue = async (db: Database, limit = 1): Promise<Claimed[]> => {
+  const { rows } = await sql<{ id: string; url: string; fetch_attempts: number }>`
     UPDATE app.inbox_items
     SET fetch_attempts = fetch_attempts + 1,
         next_fetch_at = now() + make_interval(mins => ${LEASE_MINUTES})
     WHERE id IN (
       SELECT id FROM app.inbox_items
-      WHERE status = 'queued' AND url IS NOT NULL AND (next_fetch_at IS NULL OR next_fetch_at <= now())
+      WHERE status = 'queued' AND url IS NOT NULL AND fetch_attempts < ${MAX_ATTEMPTS}
+        AND (next_fetch_at IS NULL OR next_fetch_at <= now())
       ORDER BY next_fetch_at NULLS FIRST, id
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
     )
-    RETURNING id, url, fetch_attempts, reply_chat_id, reply_message_id
+    RETURNING id, url, fetch_attempts
   `.execute(db);
   return rows
-    .map((row) => ({
-      id: Number(row.id),
-      url: row.url,
-      attempts: row.fetch_attempts,
-      replyChatId: row.reply_chat_id === null ? null : Number(row.reply_chat_id),
-      replyMessageId: row.reply_message_id === null ? null : Number(row.reply_message_id),
-    }))
+    .map((row) => ({ id: Number(row.id), url: row.url, attempts: row.fetch_attempts }))
     .sort((a, b) => a.id - b.id);
+};
+
+/**
+ * R-FET-5: an item whose attempts all ended with no result, because the worker died fetching it (out of memory,
+ * killed by its liveness probe), goes to needs_review once its last lease runs out, instead of waiting in the queue
+ * for ever. Returns them, to edit their replies.
+ */
+export const abandonCrashed = async (
+  db: Database,
+): Promise<{ id: number; reply: ReplyTarget | null }[]> => {
+  const { rows } = await sql<{ id: string } & ReplyColumns>`
+    UPDATE app.inbox_items
+    SET status = 'needs_review', fetch_status = 'failed', last_error = 'crashed', next_fetch_at = NULL
+    WHERE status = 'queued' AND url IS NOT NULL AND fetch_attempts >= ${MAX_ATTEMPTS}
+      AND next_fetch_at <= now()
+    RETURNING id, reply_chat_id, reply_message_id
+  `.execute(db);
+  return rows.map((row) => ({ id: Number(row.id), reply: replyOf(row) }));
 };
 
 export interface Page {
@@ -62,10 +96,10 @@ export interface Page {
 
 /**
  * Stores a fetched page and makes the item ready. Only while it's still queued: an item discarded meanwhile stays
- * discarded. True if it was stored.
+ * discarded.
  */
-export const saveFetched = async (db: Database, id: number, page: Page): Promise<boolean> => {
-  const result = await db
+export const saveFetched = async (db: Database, id: number, page: Page): Promise<Saved> => {
+  const row = await db
     .updateTable('app.inbox_items')
     .set({
       status: 'ready',
@@ -83,32 +117,34 @@ export const saveFetched = async (db: Database, id: number, page: Page): Promise
     })
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
+    .returning(['reply_chat_id', 'reply_message_id'])
     .executeTakeFirst();
-  return result.numUpdatedRows > 0n;
+  return saved(row);
 };
 
-/** A host the worker doesn't fetch (R-FET-3): the item is ready, and relies on its note. True if it was stored. */
-export const markSkipped = async (db: Database, id: number): Promise<boolean> => {
-  const result = await db
+/** A host the worker doesn't fetch (R-FET-3): the item is ready, and relies on its note. */
+export const markSkipped = async (db: Database, id: number): Promise<Saved> => {
+  const row = await db
     .updateTable('app.inbox_items')
     .set({ status: 'ready', fetch_status: 'skipped', next_fetch_at: null })
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
+    .returning(['reply_chat_id', 'reply_message_id'])
     .executeTakeFirst();
-  return result.numUpdatedRows > 0n;
+  return saved(row);
 };
 
 /**
  * Records a failed fetch: tried again after `retryInMinutes`, or, with no retry left, sent to needs_review with
- * `fetch_status: failed` (R-FET-2). True if it was stored.
+ * `fetch_status: failed` (R-FET-2).
  */
 export const saveFailure = async (
   db: Database,
   id: number,
   error: string,
   retryInMinutes: number | undefined,
-): Promise<boolean> => {
-  const result = await db
+): Promise<Saved> => {
+  const row = await db
     .updateTable('app.inbox_items')
     .set(
       retryInMinutes === undefined
@@ -120,8 +156,9 @@ export const saveFailure = async (
     )
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
+    .returning(['reply_chat_id', 'reply_message_id'])
     .executeTakeFirst();
-  return result.numUpdatedRows > 0n;
+  return saved(row);
 };
 
 /** How many items have waited in the queue longer than an hour (SPEC §15, monitoring). */

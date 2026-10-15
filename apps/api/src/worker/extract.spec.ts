@@ -113,6 +113,20 @@ describe('extract (R-FET-2)', () => {
     expect(page.text).toContain('cuarenta páginas');
   });
 
+  it('reads a page in the charset its server sent, when the page itself declares none', async () => {
+    // "Новости" in windows-1251; read as windows-1252 it would be "Íîâîñòè".
+    const title = Buffer.from([0xcd, 0xee, 0xe2, 0xee, 0xf1, 0xf2, 0xe8]);
+    const html = Buffer.concat([
+      Buffer.from('<!doctype html><html><head><title>'),
+      title,
+      Buffer.from(`</title></head><body>${ARTICLE}</body></html>`),
+    ]);
+    expect((await extract('text/html', html, 'windows-1251')).title).toBe('Новости');
+    expect((await extract('text/plain', title, 'windows-1251')).text).toBe('Новости');
+    // A label nobody knows is no charset at all.
+    expect((await extract('text/plain', Buffer.from('plain'), 'x-unknown')).text).toBe('plain');
+  });
+
   it('reads a PDF’s text and title', async () => {
     const page = await extract(
       'application/pdf',

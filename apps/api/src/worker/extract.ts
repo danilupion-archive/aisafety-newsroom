@@ -120,10 +120,11 @@ const paragraphs = (body: Element): string => {
   return out.join('\n\n');
 };
 
-const fromHtml = (bytes: Uint8Array): Extracted => {
-  // The encoding as a browser finds it: a byte-order mark, then the page's own declaration; without one, UTF-8 if it
-  // reads as UTF-8, else windows-1252.
+const fromHtml = (bytes: Uint8Array, charset: string | undefined): Extracted => {
+  // The encoding as a browser finds it: a byte-order mark, then the charset the server sent, then the page's own
+  // declaration; without any, UTF-8 if it reads as UTF-8, else windows-1252.
   const encoding = htmlEncodingSniffer(bytes, {
+    transportLayerEncodingLabel: charset,
     defaultEncoding: isUtf8(bytes) ? 'UTF-8' : 'windows-1252',
   });
   // jsdom runs no script and loads nothing.
@@ -178,8 +179,9 @@ const fromPdf = async (bytes: Uint8Array): Promise<Extracted> => {
     stopAtErrors: false,
     verbosity: 0,
   });
-  const document = await task.promise;
   try {
+    // Inside the try: a document that fails to load is cleaned up too.
+    const document = await task.promise;
     const { info } = (await document.getMetadata()) as { info?: { Title?: unknown } };
     const pages: string[] = [];
     let length = 0;
@@ -208,13 +210,30 @@ const fromPdf = async (bytes: Uint8Array): Promise<Extracted> => {
   }
 };
 
-/** Plain text as written: UTF-8 if it reads as UTF-8, else windows-1252. */
-const fromText = (bytes: Uint8Array): Extracted => {
-  let text: string;
+/** A decoder for a charset label, or undefined for one TextDecoder doesn't know. */
+const decoderFor = (label: string | undefined): TextDecoder | undefined => {
+  if (label === undefined) {
+    return undefined;
+  }
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder(label);
   } catch {
-    text = new TextDecoder('windows-1252').decode(bytes);
+    return undefined;
+  }
+};
+
+/** Plain text in the charset the server sent; without one, UTF-8 if it reads as UTF-8, else windows-1252. */
+const fromText = (bytes: Uint8Array, charset: string | undefined): Extracted => {
+  const declared = decoderFor(charset);
+  let text: string;
+  if (declared) {
+    text = declared.decode(bytes);
+  } else {
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      text = new TextDecoder('windows-1252').decode(bytes);
+    }
   }
   return { ...NOTHING, text: capped(text) };
 };
@@ -223,14 +242,15 @@ const fromText = (bytes: Uint8Array): Extracted => {
 export const extract = async (
   contentType: string | undefined,
   bytes: Uint8Array,
+  charset?: string,
 ): Promise<Extracted> => {
   switch (contentType) {
     case 'text/html':
-      return fromHtml(bytes);
+      return fromHtml(bytes, charset);
     case 'application/pdf':
       return fromPdf(bytes);
     case 'text/plain':
-      return fromText(bytes);
+      return fromText(bytes, charset);
     default:
       return NOTHING;
   }
