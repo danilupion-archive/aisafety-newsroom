@@ -422,8 +422,12 @@ These are requirements on the content repo, implemented there.
   Every page says who writes it (Dani) and links to the about page, which says who Dani
   is. The site doesn't speak for Pausemos la IA.
 
-**Pages:** a home page listing the latest items, a page per item, a page per tag, an
-"about" page, an RSS/Atom feed, and a sitemap.
+**Pages:** a home page listing the latest items, a page per item (`/<slug>`), a page per
+tag (`/etiqueta/<tag>`, tags shown by Spanish names), a topics index (`/temas`), an
+"about" page (`/sobre`), an Atom feed (`/feed.xml`), and a sitemap. The about page's text
+is a post of type `page` with the slug `sobre`, pushed from aisafety-media like the rest
+(R-WEB-2): pages are never listed, need no sources, and nothing on the site is written in
+its code.
 
 - **R-WEB-4** Must: Spanish interface; Open Graph and canonical metadata; usable at
   phone width; accessible (semantic HTML, contrast, alt text; WCAG 2.2 AA as the
@@ -437,14 +441,21 @@ These are requirements on the content repo, implemented there.
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9.
 
-| Method and path       | Body                                                                                            | Effect                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `PUT /posts/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, content_ref: {path, commit}}` | create or update                                         |
-| `DELETE /posts/:slug` |                                                                                                 | unpublish: the page returns `410` and drops out of feeds |
-| `GET /posts`          |                                                                                                 | list, so aisafety-media can reconcile                    |
+| Method and path       | Body                                                                                            | Effect                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PUT /posts/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; slugs that are the site's own paths (`temas`, `etiqueta`…) are refused |
+| `DELETE /posts/:slug` |                                                                                                 | unpublish: the page returns `410` and drops out of feeds                                                                                         |
+| `GET /posts`          |                                                                                                 | list, so aisafety-media can reconcile                                                                                                            |
+
+**Public read routes** (no token, on no gateway, as `newsroom_public`): `GET
+/public/posts` (latest first, no pages; `tag`, `before`, `limit`), `GET
+/public/posts/:slug` (`410` once unpublished), `GET /public/tags`, and `GET
+/public/unpublished`, the slugs the site's proxy answers `410` for.
 
 - **R-WEB-8** Must: the site can be rebuilt by re-pushing every published post from
   aisafety-media (P1).
+- **R-WEB-9** Must: the site stays off in a deployment until gitops gives it its name,
+  address and author (SPEC Q1), so it can be merged before they're decided.
 
 ## 14. Security
 

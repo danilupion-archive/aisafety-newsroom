@@ -9,6 +9,18 @@ export const slug = z
   .max(120)
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
 
+/**
+ * The site's own paths: posts live at the site's root (`/<slug>`), so these would be hidden behind the site's pages.
+ * `sobre` is the about page itself, pushed as a page (R-WEB-3).
+ */
+const RESERVED = new Set(['sobre', 'temas', 'etiqueta', 'healthz']);
+
+/** Why a slug can't take this post, or undefined if it can. */
+export const reservedSlug = (name: string, type: string): string | undefined =>
+  RESERVED.has(name) && !(name === 'sobre' && type === 'page')
+    ? `${name} is one of the site's own paths`
+    : undefined;
+
 /** A source as the site lists it (R-WEB-1): its title, its link and when it was checked. */
 const source = z.strictObject({
   title: z.string().trim().min(1).max(300),

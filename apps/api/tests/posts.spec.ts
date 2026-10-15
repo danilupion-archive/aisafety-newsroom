@@ -122,6 +122,17 @@ describe('pages', () => {
   });
 });
 
+describe('reserved slugs', () => {
+  it('refuses the site’s own paths, but takes the about page as sobre', async () => {
+    expect((await put('temas', BREVE)).json()).toEqual({
+      error: "temas is one of the site's own paths",
+    });
+    expect((await put('sobre', BREVE)).statusCode).toBe(400);
+    const about = { ...BREVE, type: 'page', body_md: 'Texto de ejemplo.', sources: [] };
+    expect((await put('sobre', about)).statusCode).toBe(201);
+  });
+});
+
 describe('DELETE /api/v1/posts/:slug (AC-7)', () => {
   it('unpublishes a post: its page answers 410 and it leaves the lists; pushing it again restores it', async () => {
     await put('informe-de-ejemplo', BREVE);

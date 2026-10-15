@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { parse } from '../parse.js';
 import { listPosts, unpublishPost, upsertPost } from './data.js';
-import { postBody, slug } from './schemas.js';
+import { postBody, reservedSlug, slug } from './schemas.js';
 
 /** The posts API (§13), under /api/v1, behind the bearer token that app.ts checks first. */
 export const postsRoutes =
@@ -18,6 +18,10 @@ export const postsRoutes =
         const body = name === undefined ? undefined : parse(postBody, request.body, reply);
         if (name === undefined || !body) {
           return reply;
+        }
+        const reserved = reservedSlug(name, body.type);
+        if (reserved !== undefined) {
+          return reply.code(400).send({ error: reserved });
         }
         const { created, post } = await upsertPost(db, name, body);
         return reply.code(created ? 201 : 200).send(post);
