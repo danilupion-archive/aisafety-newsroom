@@ -565,8 +565,8 @@ API token, re-pushing every post, restoring the database.
   and appends the note.
 - **AC-3** A link to x.com is skipped for fetching and still reaches `/news` with its
   note.
-- **AC-4** `/news` with no arguments logs every `ready` item in English to the right
-  monthly file, with tags from the watchlist, and marks each one `logged`.
+- **AC-4** `/news` with no arguments logs every `ready` item in English as its own item
+  file, with tags from the watchlist and `newsroom: <id>`, and marks each one `logged`.
 - **AC-5** A page whose text tells the reader to do something is stored as text and has
   no other effect. A link to a private address (`localhost`, `10.0.0.1`, or a name that
   resolves to one) is refused and fetches nothing.
@@ -578,7 +578,7 @@ API token, re-pushing every post, restoring the database.
 - **AC-8** `/sweep` with Miniflux configured logs feed items without the researcher
   agent searching for them again.
 - **AC-9** Sending an already logged link again with a note creates a follow-up, and the
-  next `/news` adds the note to the original's entry in the news log.
+  next `/news` adds the note to the original's item file ("Added (Dani):").
 - **AC-10** `/discard` of the wrong id shows that item's title, and `/restore` brings it
   back to where it was.
 

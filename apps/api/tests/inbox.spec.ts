@@ -9,7 +9,7 @@ import { appDatabase, asSuperuser, emptyTables, insertItem } from './db.js';
 const TOKEN = 'a'.repeat(43);
 const auth = { authorization: `Bearer ${TOKEN}` };
 const REF = {
-  news_file: 'news/2026-10.md',
+  news_file: 'news/2026/10/2026-10-15-example-item.md',
   entry_date: '2026-10-15',
   tags: ['labs', 'loss-of-control'],
   relevance: 'high',
@@ -116,6 +116,12 @@ describe('POST /api/v1/items/:id/logged', () => {
     expect(response.json()).toMatchObject({ id, status: 'logged', logged_ref: REF });
   });
 
+  it('takes a month’s file too, as the log was before one file per item', async () => {
+    const id = await insertItem();
+    const monthly = { ...REF, news_file: 'news/2026-10.md' };
+    expect((await post(`/api/v1/items/${id}/logged`, monthly)).statusCode).toBe(200);
+  });
+
   it('logs a needs_review item too: a note, or a page that could not be fetched', async () => {
     const id = await insertItem({ url: null, note: 'a note' });
     expect((await post(`/api/v1/items/${id}/logged`, REF)).statusCode).toBe(200);
@@ -128,7 +134,11 @@ describe('POST /api/v1/items/:id/logged', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json<{ logged_at: string }>().logged_at).toBe(first.logged_at);
 
-    const moved = { ...REF, news_file: 'news/2026-09.md', entry_date: '2026-09-30' };
+    const moved = {
+      ...REF,
+      news_file: 'news/2026/09/2026-09-30-example-item.md',
+      entry_date: '2026-09-30',
+    };
     const updated = await post(`/api/v1/items/${id}/logged`, moved);
     expect(updated.statusCode).toBe(200);
     expect(updated.json()).toMatchObject({
@@ -151,6 +161,8 @@ describe('POST /api/v1/items/:id/logged', () => {
     const id = await insertItem();
     for (const body of [
       { ...REF, news_file: 'news/october.md' },
+      { ...REF, news_file: 'news/2026/10/notes.md' },
+      { ...REF, news_file: 'news/../CLAUDE.md' },
       { ...REF, entry_date: '15/10/2026' },
       { ...REF, tags: ['#labs'] },
       { ...REF, relevance: 'urgent' },

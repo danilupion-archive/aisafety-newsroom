@@ -26,7 +26,14 @@ export const listQuery = z.object({
 });
 
 export const loggedBody = z.strictObject({
-  news_file: z.string().regex(/^news\/\d{4}-\d{2}\.md$/, 'news_file is news/YYYY-MM.md'),
+  // aisafety-media's news log: one file per item (news/YYYY/MM/YYYY-MM-DD-slug.md, its tools/news.py), or a month's
+  // file as it was before.
+  news_file: z
+    .string()
+    .regex(
+      /^news\/(?:\d{4}-\d{2}|\d{4}\/\d{2}\/\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*)\.md$/,
+      'news_file is an item file, news/YYYY/MM/YYYY-MM-DD-slug.md (or a month’s, news/YYYY-MM.md)',
+    ),
   entry_date: z.iso.date(),
   tags: z.array(tag).max(10),
   relevance: z.enum(['high', 'medium', 'low']),
