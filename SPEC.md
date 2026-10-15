@@ -339,10 +339,17 @@ These are requirements on the content repo, implemented there.
   and `NEWSROOM_TOKEN` from the environment, falling back to the macOS Keychain (service
   `aisafety-newsroom`, account `api-token`, stored there by `scripts/seal-gitops-secrets.sh`).
   Subcommands:
-  - inbox: `pending`, `show <id>`, `logged <id> …`, `discard <id> <reason>`,
-    `restore <id>`, `note <id> <text>`;
-  - posts: `post <path>`, `unpublish <slug>`, `posts` (to reconcile);
+  - inbox: `pending`, `show <id>…`, `logged <id> <item file>` (the date, tags and
+    relevance come from the file, which must pass `tools/news.py`'s check),
+    `discard <id> <reason>`, `restore <id>`, `note <id> <text>`;
+  - posts: `check [post…]` (offline), `post <path>` (only `approved` or `published`,
+    and committed: `content_ref.commit` is the file's last commit), `post --all`
+    (R-WEB-8), `unpublish <slug>`, `posts` (to reconcile);
   - `sync-tags` (parses `news/watchlist.md`), only if M2 goes ahead.
+
+  The token goes only to the API host, in the header: redirects aren't followed, and a
+  non-local `http://` address is refused.
+
 - **R-MED-2** Must: `/news` with no arguments runs in queue mode. For each pending item:
   1. use the stored title, outlet, date and text; fetch again only if the text is
      missing (skipped or failed) or isn't the article (a cookie wall, a login page);
@@ -359,8 +366,10 @@ These are requirements on the content repo, implemented there.
 - **R-MED-4** Must: `/sweep` reads Miniflux first (§12), then has the `researcher` agent
   cover only what the feeds don't.
 - **R-MED-5** Must: new content types:
-  - `posts/YYYY-MM-DD-slug.md` for breves: English frontmatter, Spanish body, status
-    `draft → approved → published`;
+  - `posts/YYYY-MM-DD-slug.md` for breves, `posts/<slug>.md` for pages (`sobre`):
+    English frontmatter, Spanish body, status `draft → approved → published`, or
+    `unpublished`. `sources:` lists ids of files in `sources/`, so everything the site
+    cites was fetched and checked there;
   - `format: article` pieces, with `article.md` as the body.
 
   `/breve` drafts a breve, `/post <slug>` pushes approved content to the site, and only
@@ -374,7 +383,7 @@ These are requirements on the content repo, implemented there.
 | Q4  | Is drafting with a local model worth building? (§8.2)                                                  | Decide after using M1                          |
 | Q6  | Will others send items later?                                                                          | Designed for, not built                        |
 | Q7  | Articles in v1, or breves first?                                                                       | Breves first                                   |
-| Q8  | Which "Where to look" sources have usable feeds?                                                       | Check during M3                                |
+| Q8  | Which "Where to look" sources have usable feeds?                                                       | Checked: the watchlist's Feeds (2026-10-15)    |
 | Q9  | How long to keep `page_text` (size, copyright)?                                                        | Clear it 90 days after `logged` or `discarded` |
 | Q10 | Licence for the site's content (breves, articles)                                                      | CC BY 4.0, like aiontheballot's content        |
 
@@ -402,7 +411,9 @@ These are requirements on the content repo, implemented there.
   the deployed version). The lead session triages them by title and summary, opens only
   the candidates, logs them, and marks the processed entries read.
 - **R-RSS-3** Must: `MINIFLUX_URL` (`https://miniflux.example.test`, public, behind its
-  token) and `MINIFLUX_TOKEN` come from the environment or the Keychain.
+  token) and `MINIFLUX_TOKEN` come from the environment or the Keychain (service
+  `miniflux`, account `api-token`), read by aisafety-media's `tools/miniflux.py`.
+  Everything it does stays inside the category.
 - **R-RSS-4** May (later): Miniflux entries that match a keyword list go into the inbox,
   through the API, from the worker or from an n8n workflow.
 
