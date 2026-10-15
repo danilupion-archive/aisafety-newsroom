@@ -1,0 +1,12 @@
+# Rendered in CI (helm lint/template) to exercise every template. Fictional hosts, placeholder secret names.
+aisafety-newsroom-migrations:
+  image: { repository: registry.example/aisafety-newsroom/migrations, tag: 0.1.0.abc1234 }
+  databaseUrlSecret: { name: aisafety-newsroom-owner-db }
+aisafety-newsroom-api:
+  image: { repository: registry.example/aisafety-newsroom/api, tag: 0.1.0.abc1234 }
+  apiTokenSecret: { name: aisafety-newsroom-api-token }
+  databaseUrlSecret: { name: aisafety-newsroom-app-db }
+  route:
+    enabled: true
+    parentRefs: [{ name: example-gateway, namespace: example-gateway }]
+    hostnames: [newsroom-api.example.test]

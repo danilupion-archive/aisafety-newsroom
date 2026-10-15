@@ -1,0 +1,32 @@
+# Local development and test database, mirroring production on the cluster: the same Postgres image as the
+# cluster `postgresql` chart, and the same roles (an owner plus non-owner runtime roles, as the chart's `extraRoles`
+# create them). See SPEC.md §7.
+#
+#   pnpm db:up        # start Postgres on :5433 (override with NEWSROOM_PG_PORT); aiontheballot's uses :5432
+#   pnpm db:migrate   # apply migrations and refresh db/schema.sql
+#   docker compose down -v   # stop and wipe the database
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    container_name: aisafety-newsroom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+      NEWSROOM_OWNER_PASSWORD: ${NEWSROOM_OWNER_PASSWORD:-dev-only-owner}
+      NEWSROOM_APP_PASSWORD: ${NEWSROOM_APP_PASSWORD:-dev-only-app}
+      NEWSROOM_PUBLIC_PASSWORD: ${NEWSROOM_PUBLIC_PASSWORD:-dev-only-public}
+    ports:
+      - '${NEWSROOM_PG_PORT:-5433}:5432'
+    volumes:
+      - aisafety-newsroom-pg-data:/var/lib/postgresql
+      - ./db/local/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d newsroom']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  aisafety-newsroom-pg-data:

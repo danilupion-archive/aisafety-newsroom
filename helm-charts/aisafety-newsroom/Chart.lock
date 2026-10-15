@@ -1,0 +1,9 @@
+dependencies:
+- name: aisafety-newsroom-migrations
+  repository: file://../../db/helm-chart
+  version: 0.1.0
+- name: aisafety-newsroom-api
+  repository: file://../../apps/api/helm-chart
+  version: 0.1.0
+digest: sha256:613b3874c712cc9c4a34e96eb1f40e7bb86b9f87ba501886bdcc6b46b01c76b8
+generated: "2026-10-15T20:27:33.226338+02:00"

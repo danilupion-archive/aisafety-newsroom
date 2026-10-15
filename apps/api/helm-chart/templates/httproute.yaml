@@ -1,0 +1,28 @@
+{{- if .Values.route.enabled }}
+# The API host (SPEC §5): only these paths reach the API; anything else on the host gets the gateway's 404.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "aisafety-newsroom-api.fullname" . }}
+  labels:
+    {{- include "aisafety-newsroom-api.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml (required "route.parentRefs is required when route.enabled" .Values.route.parentRefs) | nindent 4 }}
+  hostnames:
+    {{- toYaml (required "route.hostnames is required when route.enabled" .Values.route.hostnames) | nindent 4 }}
+  rules:
+    - matches:
+        {{- range (required "route.paths is required when route.enabled" .Values.route.paths) }}
+        - path:
+            type: PathPrefix
+            value: {{ . }}
+        {{- end }}
+      backendRefs:
+        - name: {{ include "aisafety-newsroom-api.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}

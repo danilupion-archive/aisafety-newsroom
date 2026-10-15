@@ -1,0 +1,324 @@
+--
+-- PostgreSQL database dump
+--
+
+\restrict schema
+
+-- Dumped from database version 18.6 (Debian 18.6-1.pgdg13+2)
+-- Dumped by pg_dump version 18.6 (Debian 18.6-1.pgdg13+2)
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: app; Type: SCHEMA; Schema: -; Owner: newsroom_owner
+--
+
+CREATE SCHEMA app;
+
+
+ALTER SCHEMA app OWNER TO newsroom_owner;
+
+--
+-- Name: private; Type: SCHEMA; Schema: -; Owner: newsroom_owner
+--
+
+CREATE SCHEMA private;
+
+
+ALTER SCHEMA private OWNER TO newsroom_owner;
+
+--
+-- Name: fetch_status; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.fetch_status AS ENUM (
+    'pending',
+    'ok',
+    'failed',
+    'skipped'
+);
+
+
+ALTER TYPE app.fetch_status OWNER TO newsroom_owner;
+
+--
+-- Name: inbox_status; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.inbox_status AS ENUM (
+    'queued',
+    'ready',
+    'needs_review',
+    'logged',
+    'discarded'
+);
+
+
+ALTER TYPE app.inbox_status OWNER TO newsroom_owner;
+
+--
+-- Name: inbox_items_transition(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.inbox_items_transition() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.status IS DISTINCT FROM OLD.status AND NOT (
+    (OLD.status = 'queued' AND NEW.status IN ('ready', 'needs_review', 'discarded'))
+    OR (OLD.status IN ('ready', 'needs_review') AND NEW.status IN ('logged', 'discarded'))
+    OR (OLD.status = 'discarded' AND NEW.status IN ('queued', 'ready', 'needs_review'))
+  ) THEN
+    RAISE EXCEPTION 'item % can''t move from % to %', OLD.id, OLD.status, NEW.status
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'inbox_items_transition';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+ALTER FUNCTION private.inbox_items_transition() OWNER TO newsroom_owner;
+
+--
+-- Name: touch_updated_at(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.touch_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END
+$$;
+
+
+ALTER FUNCTION private.touch_updated_at() OWNER TO newsroom_owner;
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: inbox_items; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.inbox_items (
+    id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    submitted_by bigint,
+    source text DEFAULT 'telegram'::text NOT NULL,
+    raw_text text DEFAULT ''::text NOT NULL,
+    url text,
+    url_normalized text,
+    note text DEFAULT ''::text NOT NULL,
+    follows_up bigint,
+    status app.inbox_status DEFAULT 'queued'::app.inbox_status NOT NULL,
+    fetch_status app.fetch_status DEFAULT 'pending'::app.fetch_status NOT NULL,
+    fetch_attempts integer DEFAULT 0 NOT NULL,
+    next_fetch_at timestamp with time zone,
+    http_status integer,
+    final_url text,
+    content_type text,
+    page_title text,
+    page_site_name text,
+    page_published_at text,
+    page_text text,
+    fetched_at timestamp with time zone,
+    logged_at timestamp with time zone,
+    logged_ref jsonb,
+    discard_reason text,
+    last_error text,
+    reply_chat_id bigint,
+    reply_message_id bigint,
+    CONSTRAINT inbox_items_fetch_attempts_positive CHECK ((fetch_attempts >= 0)),
+    CONSTRAINT inbox_items_follow_up_is_a_note CHECK (((follows_up IS NULL) OR (url IS NULL))),
+    CONSTRAINT inbox_items_logged_has_ref CHECK (((status <> 'logged'::app.inbox_status) OR ((logged_at IS NOT NULL) AND (logged_ref IS NOT NULL)))),
+    CONSTRAINT inbox_items_logged_ref_object CHECK ((jsonb_typeof(logged_ref) = 'object'::text)),
+    CONSTRAINT inbox_items_note_needs_review CHECK (((url IS NOT NULL) OR (status <> ALL (ARRAY['queued'::app.inbox_status, 'ready'::app.inbox_status])))),
+    CONSTRAINT inbox_items_page_text_length CHECK ((char_length(page_text) <= 20000)),
+    CONSTRAINT inbox_items_source_known CHECK ((source = 'telegram'::text)),
+    CONSTRAINT inbox_items_url_pair CHECK (((url IS NULL) = (url_normalized IS NULL)))
+);
+
+
+ALTER TABLE app.inbox_items OWNER TO newsroom_owner;
+
+--
+-- Name: inbox_items_id_seq; Type: SEQUENCE; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE app.inbox_items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME app.inbox_items_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: telegram_updates; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.telegram_updates (
+    update_id bigint NOT NULL,
+    received_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE app.telegram_updates OWNER TO newsroom_owner;
+
+--
+-- Name: schema_migrations; Type: TABLE; Schema: public; Owner: newsroom_owner
+--
+
+CREATE TABLE public.schema_migrations (
+    version character varying NOT NULL
+);
+
+
+ALTER TABLE public.schema_migrations OWNER TO newsroom_owner;
+
+--
+-- Name: inbox_items inbox_items_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.inbox_items
+    ADD CONSTRAINT inbox_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: telegram_updates telegram_updates_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.telegram_updates
+    ADD CONSTRAINT telegram_updates_pkey PRIMARY KEY (update_id);
+
+
+--
+-- Name: schema_migrations schema_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY public.schema_migrations
+    ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: inbox_items_due; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX inbox_items_due ON app.inbox_items USING btree (next_fetch_at NULLS FIRST, id) WHERE (status = 'queued'::app.inbox_status);
+
+
+--
+-- Name: inbox_items_follows_up; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX inbox_items_follows_up ON app.inbox_items USING btree (follows_up) WHERE (follows_up IS NOT NULL);
+
+
+--
+-- Name: inbox_items_open; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX inbox_items_open ON app.inbox_items USING btree (status, id) WHERE (status = ANY (ARRAY['queued'::app.inbox_status, 'ready'::app.inbox_status, 'needs_review'::app.inbox_status]));
+
+
+--
+-- Name: inbox_items_url_normalized_key; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE UNIQUE INDEX inbox_items_url_normalized_key ON app.inbox_items USING btree (url_normalized) WHERE (url_normalized IS NOT NULL);
+
+
+--
+-- Name: inbox_items inbox_items_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER inbox_items_touch_updated_at BEFORE UPDATE ON app.inbox_items FOR EACH ROW EXECUTE FUNCTION private.touch_updated_at();
+
+
+--
+-- Name: inbox_items inbox_items_transition; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER inbox_items_transition BEFORE UPDATE OF status ON app.inbox_items FOR EACH ROW EXECUTE FUNCTION private.inbox_items_transition();
+
+
+--
+-- Name: inbox_items inbox_items_follows_up_fkey; Type: FK CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.inbox_items
+    ADD CONSTRAINT inbox_items_follows_up_fkey FOREIGN KEY (follows_up) REFERENCES app.inbox_items(id);
+
+
+--
+-- Name: SCHEMA app; Type: ACL; Schema: -; Owner: newsroom_owner
+--
+
+GRANT USAGE ON SCHEMA app TO newsroom_app;
+GRANT USAGE ON SCHEMA app TO newsroom_public;
+
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
+--
+
+REVOKE USAGE ON SCHEMA public FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION inbox_items_transition(); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.inbox_items_transition() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION touch_updated_at(); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.touch_updated_at() FROM PUBLIC;
+
+
+--
+-- Name: TABLE inbox_items; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE app.inbox_items TO newsroom_app;
+
+
+--
+-- Name: TABLE telegram_updates; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT ON TABLE app.telegram_updates TO newsroom_app;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: -; Owner: newsroom_owner
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE newsroom_owner REVOKE ALL ON FUNCTIONS FROM PUBLIC;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict schema
+

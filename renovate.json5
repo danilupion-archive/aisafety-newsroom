@@ -1,0 +1,37 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:best-practices'],
+  rangeStrategy: 'bump',
+  dependencyDashboard: true,
+  timezone: 'Europe/Madrid',
+  // One weekly window, early on Monday, as aiontheballot. Security fixes ignore it: Renovate always raises
+  // vulnerability PRs at once, whatever the schedule.
+  schedule: ['* 0-5 * * 1'],
+  updateNotScheduled: false,
+  prHourlyLimit: 0,
+  rebaseWhen: 'conflicted',
+  // Supply-chain delay: keep in sync with minimumReleaseAge in pnpm-workspace.yaml
+  minimumReleaseAge: '3 days',
+  internalChecksFilter: 'strict',
+  osvVulnerabilityAlerts: true,
+  packageRules: [
+    {
+      // Every non-major update in one PR a week.
+      groupName: 'Non-major updates',
+      matchUpdateTypes: ['patch', 'pin', 'minor', 'digest', 'pinDigest'],
+      automerge: false,
+      groupSlug: 'non-major-updates',
+      rebaseWhen: 'conflicted',
+      labels: ['dependencies', 'non-major'],
+    },
+    {
+      matchUpdateTypes: ['major'],
+      automerge: false,
+      labels: ['dependencies', 'major'],
+    },
+    {
+      matchManagers: ['github-actions'],
+      labels: ['github-actions'],
+    },
+  ],
+}

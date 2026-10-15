@@ -1,0 +1,13 @@
+apiVersion: v2
+name: aisafety-newsroom
+description: Umbrella chart for aisafety-newsroom, deployed by Argo CD on the cluster (SPEC §15)
+type: application
+version: 0.1.0
+appVersion: '0.0.0'
+dependencies:
+  - name: aisafety-newsroom-migrations
+    version: 0.1.0
+    repository: file://../../db/helm-chart
+  - name: aisafety-newsroom-api
+    version: 0.1.0
+    repository: file://../../apps/api/helm-chart

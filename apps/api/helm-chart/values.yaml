@@ -1,0 +1,52 @@
+replicaCount: 2
+image:
+  repository: aisafety-newsroom/api
+  tag: ''
+  pullPolicy: IfNotPresent
+service:
+  port: 3001
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# The bearer token for /api/v1 (R-API-1, R-API-2), sealed in gitops by scripts/seal-gitops-secrets.sh.
+apiTokenSecret:
+  name: ''
+  key: API_TOKEN
+# newsroom_app's connection string (SPEC §7), sealed in gitops by scripts/seal-gitops-secrets.sh. Never the owner's.
+databaseUrlSecret:
+  name: ''
+  key: DATABASE_URL
+
+# Extra environment (plain values, or secretKeyRef for credentials sealed in gitops).
+env: []
+envFrom: []
+
+# The API host (SPEC §5): on the public gateway, routing only the Telegram webhook and /api/v1 to the API. Every
+# /api/v1 request needs the bearer token; the webhook needs Telegram's secret token.
+route:
+  enabled: false
+  # e.g. - name: example-gateway
+  #        namespace: example-gateway
+  parentRefs: []
+  hostnames: []
+  annotations: {}
+  paths:
+    - /telegram/webhook
+    - /api/v1

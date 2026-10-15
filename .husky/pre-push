@@ -1,0 +1,10 @@
+# The first push has no origin/main to compare with: nothing to check yet.
+if ! git rev-parse --verify --quiet origin/main > /dev/null; then
+  echo "No origin/main yet (first push): skipping the changeset checks"
+  exit 0
+fi
+if ! pnpm release:check; then
+  echo "⚠️  No changeset detected, but they are expected — please run 'pnpm release:note'"
+  exit 1
+fi
+scripts/check-deployables-released.sh origin/main

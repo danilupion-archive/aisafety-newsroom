@@ -1,0 +1,205 @@
+name: 🧪 CI
+
+# No pull_request_target anywhere: untrusted PR code never runs with a write token or secrets.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR runs are cancelled; runs on main finish, because the release workflow follows each one.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Runners (SPEC §15): pushes to main, manual runs and pull requests from this repository's own branches run on the
+# self-hosted runner on release-runner. Pull requests from forks run on a GitHub-hosted runner, since the repository is
+# public and a stranger's code must never run on ours (it holds the registry's push credentials and a private network key); so do
+# Renovate's, whose dependency versions nobody has reviewed yet. Each job repeats the choice: `runs-on` can't read
+# `env`.
+jobs:
+  checks:
+    name: Checks
+    if: github.event.pull_request.draft != true
+    runs-on: >-
+      ${{ fromJSON((github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository
+      || github.event.pull_request.user.login == 'renovate[bot]')) && '["ubuntu-24.04"]' || '["self-hosted", "release-runner"]') }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the changeset and migration checks diff against the base.
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-pnpm
+      - uses: ./.github/actions/install-pnpm-dependencies
+
+      # Renovate PRs get theirs from the renovate-changeset job below.
+      - name: Require a changeset
+        if: github.event_name == 'pull_request' && github.event.pull_request.user.login != 'renovate[bot]'
+        run: |
+          if ! pnpm release:check; then
+            echo "::error::Missing changeset. Run 'pnpm release:note', or 'pnpm release:empty' for docs- or CI-only changes."
+            exit 1
+          fi
+
+      # Renovate PRs get their changesets after the checks (renovate-changeset below). Skipped on the first push, which
+      # has no previous commit to compare with.
+      - name: Every changed deployable is released
+        if: >-
+          github.event_name != 'workflow_dispatch' &&
+          github.event.before != '0000000000000000000000000000000000000000' &&
+          !(github.event_name == 'pull_request' && github.event.pull_request.user.login == 'renovate[bot]')
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: scripts/check-deployables-released.sh "$BASE"
+
+      - name: Merged migrations are unchanged
+        if: >-
+          github.event_name != 'workflow_dispatch' &&
+          github.event.before != '0000000000000000000000000000000000000000'
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: scripts/check-migrations-append-only.sh "$BASE"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: Type check
+        run: pnpm build:check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Setup Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+
+      - name: Lint Helm charts
+        run: |
+          for chart in apps/*/helm-chart db/helm-chart; do
+            helm lint --strict "$chart"
+          done
+          # The subcharts aren't committed: built from their sources, as Argo CD does with its own Helm.
+          helm dependency build helm-charts/aisafety-newsroom
+          helm lint --strict helm-charts/aisafety-newsroom --values helm-charts/aisafety-newsroom/ci/example-values.yaml
+
+  database:
+    name: Database
+    if: github.event.pull_request.draft != true
+    runs-on: >-
+      ${{ fromJSON((github.event_name == 'pull_request' && (github.event.pull_request.head.repo.full_name != github.repository
+      || github.event.pull_request.user.login == 'renovate[bot]')) && '["ubuntu-24.04"]' || '["self-hosted", "release-runner"]') }}
+    timeout-minutes: 20
+    services:
+      postgres:
+        # Same image as compose.yaml and the cluster's cluster postgresql chart.
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-pnpm
+      - uses: ./.github/actions/install-pnpm-dependencies
+
+      # The script compose.yaml runs at init: the owner, the non-owner runtime roles, `newsroom` and `newsroom_test`.
+      - name: Create roles and databases
+        env:
+          CONTAINER: ${{ job.services.postgres.id }}
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+        run: |
+          docker exec -i \
+            -e POSTGRES_USER=postgres -e POSTGRES_DB=postgres -e PGPASSWORD=postgres \
+            -e NEWSROOM_OWNER_PASSWORD=ci-owner -e NEWSROOM_APP_PASSWORD=ci-app \
+            -e NEWSROOM_PUBLIC_PASSWORD=ci-public \
+            "$CONTAINER" sh < db/local/init.sh
+          {
+            echo "NEWSROOM_PG_CONTAINER=$CONTAINER"
+            echo "DATABASE_URL=postgres://newsroom_owner:ci-owner@localhost:$PG_PORT/newsroom?sslmode=disable"
+            echo "TEST_DATABASE_URL=postgres://newsroom_owner:ci-owner@localhost:$PG_PORT/newsroom_test?sslmode=disable"
+            echo "TEST_SUPERUSER_DATABASE_URL=postgres://postgres:postgres@localhost:$PG_PORT/newsroom_test?sslmode=disable"
+            echo "TEST_APP_DATABASE_URL=postgres://newsroom_app:ci-app@localhost:$PG_PORT/newsroom_test?sslmode=disable"
+          } >> "$GITHUB_ENV"
+
+      # Rebuilds newsroom_test from the migrations, then runs the transition, role and constraint tests.
+      - name: Database tests
+        run: pnpm test:db
+
+      - name: Schema dump and Kysely types are up to date
+        run: |
+          pnpm exec dbmate --migrations-dir db/migrations --no-dump-schema up
+          pnpm db:dump
+          pnpm db:types
+          if ! git diff --exit-code -- db/schema.sql packages/db/src/generated; then
+            echo "::error::Run 'pnpm db:migrate && pnpm db:types' and commit db/schema.sql and the generated types."
+            exit 1
+          fi
+
+  # Renovate doesn't write changesets. Once the checks pass, add a patch changeset for each package the PR touches and
+  # amend it into the PR (as aiontheballot does, without pull_request_target: Renovate branches live in this
+  # repository, so a pull_request run can get a write token). A push made with GITHUB_TOKEN doesn't trigger workflows,
+  # so the amended head has no check runs of its own; its code is what the checks above just tested.
+  renovate-changeset:
+    name: Renovate changeset
+    needs: [checks, database]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'renovate[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    # A pull_request job: on a GitHub-hosted runner, as Renovate's checks.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/setup-pnpm
+      - uses: ./.github/actions/install-pnpm-dependencies
+
+      - name: Add and push the changeset
+        env:
+          BASE: origin/${{ github.base_ref }}
+          HUSKY: 0
+        run: |
+          scripts/renovate-changeset.sh "$BASE"
+          git add .changeset
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          # --amend keeps Renovate as the author, so Renovate still treats the branch as its own and keeps rebasing it.
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit --amend --no-edit
+          git push --force-with-lease
