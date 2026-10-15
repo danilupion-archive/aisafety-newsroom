@@ -448,9 +448,11 @@ same rules as §9.
 | `GET /posts`          |                                                                                                 | list, so aisafety-media can reconcile                                                                                                            |
 
 **Public read routes** (no token, on no gateway, as `newsroom_public`): `GET
-/public/posts` (latest first, no pages; `tag`, `before`, `limit`), `GET
-/public/posts/:slug` (`410` once unpublished), `GET /public/tags`, and `GET
-/public/unpublished`, the slugs the site's proxy answers `410` for.
+/public/posts` (latest first, no pages; `tag`, `limit`, and for the next page the last
+post's `published_at` and slug as `before` and `before_slug`, since posts can share an
+instant), `GET /public/posts/:slug` (`410` once unpublished), `GET /public/tags`, and
+`GET /public/unpublished`, the slugs the site's proxy answers `410` for. A
+`published_at` with no time is midnight in Madrid, the site's clock.
 
 - **R-WEB-8** Must: the site can be rebuilt by re-pushing every published post from
   aisafety-media (P1).
