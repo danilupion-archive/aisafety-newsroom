@@ -1,0 +1,27 @@
+{{- if .Values.route.enabled }}
+# The site's host (SPEC §5): every path to the site. On a host shared with the API, the API's more specific route
+# (/api/v1, /telegram/webhook) wins, as the gateway merges same-hostname routes by path.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "aisafety-newsroom-web.fullname" . }}
+  labels:
+    {{- include "aisafety-newsroom-web.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml (required "route.parentRefs is required when route.enabled" .Values.route.parentRefs) | nindent 4 }}
+  hostnames:
+    {{- toYaml (required "route.hostnames is required when route.enabled" .Values.route.hostnames) | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ include "aisafety-newsroom-web.fullname" . }}
+          port: {{ .Values.service.port }}
+{{- end }}

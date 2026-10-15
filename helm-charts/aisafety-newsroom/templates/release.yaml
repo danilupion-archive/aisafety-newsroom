@@ -16,3 +16,4 @@ data:
   migrations: {{ index .Values "aisafety-newsroom-migrations" "image" "tag" | quote }}
   migrations-values: {{ toYaml (index .Values "aisafety-newsroom-migrations") | sha256sum | quote }}
   api: {{ index .Values "aisafety-newsroom-api" "image" "tag" | quote }}
+  web: {{ index .Values "aisafety-newsroom-web" "image" "tag" | quote }}

@@ -11,3 +11,8 @@ dependencies:
   - name: aisafety-newsroom-api
     version: 0.1.0
     repository: file://../../apps/api/helm-chart
+  - name: aisafety-newsroom-web
+    version: 0.1.0
+    repository: file://../../apps/web/helm-chart
+    # Off until gitops gives the site its name, address and author (SPEC Q1).
+    condition: aisafety-newsroom-web.enabled

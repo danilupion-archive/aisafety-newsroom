@@ -21,3 +21,15 @@ aisafety-newsroom-api:
     enabled: true
     parentRefs: [{ name: example-gateway, namespace: example-gateway }]
     hostnames: [newsroom-api.example.test]
+aisafety-newsroom-web:
+  enabled: true
+  image: { repository: registry.example/aisafety-newsroom/web, tag: 0.1.0.abc1234 }
+  site:
+    { url: https://newsroom-site.example.test, name: Sitio de ejemplo, author: Autora de ejemplo }
+  # Renders analytics and the route, so lint covers them.
+  analytics:
+    { scriptUrl: https://plausible.example.test/js/script.js, domain: newsroom-site.example.test }
+  route:
+    enabled: true
+    parentRefs: [{ name: example-gateway, namespace: example-gateway }]
+    hostnames: [newsroom-site.example.test]

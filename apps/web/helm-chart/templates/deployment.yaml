@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisafety-newsroom-web.fullname" . }}
+  labels:
+    {{- include "aisafety-newsroom-web.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aisafety-newsroom-web.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aisafety-newsroom-web.selectorLabels" . | nindent 8 }}
+    spec:
+      # preStop sleep + time to drain in-flight requests
+      terminationGracePeriodSeconds: 30
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: {{ .Values.service.port | quote }}
+            - name: SITE_URL
+              value: {{ required "site.url is required" .Values.site.url | quote }}
+            - name: SITE_NAME
+              value: {{ required "site.name is required" .Values.site.name | quote }}
+            - name: AUTHOR_NAME
+              value: {{ required "site.author is required" .Values.site.author | quote }}
+            - name: API_URL
+              value: {{ printf "http://%s:%v" (.Values.api.serviceName | default (printf "%s-api" .Release.Name)) .Values.api.port | quote }}
+            {{- if or .Values.analytics.scriptUrl .Values.analytics.domain }}
+            # Plausible takes its script and the domain together (src/site.ts), so one without the other fails here.
+            - name: PLAUSIBLE_SCRIPT_URL
+              value: {{ required "analytics.scriptUrl is required with analytics.domain" .Values.analytics.scriptUrl | quote }}
+            - name: PLAUSIBLE_DOMAIN
+              value: {{ required "analytics.domain is required with analytics.scriptUrl" .Values.analytics.domain | quote }}
+            {{- end }}
+            {{- with .Values.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              # Keep serving while the endpoint removal reaches the gateway; SIGTERM arrives after the sleep.
+              exec:
+                command: ['sleep', '8']
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            # Next keeps its data cache here (each API answer for at most 60 s, R-WEB-6); the root filesystem is read-only.
+            - name: next-cache
+              mountPath: /app/apps/web/.next/cache
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: next-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

@@ -8,3 +8,8 @@ aisafety-newsroom-api:
   nameOverride: api
   image:
     tag: '0.1.0.4ad7b9b'
+aisafety-newsroom-web:
+  enabled: false
+  nameOverride: web
+  image:
+    tag: ''

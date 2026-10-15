@@ -5,5 +5,8 @@ dependencies:
 - name: aisafety-newsroom-api
   repository: file://../../apps/api/helm-chart
   version: 0.1.0
-digest: sha256:613b3874c712cc9c4a34e96eb1f40e7bb86b9f87ba501886bdcc6b46b01c76b8
-generated: "2026-10-15T20:27:33.226338+02:00"
+- name: aisafety-newsroom-web
+  repository: file://../../apps/web/helm-chart
+  version: 0.1.0
+digest: sha256:a5a4f101808872b66d3969dc3757bbbc5d3b2fc482c9fec402b71cabdc8718b1
+generated: "2026-10-15T21:19:38.291701+02:00"

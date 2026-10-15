@@ -1,0 +1,57 @@
+replicaCount: 2
+image:
+  repository: aisafety-newsroom/web
+  tag: ''
+  pullPolicy: IfNotPresent
+service:
+  port: 3000
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 384Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+# The site (SPEC §13; names and addresses from configuration, SPEC Q1).
+site:
+  # Its public address, e.g. https://newsroom.danilupion.com: canonical links, the feed and the sitemap.
+  url: ''
+  name: ''
+  # Who writes it, on every page (R-WEB-3).
+  author: ''
+
+# The API's public read routes inside the cluster (R-WEB-6): its Service, `<release>-api` unless named here.
+api:
+  serviceName: ''
+  port: 3001
+
+# Plausible (R-WEB-7): its script and this site's domain in it, both or neither.
+analytics:
+  scriptUrl: ''
+  domain: ''
+
+# Extra environment.
+env: []
+
+# The site's host on the public gateway. Every path goes to the site; when it shares a host with the API, the API's
+# own route (/api/v1, /telegram/webhook) is more specific and wins.
+route:
+  enabled: false
+  # e.g. - name: example-gateway
+  #        namespace: example-gateway
+  parentRefs: []
+  hostnames: []
+  annotations: {}

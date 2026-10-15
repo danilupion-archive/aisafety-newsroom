@@ -1,0 +1,46 @@
+{
+  "name": "@aisafety-newsroom/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The public Spanish site: breves and articles approved in aisafety-media (no sessions, no cookies)",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently 'next dev -p 3000' 'panda --watch'",
+    "build": "panda codegen && next build",
+    "build:check": "panda codegen && next typegen && tsc --noEmit",
+    "start": "next start -p 3000",
+    "lint": "oxlint --type-aware --max-warnings 0 .",
+    "lint:fix": "oxlint --type-aware --fix --max-warnings 0 .",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "prepare": "[ \"$PACKAGED\" = true ] && echo 'Skipping prepare for packaged production dependencies install' || panda codegen",
+    "docker:build": "docker buildx build ${DOCKER_PLATFORM:+--platform=$DOCKER_PLATFORM} -t \"${DOCKER_REGISTRY:+${DOCKER_REGISTRY}/}aisafety-newsroom/web:${npm_package_version}${DOCKER_TAG_SUFFIX:+.${DOCKER_TAG_SUFFIX}}\" -f Dockerfile ../..",
+    "docker:push": "docker push \"${DOCKER_REGISTRY:+${DOCKER_REGISTRY}/}aisafety-newsroom/web:${npm_package_version}${DOCKER_TAG_SUFFIX:+.${DOCKER_TAG_SUFFIX}}\""
+  },
+  "dependencies": {
+    "@aisafety-newsroom/domain": "workspace:*",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@pandacss/dev": "2.2.0",
+    "@pandacss/preset-base": "2.2.0",
+    "@pandacss/preset-panda": "2.2.0",
+    "@slango.configs/lint-staged": "2.0.8",
+    "@slango.configs/oxlint": "0.1.13",
+    "@slango.configs/typescript": "3.0.0",
+    "@slango.configs/vitest": "2.1.2",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/coverage-v8": "5.0.3",
+    "@vitest/ui": "5.0.3",
+    "concurrently": "10.0.6",
+    "oxlint": "1.87.0",
+    "oxlint-tsgolint": "7.0.2004",
+    "postcss": "8.5.29",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
+  }
+}
