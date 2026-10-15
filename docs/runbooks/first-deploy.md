@@ -23,7 +23,7 @@ Check: both images in the registry's `aisafety-newsroom` project, and the tags c
 
 ## 3. Turn the Application on in gitops
 
-Choose the API host (SPEC Q1), then add `clusters/example/values/apps/aisafety-newsroom.yaml`:
+The API host is `newsroom.danilupion.com` (SPEC D8). Add `clusters/example/values/apps/aisafety-newsroom.yaml`:
 
 ```yaml
 # aisafety-newsroom (danilupion/aisafety-newsroom). Image tags are not set here: the app repo's release workflow
@@ -51,7 +51,7 @@ aisafety-newsroom-api:
       - name: example-gateway
         namespace: example-gateway
     hostnames:
-      - API_HOST.example.test
+      - newsroom.danilupion.com
 ```
 
 Validate (`make lint && make validate-kustomize` in gitops), commit and push. Argo CD then creates the Application:
@@ -62,10 +62,10 @@ the host, and the gateway's `*.example.test` certificate covers it.
 
 ```sh
 # 401: no token
-curl -si https://API_HOST.example.test/api/v1/items | head -1
+curl -si https://newsroom.danilupion.com/api/v1/items | head -1
 # 404 {"error":"Not found"}: the token works, and the inbox routes come with M1
 curl -s -H "Authorization: Bearer $(security find-generic-password -s aisafety-newsroom -a api-token -w)" \
-  https://API_HOST.example.test/api/v1/items
+  https://newsroom.danilupion.com/api/v1/items
 ```
 
 In the cluster: the migration Job succeeded, two API pods are ready, and `newsroom` has the `app` schema.

@@ -134,11 +134,13 @@ Everything except Telegram, the readers and the Mac runs on the cluster, in the
 | SITE | Public site                    | Next.js in `apps/web`                                                          |
 | CLI  | `tools/newsroom.py` on the Mac | Lives in **aisafety-media**, since it's content tooling; contract defined here |
 
-**Hosts.** Both are on the public gateway, and both are configuration, never code:
+**Hosts.** On the public gateway, and configuration, never code (D8):
 
-- `<site host>`: the public site, a subdomain of `example.test` `[Q1]`;
-- `<api host>`: routes only `/telegram/webhook` and `/api/v1/*` to the API. It's separate
-  from the site so capture doesn't wait for the site's name.
+- `<api host>` is `newsroom.danilupion.com`, the system's host: `/telegram/webhook` and
+  `/api/v1/*` go to the API, and nothing else does yet;
+- `<site host>`: the public site `[Q1]`. It may share `newsroom.danilupion.com`, with every
+  other path going to the site (the path split aiontheballot uses), or get a Spanish-named
+  host of its own. The API's address stays the same either way.
 
 The API's public read routes are on no gateway: only the web pods reach them, through
 the Service, and a NetworkPolicy enforces it.
@@ -363,27 +365,28 @@ These are requirements on the content repo, implemented there.
 
 ## 11. Open questions
 
-| #   | Question                                                                       | Leaning                                        |
-| --- | ------------------------------------------------------------------------------ | ---------------------------------------------- |
-| Q1  | The site's subdomain and name, under `example.test`, and the API host's name | All configuration; decide before M4            |
-| Q4  | Is drafting with a local model worth building? (§8.2)                          | Decide after using M1                          |
-| Q6  | Will others send items later?                                                  | Designed for, not built                        |
-| Q7  | Articles in v1, or breves first?                                               | Breves first                                   |
-| Q8  | Which "Where to look" sources have usable feeds?                               | Check during M3                                |
-| Q9  | How long to keep `page_text` (size, copyright)?                                | Clear it 90 days after `logged` or `discarded` |
-| Q10 | Licence for the site's content (breves, articles)                              | CC BY 4.0, like aiontheballot's content        |
+| #   | Question                                                                                               | Leaning                                        |
+| --- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Q1  | The site's subdomain and name: `newsroom.danilupion.com` (shared with the API) or a Spanish-named host | All configuration; decide before M4            |
+| Q4  | Is drafting with a local model worth building? (§8.2)                                                  | Decide after using M1                          |
+| Q6  | Will others send items later?                                                                          | Designed for, not built                        |
+| Q7  | Articles in v1, or breves first?                                                                       | Breves first                                   |
+| Q8  | Which "Where to look" sources have usable feeds?                                                       | Check during M3                                |
+| Q9  | How long to keep `page_text` (size, copyright)?                                                        | Clear it 90 days after `logged` or `discarded` |
+| Q10 | Licence for the site's content (breves, articles)                                                      | CC BY 4.0, like aiontheballot's content        |
 
 ### Decided in v0.2
 
-| #   | Decision                                                                                                 | Was          |
-| --- | -------------------------------------------------------------------------------------------------------- | ------------ |
-| D1  | The bot, API, worker and database run on the cluster; n8n isn't part of the system                    | Q2, Q3       |
-| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                          | Q2           |
-| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                            | Q5           |
-| D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation | Q1 (in part) |
-| D5  | Drafting with a local model waits until M1 has been used                                                 | Q4           |
-| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                         | —            |
-| D7  | The inbox and posts API are on a public host behind a bearer token, not on the private network                   | —            |
+| #   | Decision                                                                                                    | Was          |
+| --- | ----------------------------------------------------------------------------------------------------------- | ------------ |
+| D1  | The bot, API, worker and database run on the cluster; n8n isn't part of the system                       | Q2, Q3       |
+| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                             | Q2           |
+| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                               | Q5           |
+| D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation    | Q1 (in part) |
+| D5  | Drafting with a local model waits until M1 has been used                                                    | Q4           |
+| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                            | —            |
+| D7  | The inbox and posts API are on a public host behind a bearer token, not on the private network                      | —            |
+| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`; the site may share it | Q1 (in part) |
 
 ## 12. Miniflux for `/sweep`
 
