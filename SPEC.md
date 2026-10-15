@@ -368,15 +368,15 @@ These are requirements on the content repo, implemented there.
 
 ## 11. Open questions
 
-| #   | Question                                                                                               | Leaning                                       |
-| --- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| Q1  | The site's subdomain and name: `newsroom.danilupion.com` (shared with the API) or a Spanish-named host | All configuration; decide before M4           |
-| Q4  | Is drafting with a local model worth building? (§8.2)                                                  | Decide after using M1                         |
-| Q6  | Will others send items later?                                                                          | Designed for, not built                       |
-| Q7  | Articles in v1, or breves first?                                                                       | Breves first                                  |
-| Q8  | Which "Where to look" sources have usable feeds?                                                       | Check during M3                               |
-| Q9  | How long to keep `page_text` (size, copyright)?                                                        | 90 days after `logged` or `discarded` (built) |
-| Q10 | Licence for the site's content (breves, articles)                                                      | CC BY 4.0, like aiontheballot's content       |
+| #   | Question                                                                                               | Leaning                                        |
+| --- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Q1  | The site's subdomain and name: `newsroom.danilupion.com` (shared with the API) or a Spanish-named host | All configuration; decide before M4            |
+| Q4  | Is drafting with a local model worth building? (§8.2)                                                  | Decide after using M1                          |
+| Q6  | Will others send items later?                                                                          | Designed for, not built                        |
+| Q7  | Articles in v1, or breves first?                                                                       | Breves first                                   |
+| Q8  | Which "Where to look" sources have usable feeds?                                                       | Check during M3                                |
+| Q9  | How long to keep `page_text` (size, copyright)?                                                        | Clear it 90 days after `logged` or `discarded` |
+| Q10 | Licence for the site's content (breves, articles)                                                      | CC BY 4.0, like aiontheballot's content        |
 
 ### Decided in v0.2
 
