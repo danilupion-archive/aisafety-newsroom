@@ -1,6 +1,11 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.6** · 2026-10-17 · Owner: Dani
+Status: **draft v0.7** · 2026-10-17 · Owner: Dani
+
+v0.7 changes: three dates kept apart (D16): when Dani found a link, the page's own day,
+and for a post its posted day and its news date. The timeline stays in posted order and
+has a second view by news date (R-WEB-13); the inbox sorts by the page's day too
+(R-API-4). A missing page's message is in its HTML, not only in a script.
 
 v0.6 changes: the site says on every page and in its feeds that its texts are written
 by AI, picked and checked by Dani (R-WEB-3); its tagline is "La caja ya está abierta".
@@ -79,7 +84,8 @@ and `/sweep` and indexed by `tools/news.py` there. Tags and alert rules live in
 `news/watchlist.md`.
 
 **The site is Dani's own.** Its about page says who Dani is, including that Dani
-co-leads Pausemos la IA (PauseAI Spain), but the site doesn't speak for the organisation
+collaborates with Pausemos la IA ("colaboro con Pausemos la IA"; in English, "I collaborate
+with PauseAI"), but the site doesn't speak for the organisation
 and needs no review by it.
 
 **The stack** follows aiontheballot (its ADR-0001, hosting, and
@@ -238,6 +244,7 @@ and is reviewed in every PR.
 | `fetch_attempts`, `next_fetch_at`                   | int, timestamptz            | retries with backoff                                                |
 | `http_status`, `final_url`, `content_type`          | int, text, text             |                                                                     |
 | `page_title`, `page_site_name`, `page_published_at` | text                        | from page metadata, verbatim                                        |
+| `page_published_on`                                 | date, generated             | the day `page_published_at` names, when it's an ISO date (R-API-4)  |
 | `page_text`                                         | text                        | extracted main text, ≤ 20,000 chars; cleared after 90 days `[Q9]`   |
 | `page_kind`, `page_author`, `page_duration_seconds` | text, text, int             | `page` or `video`; a video's channel and its length (R-FET-7)       |
 | `fetched_at`, `logged_at`                           | timestamptz                 |                                                                     |
@@ -355,15 +362,19 @@ validated with zod schemas that the tests share.
   returns `200`; with a different body it updates `logged_ref` and returns `200`
   (R-DB-1). Restoring an item that isn't discarded returns `200` if it's already open,
   `409` if it's logged.
+- **R-API-4** Should: `GET /items` lists as found (oldest first, the default) or, with
+  `sort=source`, by the day each page says it was published, oldest first and undated
+  ones last, so a story sent today about something weeks old stands out (D16). The day is
+  read from `page_published_at` when it starts with an ISO date; nothing else is guessed.
 
-| Method and path             | Body or query                                         | Returns                                                                                                                                      |
-| --------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50) | items without `page_text`, with `page_excerpt` (first 4,000 chars); a follow-up also carries its original's id, URL, status and `logged_ref` |
-| `GET /items/:id`            |                                                       | the full item, including `page_text`                                                                                                         |
-| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`            | `200` with the item                                                                                                                          |
-| `POST /items/:id/discarded` | `{reason}`                                            | `200` with the item                                                                                                                          |
-| `POST /items/:id/restored`  |                                                       | `200` with the item                                                                                                                          |
-| `POST /items/:id/note`      | `{text}`                                              | `200` with the item                                                                                                                          |
+| Method and path             | Body or query                                                                                       | Returns                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50), `sort=found` (default) or `source` (R-API-4) | items without `page_text`, with `page_excerpt` (first 4,000 chars); a follow-up also carries its original's id, URL, status and `logged_ref` |
+| `GET /items/:id`            |                                                                                                     | the full item, including `page_text`                                                                                                         |
+| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`                                                          | `200` with the item                                                                                                                          |
+| `POST /items/:id/discarded` | `{reason}`                                                                                          | `200` with the item                                                                                                                          |
+| `POST /items/:id/restored`  |                                                                                                     | `200` with the item                                                                                                                          |
+| `POST /items/:id/note`      | `{text}`                                                                                            | `200` with the item                                                                                                                          |
 
 Errors are `{ "error": "message" }` with `400`, `401`, `404` or `409`.
 
@@ -431,23 +442,24 @@ These are requirements on the content repo, implemented there.
 
 ### Decided (v0.2–v0.4)
 
-| #   | Decision                                                                                                                           | Was          |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system                                   | Q2, Q3       |
-| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                                                    | Q2           |
-| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                                                      | Q5           |
-| D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation                           | Q1 (in part) |
-| D5  | Drafting with a local model waits until M1 has been used                                                                           | Q4           |
-| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                                                   | —            |
-| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                       | —            |
-| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                               | Q1 (in part) |
-| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                              | —            |
-| D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                 | Q1 (in part) |
-| D11 | Every post is published in both languages; the site shows a story only when both versions are                                      | Q11          |
-| D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11) | Q1           |
-| D13 | Miniflux waits: Dani checks the sources by hand for now, and R-RSS-1–3 apply once it's set up                                      | —            |
-| D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it     | Q10          |
-| D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                    | Q12          |
+| #   | Decision                                                                                                                                                                                                                                                                                                            | Was          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system                                                                                                                                                                                                                    | Q2, Q3       |
+| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                                                                                                                                                                                                                                     | Q2           |
+| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                                                                                                                                                                                                                                       | Q5           |
+| D4  | The site is Dani's own; the about page says Dani collaborates with Pausemos la IA; no review by the organisation                                                                                                                                                                                                    | Q1 (in part) |
+| D5  | Drafting with a local model waits until M1 has been used                                                                                                                                                                                                                                                            | Q4           |
+| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                                                                                                                                                                                                                                    | —            |
+| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                                                                                                                                                                                                        | —            |
+| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                                                                                                                                                                                                                | Q1 (in part) |
+| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                                                                                                                                                                                                               | —            |
+| D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                                                                                                                                                                                                  | Q1 (in part) |
+| D11 | Every post is published in both languages; the site shows a story only when both versions are                                                                                                                                                                                                                       | Q11          |
+| D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11)                                                                                                                                                                                  | Q1           |
+| D13 | Miniflux waits: Dani checks the sources by hand for now, and R-RSS-1–3 apply once it's set up                                                                                                                                                                                                                       | —            |
+| D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it                                                                                                                                                                                      | Q10          |
+| D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                                                                                                                                                                                                     | Q12          |
+| D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13) | —            |
 
 ## 12. Miniflux for `/sweep`
 
@@ -506,12 +518,15 @@ These are requirements on the content repo, implemented there.
 `/` is the Spanish home for every reader, whatever their browser asks for: the main
 readers are in Spain, and each page links to the same page in English. `/es` and every
 address under it answer `301` to the same address without the prefix, so a link written
-with it still works. The sitemap lists both languages. An address that is no page answers
-404 in its language. The about page's text is a post of type `page` whose slug is its
-language's word (`sobre`, `about`), pushed from aisafety-media like the rest (R-WEB-2):
-pages are never listed, need no sources, and nothing on the site is written in its code.
-The six path words, the two languages' prefixes and `healthz`, which share the root with
-Spanish posts, are refused as slugs in both languages, so no post hides behind a page.
+with it still works. The sitemap lists both languages. An address that is no page, or no
+published post or tag, answers 404 with the not-found page of its language, its text in
+the page itself: the site's proxy tells them (asking the API about a post or a tag) and
+serves that page with the status, since a page's own not-found is drawn by script. The
+about page's text is a post of type `page` whose slug is its language's word (`sobre`,
+`about`), pushed from aisafety-media like the rest (R-WEB-2): pages are never listed,
+need no sources, and nothing on the site is written in its code. The six path words, the
+two languages' prefixes and `healthz`, which share the root with Spanish posts, are
+refused as slugs in both languages, so no post hides behind a page.
 
 - **R-WEB-4** Must: a Spanish and an English interface, each language's own labels,
   dates and tag names, and a link to the other language labelled in that language; Open
@@ -533,15 +548,25 @@ Spanish posts, are refused as slugs in both languages, so no post hides behind a
   the source's entry in the posts API then carries. No embedded player: one tracks its
   viewers and loads from another host, against R-WEB-7. A still the site serves itself,
   which loads the player only when clicked, may come with images (Q13).
+- **R-WEB-13** Must: a breve or an article has a news date, the day its story happened
+  as its original source dates it (`news_date`, a calendar day; a page has none; D16).
+  Both versions of a story carry the same one, or the site shows neither, like D11. The
+  timelines (the home and a tag's page) list as posted by default, so a story added late
+  doesn't land deep in the list; a second order, "Por fecha de la noticia" / "By news
+  date" (`?orden=noticia`, `?order=news`), lists by news date, newest first, each date
+  column showing that day. As posted, a card whose story happened on another day says so
+  ("noticia del 12 oct"), and so does the post's page. The feeds and the sitemap stay as
+  posted. A push without a news date (a client older than them) is dated by its posted
+  day on the site's clock, and so is a post pushed before them.
 
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9. A post's address is its language and its slug.
 
-| Method and path             | Body                                                                                                                         | Effect                                                                                                      |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused |
-| `DELETE /posts/:lang/:slug` |                                                                                                                              | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)               |
-| `GET /posts`                |                                                                                                                              | list, so aisafety-media can reconcile                                                                       |
+| Method and path             | Body                                                                                                                                    | Effect                                                                                                                                        |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, news_date, translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused; `news_date` is refused on a page |
+| `DELETE /posts/:lang/:slug` |                                                                                                                                         | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)                                                 |
+| `GET /posts`                |                                                                                                                                         | list, so aisafety-media can reconcile                                                                                                         |
 
 `lang` is `es` or `en`; `translation_of` is `{lang, slug}` or `null`. A translation whose
 original has never been pushed, a second translation in one language and a translation of
@@ -551,9 +576,10 @@ the public routes show a story once both are published (D11).
 
 **Public read routes** (no token, on no gateway, as `newsroom_public`), each for one
 language: `GET /public/posts?lang=` (latest first, no pages, each with its
-`source_count` for the timeline; `tag`, `limit`, and for the next page the last post's
-`published_at` and slug as `before` and `before_slug`, since posts can share an
-instant), `GET /public/posts/:lang/:slug` (with the story's other
+`source_count` and `news_date` for the timeline; `tag`, `limit`, and for the next page
+the last post's `published_at` and slug as `before` and `before_slug`, since posts can
+share an instant; `order=news` lists by news date, its next page led by the last post's
+as `before_date`), `GET /public/posts/:lang/:slug` (with the story's other
 version as `translations`; `404` until both are published, `410` once either is
 unpublished), `GET /public/tags?lang=`,
 and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. A
