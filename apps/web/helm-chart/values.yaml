@@ -41,10 +41,10 @@ api:
   serviceName: ''
   port: 3001
 
-# Plausible (R-WEB-7): its script and this site's domain in it, both or neither.
+# Plausible (R-WEB-7): the site's own script in it (`https://<plausible>/js/pa-….js`), which carries the site and the
+# options set there. Unset, no analytics.
 analytics:
   scriptUrl: ''
-  domain: ''
 
 # Error tracking for the site's server (SPEC §15): SENTRY_DSN of the GlitchTip project aisafety-newsroom-web, sealed by
 # scripts/seal-glitchtip-dsns.sh. Unset, nothing is reported. Nothing runs in the browser (R-WEB-7).

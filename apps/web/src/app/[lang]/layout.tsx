@@ -13,7 +13,7 @@ import { Mark } from '@/components/Mark';
 import { Wordmark } from '@/components/Wordmark';
 import { otherLang, otherLanguageHref, PATH_WORDS, PATHNAME_HEADER, paths, readPath } from '@/i18n';
 import { pageLang } from '@/params';
-import { site } from '@/site';
+import { PLAUSIBLE_INIT, site } from '@/site';
 import { STRINGS } from '@/strings';
 import { container, label } from '@/styles';
 import { isSlug } from '@/tags';
@@ -156,7 +156,10 @@ const RootLayout = async ({ children, params }: Props) => {
     <html lang={lang}>
       <head>
         {analytics ? (
-          <script defer data-domain={analytics.domain} src={analytics.scriptUrl} />
+          <>
+            <script async src={analytics.scriptUrl} />
+            <script dangerouslySetInnerHTML={{ __html: PLAUSIBLE_INIT }} />
+          </>
         ) : null}
       </head>
       <body>

@@ -43,12 +43,9 @@ spec:
               value: {{ required "site.author is required" .Values.site.author | quote }}
             - name: API_URL
               value: {{ printf "http://%s:%v" (.Values.api.serviceName | default (printf "%s-api" .Release.Name)) .Values.api.port | quote }}
-            {{- if or .Values.analytics.scriptUrl .Values.analytics.domain }}
-            # Plausible takes its script and the domain together (src/site.ts), so one without the other fails here.
+            {{- with .Values.analytics.scriptUrl }}
             - name: PLAUSIBLE_SCRIPT_URL
-              value: {{ required "analytics.scriptUrl is required with analytics.domain" .Values.analytics.scriptUrl | quote }}
-            - name: PLAUSIBLE_DOMAIN
-              value: {{ required "analytics.domain is required with analytics.scriptUrl" .Values.analytics.domain | quote }}
+              value: {{ . | quote }}
             {{- end }}
             {{- with .Values.errorTracking.dsnSecret }}
             {{- if .name }}

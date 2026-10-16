@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 
 import type { PostSummary } from './api';
@@ -9,7 +10,7 @@ import { calendarDate, dateParts, longDate } from './format';
 import { otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
 import { nextPage, readCursor } from './paging';
 import { contentSecurityPolicy, gonePage } from './security';
-import { readSite } from './site';
+import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
 import { namedTags, tagLabel } from './tags';
 
@@ -33,25 +34,33 @@ describe('readSite', () => {
         SITE_NAME_EN: 'Example news',
         AUTHOR_NAME: 'Autora de ejemplo',
         API_URL: 'http://api:3001/',
-        PLAUSIBLE_SCRIPT_URL: 'https://plausible.example/js/script.js',
-        PLAUSIBLE_DOMAIN: 'newsroom.example',
+        PLAUSIBLE_SCRIPT_URL: 'https://plausible.example/js/pa-example.js',
       }),
     ).toEqual({
       url: 'https://newsroom.example',
       name: { es: 'Noticias de ejemplo', en: 'Example news' },
       author: 'Autora de ejemplo',
       apiUrl: 'http://api:3001',
-      analytics: {
-        scriptUrl: 'https://plausible.example/js/script.js',
-        domain: 'newsroom.example',
-      },
+      analytics: { scriptUrl: 'https://plausible.example/js/pa-example.js' },
     });
   });
 
-  it('turns analytics on only with both its settings', () => {
-    expect(
-      readSite({ PLAUSIBLE_SCRIPT_URL: 'https://plausible.example/js/script.js' }).analytics,
-    ).toBeUndefined();
+  it('turns analytics on with the site’s script alone, and off without it', () => {
+    expect(readSite({ PLAUSIBLE_DOMAIN: 'newsroom.example' }).analytics).toBeUndefined();
+    expect(readSite({ PLAUSIBLE_SCRIPT_URL: '' }).analytics).toBeUndefined();
+  });
+
+  it('starts Plausible as its snippet does: calls wait in a queue until the script arrives', () => {
+    const context: Record<string, unknown> = {};
+    context.window = context;
+    runInNewContext(PLAUSIBLE_INIT, context);
+    const plausible = context.plausible as ((...args: unknown[]) => void) & {
+      q?: unknown[];
+      o?: object;
+    };
+    expect(Object.keys(plausible.o ?? { unset: true })).toEqual([]);
+    plausible('pageview');
+    expect(plausible.q).toHaveLength(1);
   });
 });
 
@@ -213,7 +222,7 @@ describe('contentSecurityPolicy', () => {
   });
 
   it('allows Plausible’s origin alone when it is configured (R-WEB-7)', () => {
-    const policy = contentSecurityPolicy('https://plausible.example/js/script.js');
+    const policy = contentSecurityPolicy('https://plausible.example/js/pa-example.js');
     expect(policy).toContain("script-src 'self' 'unsafe-inline' https://plausible.example;");
     expect(policy).toContain("connect-src 'self' https://plausible.example;");
   });

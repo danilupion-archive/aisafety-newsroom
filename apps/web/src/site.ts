@@ -13,8 +13,8 @@ export interface Site {
   author: string;
   /** The API's public read routes, inside the cluster (R-WEB-6). */
   apiUrl: string;
-  /** Plausible's script and this site's domain in it (R-WEB-7); both or neither. */
-  analytics: { scriptUrl: string; domain: string } | undefined;
+  /** Plausible's script for this site, its own `pa-….js` (R-WEB-7). */
+  analytics: { scriptUrl: string } | undefined;
 }
 
 type Env = Record<string, string | undefined>;
@@ -23,7 +23,6 @@ const trimSlash = (value: string): string => value.replace(/\/+$/, '');
 
 export const readSite = (env: Env): Site => {
   const scriptUrl = env.PLAUSIBLE_SCRIPT_URL;
-  const domain = env.PLAUSIBLE_DOMAIN;
   return {
     url: trimSlash(env.SITE_URL ?? 'http://localhost:3000'),
     name: {
@@ -32,8 +31,16 @@ export const readSite = (env: Env): Site => {
     },
     author: env.AUTHOR_NAME ?? 'Autor de ejemplo',
     apiUrl: trimSlash(env.API_URL ?? 'http://127.0.0.1:3001'),
-    analytics: scriptUrl && domain ? { scriptUrl, domain } : undefined,
+    analytics: scriptUrl ? { scriptUrl } : undefined,
   };
 };
 
 export const site = (): Site => readSite(process.env);
+
+/**
+ * Plausible's own loader, as its snippet writes it: calls made before the site's script arrives are queued, and `init`
+ * starts it with the options set in Plausible for the site. A constant, never built from a request.
+ */
+export const PLAUSIBLE_INIT =
+  'window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},' +
+  'plausible.init=plausible.init||function(i){plausible.o=i||{}};plausible.init()';
