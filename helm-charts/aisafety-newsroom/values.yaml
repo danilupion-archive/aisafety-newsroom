@@ -3,13 +3,13 @@
 aisafety-newsroom-migrations:
   nameOverride: migrations
   image:
-    tag: '0.1.0.c5b41a6'
+    tag: '0.2.0.ec30f7f'
 aisafety-newsroom-api:
   nameOverride: api
   image:
-    tag: '0.2.0.c5b41a6'
+    tag: '0.3.0.ec30f7f'
 aisafety-newsroom-web:
   enabled: false
   nameOverride: web
   image:
-    tag: '0.1.0.c5b41a6'
+    tag: '0.2.0.ec30f7f'
