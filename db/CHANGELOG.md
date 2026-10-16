@@ -1,5 +1,12 @@
 # @aisafety-newsroom/migrations
 
+## 0.2.1
+
+### Patch Changes
+
+- b8cc1c8: No infrastructure named in the code, the charts or their comments: the repo is public. Releases start by hand and build
+  on a runner that refuses everything else.
+
 ## 0.2.0
 
 ### Minor Changes
