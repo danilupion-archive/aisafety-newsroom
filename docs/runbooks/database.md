@@ -37,7 +37,8 @@ posts.
 
 ## Re-pushing every post (R-WEB-8)
 
-From aisafety-media, push every post whose status is `approved` or `published` again with `PUT
-/api/v1/posts/:slug` (its `/post`, once it exists), including the about page (`sobre`, type `page`). `GET
-/api/v1/posts` lists what the site has, unpublished ones included, to compare against. Pushing is idempotent: a post
-pushed twice is the same post (R-API-3).
+From aisafety-media, push every post the site had again: `python3 tools/newsroom.py post --all` (`/post all`) sends each
+published one, and each unpublished one as unpublished (its address answers 410 again), with `PUT
+/api/v1/posts/:lang/:slug`, originals before their translations, the about pages (`es/sobre`, `en/about`) included.
+`GET /api/v1/posts` lists what the site has, unpublished ones included, to compare against. Pushing is idempotent: a
+post pushed twice is the same post (R-API-3).

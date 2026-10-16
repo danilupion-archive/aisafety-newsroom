@@ -27,19 +27,21 @@ aisafety-media is the newsroom's only client (SPEC §10): `tools/newsroom.py` fo
 
 ## Day to day
 
-| Where          | What                                                                                |
-| -------------- | ----------------------------------------------------------------------------------- |
-| Telegram       | Send the bot a link, with a note if you like: "Saved #n", then the page's title     |
-| aisafety-media | `/news` with no arguments logs everything waiting, one item file each (queue mode)  |
-| aisafety-media | `/sweep` reads the feeds first, then searches only what they don't cover            |
-| aisafety-media | `/breve <item>` drafts a breve; set `status: approved`, commit, then `/post <slug>` |
-| aisafety-media | `/post` with no arguments compares the site with `posts/`                           |
+| Where          | What                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Telegram       | Send the bot a link, with a note if you like: "Saved #n", then the page's title                                           |
+| aisafety-media | `/news` with no arguments logs everything waiting, one item file each (queue mode)                                        |
+| aisafety-media | `/sweep` reads the feeds first, then searches only what they don't cover                                                  |
+| aisafety-media | `/breve <item> [en]` drafts a breve in both languages, Spanish first unless `en`; approve both, commit, `/post es/<slug>` |
+| aisafety-media | `/breve translate es/<slug>` redrafts a story's other version after its original changed (R-WEB-10)                       |
+| aisafety-media | `/post` with no arguments compares the site with `posts/`                                                                 |
 
 `/news <url>` (direct mode) never needs the newsroom. If the API can't be reached, queue mode says so and stops;
 the items wait in the inbox.
 
-Until the site's address is decided (SPEC Q1), `tools/newsroom.py` prints posts' paths only; set `NEWSROOM_SITE_URL`
-to print full addresses.
+Every post goes up in both languages (SPEC D11): `/post` pushes the story's two versions, and the site shows it once
+both are up; `/post unpublish` takes both down. Posts' addresses are on the API's host (SPEC D10):
+`https://newsroom.danilupion.com/es/<slug>`. `NEWSROOM_SITE_URL` changes the host `tools/newsroom.py` prints them on.
 
 ## Testing a change locally
 

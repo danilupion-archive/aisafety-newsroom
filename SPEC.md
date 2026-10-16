@@ -1,6 +1,10 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.2** · 2026-10-15 · Owner: Dani
+Status: **draft v0.3** · 2026-10-16 · Owner: Dani
+
+v0.3 changes: the site is in Spanish and English from v1, on `newsroom.danilupion.com`
+next to the API (D10); every post is published in both languages, and the site shows a
+story only when both versions are (D11, R-WEB-10).
 
 v0.2 changes: everything runs on the cluster and n8n is no longer part of the system;
 the stack follows aiontheballot at a smaller scale; drafting with a local model is
@@ -22,7 +26,7 @@ researching AI safety and producing content. It does three things:
 2. **Triage.** Captured pages are fetched on the server and their text and metadata
    stored, so that aisafety-media's `/news` can log them in bulk without fetching each
    one. RSS feeds in Miniflux give `/sweep` a reliable first pass.
-3. **Publish.** A public Spanish-language site, Dani's own, shows short news items
+3. **Publish.** A public site in Spanish and English, Dani's own, shows short news items
    (_breves_) and articles that Dani has approved in aisafety-media.
 
 ## 2. Scope
@@ -32,7 +36,7 @@ researching AI safety and producing content. It does three things:
 - Telegram bot → inbox → aisafety-media `/news` (queue mode)
 - Fetching and text extraction on the server
 - Miniflux as the first source for `/sweep`
-- Public Spanish site for breves, fed only from aisafety-media
+- Public site for breves, in Spanish and English, fed only from aisafety-media
 
 **Out of v1:**
 
@@ -109,15 +113,15 @@ a connection to it. Ollama isn't installed.
 ## 5. Architecture
 
 ```text
-Phone ─▶ Telegram ─▶ [public] <api host>/telegram/webhook ─▶ api ──┐
+Phone ─▶ Telegram ─▶ [public] <host>/telegram/webhook ─▶ api ──────┐
                                                                    │
                      worker: fetch + extract ──────────────────────┼─▶ Postgres
                         └─▶ the web (public addresses only)        │   newsroom
                                                                    │
-Readers ─▶ [public] <site host> ─▶ web ─▶ api public read routes ──┘
+Readers ─▶ [public] <host>/es, /en ─▶ web ─▶ api public read routes ─┘
                                           (in-cluster only, read-only role)
 
-Mac ─▶ [public] <api host>/api/v1 ─▶ api   inbox (/news), posts (/post), bearer token
+Mac ─▶ [public] <host>/api/v1 ─▶ api   inbox (/news), posts (/post), bearer token
 Mac ─▶ [public] miniflux.example.test    /sweep, Miniflux token
 ```
 
@@ -135,13 +139,10 @@ Everything except Telegram, the readers and the Mac runs on the cluster, in the
 | SITE | Public site                    | Next.js in `apps/web`                                                          |
 | CLI  | `tools/newsroom.py` on the Mac | Lives in **aisafety-media**, since it's content tooling; contract defined here |
 
-**Hosts.** On the public gateway, and configuration, never code (D8):
-
-- `<api host>` is `newsroom.danilupion.com`, the system's host: `/telegram/webhook` and
-  `/api/v1/*` go to the API, and nothing else does yet;
-- `<site host>`: the public site `[Q1]`. It may share `newsroom.danilupion.com`, with every
-  other path going to the site (the path split aiontheballot uses), or get a Spanish-named
-  host of its own. The API's address stays the same either way.
+**Host.** One, on the public gateway, and configuration, never code (D8, D10):
+`<host>` is `newsroom.danilupion.com`. `/telegram/webhook` and `/api/v1/*` go to the API;
+every other path goes to the site (the path split aiontheballot uses), whose addresses
+all start with a language, `/es/` or `/en/`.
 
 The API's public read routes are on no gateway: only the web pods reach them, through
 the Service, and a NetworkPolicy enforces it.
@@ -344,7 +345,7 @@ These are requirements on the content repo, implemented there.
     `discard <id> <reason>`, `restore <id>`, `note <id> <text>`;
   - posts: `check [post…]` (offline), `post <path>` (only `approved` or `published`,
     and committed: `content_ref.commit` is the file's last commit), `post --all`
-    (R-WEB-8), `unpublish <slug>`, `posts` (to reconcile);
+    (R-WEB-8), `unpublish <lang>/<slug>`, `posts` (to reconcile);
   - `sync-tags` (parses `news/watchlist.md`), only if M2 goes ahead.
 
   The token goes only to the API host, in the header: redirects aren't followed, and a
@@ -366,28 +367,31 @@ These are requirements on the content repo, implemented there.
 - **R-MED-4** Must: `/sweep` reads Miniflux first (§12), then has the `researcher` agent
   cover only what the feeds don't.
 - **R-MED-5** Must: new content types:
-  - `posts/YYYY-MM-DD-slug.md` for breves, `posts/<slug>.md` for pages (`sobre`):
-    English frontmatter, Spanish body, status `draft → approved → published`, or
-    `unpublished`. `sources:` lists ids of files in `sources/`, so everything the site
-    cites was fetched and checked there;
+  - `posts/<lang>/YYYY-MM-DD-slug.md` for breves, `posts/<lang>/<slug>.md` for pages
+    (`posts/es/sobre.md`, `posts/en/about.md`), the folder giving the language: English
+    frontmatter, the body in the post's language, status `draft → approved → published`,
+    or `unpublished`. `sources:` lists ids of files in `sources/`, so everything the site
+    cites was fetched and checked there. Every post has its version in the other
+    language, which names its original as `translation_of: <lang>/<slug>` (R-WEB-10);
   - `format: article` pieces, with `article.md` as the body.
 
-  `/breve` drafts a breve, `/post <slug>` pushes approved content to the site, and only
-  Dani sets `approved`.
+  `/breve` drafts a breve in both languages, `/post <lang>/<slug>` pushes an approved story
+  (both versions) to the site, and only Dani sets `approved`.
 
 ## 11. Open questions
 
-| #   | Question                                                                                               | Leaning                                        |
-| --- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| Q1  | The site's subdomain and name: `newsroom.danilupion.com` (shared with the API) or a Spanish-named host | All configuration; decide before M4            |
-| Q4  | Is drafting with a local model worth building? (§8.2)                                                  | Decide after using M1                          |
-| Q6  | Will others send items later?                                                                          | Designed for, not built                        |
-| Q7  | Articles in v1, or breves first?                                                                       | Breves first                                   |
-| Q8  | Which "Where to look" sources have usable feeds?                                                       | Checked: the watchlist's Feeds (2026-10-15)    |
-| Q9  | How long to keep `page_text` (size, copyright)?                                                        | Clear it 90 days after `logged` or `discarded` |
-| Q10 | Licence for the site's content (breves, articles)                                                      | CC BY 4.0, like aiontheballot's content        |
+| #   | Question                                                    | Leaning                                        |
+| --- | ----------------------------------------------------------- | ---------------------------------------------- |
+| Q1  | The site's name in each language (its host is decided: D10) | In the design canvas, before M4 ships          |
+| Q4  | Is drafting with a local model worth building? (§8.2)       | Decide after using M1                          |
+| Q6  | Will others send items later?                               | Designed for, not built                        |
+| Q7  | Articles in v1, or breves first?                            | Breves first                                   |
+| Q8  | Which "Where to look" sources have usable feeds?            | Checked: the watchlist's Feeds (2026-10-15)    |
+| Q9  | How long to keep `page_text` (size, copyright)?             | Clear it 90 days after `logged` or `discarded` |
+| Q10 | Licence for the site's content (breves, articles)           | CC BY 4.0, like aiontheballot's content        |
+| Q12 | An English breve's length (R-WEB-1)                         | 65–130 words: Spanish's 80–150, about 15% less |
 
-### Decided in v0.2
+### Decided (v0.2, v0.3)
 
 | #   | Decision                                                                                                    | Was          |
 | --- | ----------------------------------------------------------------------------------------------------------- | ------------ |
@@ -400,6 +404,8 @@ These are requirements on the content repo, implemented there.
 | D7  | The inbox and posts API are on a public host behind a bearer token, not on the private network                      | —            |
 | D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`; the site may share it | Q1 (in part) |
 | D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file       | —            |
+| D10 | The site is in Spanish and English from v1, both on `newsroom.danilupion.com` under `/es/` and `/en/`       | Q1 (in part) |
+| D11 | Every post is published in both languages; the site shows a story only when both versions are               | Q11          |
 
 ## 12. Miniflux for `/sweep`
 
@@ -421,8 +427,9 @@ These are requirements on the content repo, implemented there.
 
 ### Content
 
-- **R-WEB-1** Must: two content types, both in Spanish:
-  - **breve**: 80–150 words, a title, 1–3 sources;
+- **R-WEB-1** Must: two content types, each written in Spanish or English:
+  - **breve**: a title, 1–3 sources, 80–150 words in Spanish or 65–130 in English, which
+    says the same in fewer words `[Q12]`;
   - **article**: long form.
 
   Each lists its sources (title, link, access date) and its tags.
@@ -432,17 +439,36 @@ These are requirements on the content repo, implemented there.
 - **R-WEB-3** Must: no AI-generated images; non-partisan; honest about uncertainty.
   Every page says who writes it (Dani) and links to the about page, which says who Dani
   is. The site doesn't speak for Pausemos la IA.
+- **R-WEB-10** Must: every post is published in Spanish and English (D11): written in
+  one language and translated into the other. A translation names its original, which
+  has been pushed already; a story is one original and its translation, never a
+  translation of a translation (the database enforces it). The site shows a story only
+  when both versions are published, so no reader finds one language alone, not even
+  between the two pushes; taking either version down takes both down (`410`). Each
+  version links to the other, visibly and for search engines (`hreflang`).
 
-**Pages:** a home page listing the latest items, a page per item (`/<slug>`), a page per
-tag (`/etiqueta/<tag>`, tags shown by Spanish names), a topics index (`/temas`), an
-"about" page (`/sobre`), an Atom feed (`/feed.xml`), and a sitemap. The about page's text
-is a post of type `page` with the slug `sobre`, pushed from aisafety-media like the rest
-(R-WEB-2): pages are never listed, need no sources, and nothing on the site is written in
-its code.
+**Pages,** in each language under its prefix (D10), with its own words:
 
-- **R-WEB-4** Must: Spanish interface; Open Graph and canonical metadata; usable at
-  phone width; accessible (semantic HTML, contrast, alt text; WCAG 2.2 AA as the
-  target).
+| Page                       | Spanish              | English         |
+| -------------------------- | -------------------- | --------------- |
+| Latest items, page by page | `/es`                | `/en`           |
+| One item                   | `/es/<slug>`         | `/en/<slug>`    |
+| A tag's items (named tags) | `/es/etiqueta/<tag>` | `/en/tag/<tag>` |
+| Topics index               | `/es/temas`          | `/en/topics`    |
+| About                      | `/es/sobre`          | `/en/about`     |
+| Atom feed                  | `/es/feed.xml`       | `/en/feed.xml`  |
+
+`/` sends readers to the language their browser asks for, Spanish if neither; the sitemap
+lists both. An address outside both languages answers 404 in both. The about page's text
+is a post of type `page` whose slug is its language's word (`sobre`, `about`), pushed from
+aisafety-media like the rest (R-WEB-2): pages are never listed, need no sources, and
+nothing on the site is written in its code. The six path words are refused as slugs in
+both languages, so no post hides behind a page.
+
+- **R-WEB-4** Must: a Spanish and an English interface, each language's own labels,
+  dates and tag names, and a link to the other language labelled in that language; Open
+  Graph and canonical metadata; usable at phone width; accessible (semantic HTML,
+  `lang` on every page, contrast, alt text; WCAG 2.2 AA as the target).
 - **R-WEB-5** Must: Markdown is rendered to sanitised HTML. No raw HTML from posts.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
@@ -450,25 +476,35 @@ its code.
   needed); GlitchTip for server-side errors. No error SDK in the browser in v1.
 
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
-same rules as §9.
+same rules as §9. A post's address is its language and its slug.
 
-| Method and path       | Body                                                                                            | Effect                                                                                                                                           |
-| --------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PUT /posts/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; slugs that are the site's own paths (`temas`, `etiqueta`…) are refused |
-| `DELETE /posts/:slug` |                                                                                                 | unpublish: the page returns `410` and drops out of feeds                                                                                         |
-| `GET /posts`          |                                                                                                 | list, so aisafety-media can reconcile                                                                                                            |
+| Method and path             | Body                                                                                                                         | Effect                                                                                                      |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused |
+| `DELETE /posts/:lang/:slug` |                                                                                                                              | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)               |
+| `GET /posts`                |                                                                                                                              | list, so aisafety-media can reconcile                                                                       |
 
-**Public read routes** (no token, on no gateway, as `newsroom_public`): `GET
-/public/posts` (latest first, no pages; `tag`, `limit`, and for the next page the last
-post's `published_at` and slug as `before` and `before_slug`, since posts can share an
-instant), `GET /public/posts/:slug` (`410` once unpublished), `GET /public/tags`, and
-`GET /public/unpublished`, the slugs the site's proxy answers `410` for. A
+`lang` is `es` or `en`; `translation_of` is `{lang, slug}` or `null`. A translation whose
+original has never been pushed, a second translation in one language and a translation of
+a translation are refused with `409`. `unpublished: true` (default `false`) stores the post
+already unpublished, for a rebuild; any other push publishes it. Each push is one version;
+the public routes show a story once both are published (D11).
+
+**Public read routes** (no token, on no gateway, as `newsroom_public`), each for one
+language: `GET /public/posts?lang=` (latest first, no pages; `tag`, `limit`, and for the
+next page the last post's `published_at` and slug as `before` and `before_slug`, since
+posts can share an instant), `GET /public/posts/:lang/:slug` (with the story's other
+version as `translations`; `404` until both are published, `410` once either is
+unpublished), `GET /public/tags?lang=`,
+and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. A
 `published_at` with no time is midnight in Madrid, the site's clock.
 
-- **R-WEB-8** Must: the site can be rebuilt by re-pushing every published post from
-  aisafety-media (P1).
-- **R-WEB-9** Must: the site stays off in a deployment until gitops gives it its name,
-  address and author (SPEC Q1), so it can be merged before they're decided.
+- **R-WEB-8** Must: the site can be rebuilt from aisafety-media (P1) by re-pushing every
+  published post, and every unpublished one as unpublished (its address answers `410`
+  again, and its translation can name it), originals before their translations.
+- **R-WEB-9** Must: the site stays off in a deployment until gitops gives it its address,
+  its name in each language and its author (SPEC Q1), so it can be merged before they're
+  decided.
 
 ## 14. Security
 
@@ -508,7 +544,7 @@ instant), `GET /public/posts/:slug` (`410` once unpublished), `GET /public/tags`
   - multi-tenancy and row-level security; audit and immutability triggers; four-eyes
     review;
   - Better Auth and an admin UI;
-  - next-intl: the interface is Spanish only, with its strings in one module;
+  - next-intl: the interface's two languages keep their strings in one module;
   - OpenTelemetry, share images, a Playwright suite and mutation tests;
   - a separate fetcher service: the worker fetches, under R-FET-4;
   - ADRs: decisions live in this spec until something changes them.
@@ -605,6 +641,9 @@ API token, re-pushing every post, restoring the database.
   next `/news` adds the note to the original's item file ("Added (Dani):").
 - **AC-10** `/discard` of the wrong id shows that item's title, and `/restore` brings it
   back to where it was.
+- **AC-11** `/` sends a browser that asks for English to `/en` and any other to `/es`. A
+  Spanish breve shows on neither side until its English translation is pushed too; then
+  each links to the other, and unpublishing one takes both down (`410`).
 
 ## 17. Milestones
 
@@ -614,5 +653,5 @@ API token, re-pushing every post, restoring the database.
 | M1  | BOT, DB, WRK, inbox API, `tools/newsroom.py`, `/news` queue mode                                                          | M0         |
 | M2  | Decide on drafting with a local model from M1's use; build it only if it's worth it                                       | Q4         |
 | M3  | Miniflux category and feeds; `/sweep` reads them                                                                          | Q8         |
-| M4  | Site with breves: posts API, pages, feed; `/breve`, `/post`                                                               | Q1         |
+| M4  | Site with breves in Spanish and English: posts API, pages, feeds; `/breve`, `/post`                                       | Q1         |
 | M5  | Articles                                                                                                                  | Q7         |

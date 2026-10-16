@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 Capture, triage and publishing software for aisafety-media: a Telegram bot, a fetch worker, an inbox API and a public
-Spanish site, on the the cluster cluster. The stack follows aiontheballot (`../aiontheballot`) at a smaller scale.
+site in Spanish and English, on the the cluster cluster. The stack follows aiontheballot (`../aiontheballot`) at a
+smaller scale.
 
 - Requirements, decisions and open questions: `SPEC.md` (source of truth; requirement ids like `R-CAP-3`)
 - Deployment manifests: `../gitops` (`docs/app-onboarding.md`); the content and its rules: `../aisafety-media`
@@ -58,5 +59,6 @@ Copy `.env.example` to `.env` for local database URLs. Local Postgres listens on
   run `pnpm db:migrate` and `pnpm db:types` and commit both outputs.
 - **Tests:** next to the code as `*.spec.ts`; database tests in `packages/db/tests`. Every new invariant gets its test
   first.
-- **Language:** code, docs and bot replies in English; the public site's interface and content in Spanish.
+- **Language:** code, docs and bot replies in English; the public site in Spanish and English (`/es/`, `/en/`), its
+  interface's words in `apps/web/src/strings.ts` and its path words in `packages/domain/src/languages.ts`.
 - **Docs:** Markdown lines under 120 characters.
