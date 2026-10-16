@@ -5,9 +5,10 @@ import { connection } from 'next/server';
 
 import { latestPosts } from '@/api';
 import { FeedBox } from '@/components/FeedBox';
+import { OrderSwitch } from '@/components/OrderSwitch';
 import { Timeline } from '@/components/Timeline';
 import { DEFAULT_LANG, paths } from '@/i18n';
-import { nextPage, readCursor } from '@/paging';
+import { nextPage, readCursor, readOrder } from '@/paging';
 import { alternates, pageLang, type Query } from '@/params';
 import { STRINGS } from '@/strings';
 import { container, pageTitle, srOnly } from '@/styles';
@@ -37,32 +38,39 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
   };
 };
 
-/** One language's latest breves and articles as a timeline, then older ones page by page (SPEC §13 pages). */
+/**
+ * One language's latest breves and articles as a timeline, then older ones page by page (SPEC §13 pages): as posted,
+ * or by the day each story happened (R-WEB-13).
+ */
 const Home = async ({ params, searchParams }: Props) => {
   await connection();
   const lang = await pageLang(params);
   const t = STRINGS[lang];
-  const after = readCursor(lang, await searchParams);
-  const posts = await latestPosts(lang, { after, limit: PAGE });
+  const query = await searchParams;
+  const order = readOrder(lang, query);
+  const after = readCursor(lang, query, order);
+  const posts = await latestPosts(lang, { after, limit: PAGE, order });
   const last = posts.at(-1);
+  const home = paths.home(lang);
   return (
     <div className={container}>
       {after ? (
         <h1 className={pageTitle}>{t.older}</h1>
       ) : (
         <>
-          <h1 className={srOnly}>{t.latest}</h1>
+          <h1 className={srOnly}>{order === 'news' ? t.orderNews : t.latest}</h1>
           <p className={intro}>{t.intro}</p>
         </>
       )}
+      {posts.length === 0 && !after ? null : <OrderSwitch lang={lang} path={home} order={order} />}
       {posts.length === 0 ? (
         <p>{after ? t.noOlder : t.nothingYet}</p>
       ) : (
-        <Timeline lang={lang} posts={posts} featureFirst={!after} />
+        <Timeline lang={lang} posts={posts} order={order} featureFirst={!after} />
       )}
       <FeedBox
         lang={lang}
-        older={posts.length === PAGE && last ? nextPage(lang, paths.home(lang), last) : undefined}
+        older={posts.length === PAGE && last ? nextPage(lang, home, last, order) : undefined}
       />
     </div>
   );

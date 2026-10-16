@@ -29,7 +29,7 @@ export const inboxRoutes =
       if (!query) {
         return reply;
       }
-      return listItems(db, { statuses: query.status, limit: query.limit });
+      return listItems(db, { statuses: query.status, limit: query.limit, sort: query.sort });
     });
 
     app.get<{ Params: { id: string } }>('/api/v1/items/:id', async (request, reply) => {

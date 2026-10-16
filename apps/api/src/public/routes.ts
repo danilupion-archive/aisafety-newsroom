@@ -4,7 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { sql } from 'kysely';
 
 import { parse } from '../parse.js';
-import { translationOf } from '../posts/data.js';
+import { newsDate, translationOf } from '../posts/data.js';
 import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.js';
 
 /**
@@ -28,7 +28,8 @@ export const publicRoutes =
 
     /**
      * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
-     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves.
+     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves. In news order, by
+     * the day each story happened, newest first, then as posted (R-WEB-13).
      */
     app.get('/public/posts', async (request, reply) => {
       const query = parse(publicListQuery, request.query, reply);
@@ -38,23 +39,35 @@ export const publicRoutes =
       let select = db
         .selectFrom('app.published_posts')
         .select(['lang', 'slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
         .where('lang', '=', query.lang)
         .where('type', '<>', 'page')
-        .orderBy('published_at', 'desc')
-        .orderBy('slug')
         .limit(query.limit);
+      if (query.order === 'news') {
+        select = select.orderBy('news_date', 'desc');
+      }
+      select = select.orderBy('published_at', 'desc').orderBy('slug');
       if (query.tag !== undefined) {
         select = select.where(sql<boolean>`${query.tag} = ANY(tags)`);
       }
-      if (query.before !== undefined) {
+      if (query.before !== undefined || query.before_date !== undefined) {
         // Compared at the millisecond, the precision the cursor came out with.
         const at = sql`date_trunc('milliseconds', published_at)`;
-        const before = new Date(query.before);
+        const before = query.before === undefined ? undefined : new Date(query.before);
+        const posted =
+          before === undefined
+            ? undefined
+            : query.before_slug === undefined
+              ? sql<boolean>`${at} < ${before}`
+              : sql<boolean>`(${at} < ${before} OR (${at} = ${before} AND slug > ${query.before_slug}))`;
+        const day = query.before_date;
         select = select.where(
-          query.before_slug === undefined
-            ? sql<boolean>`${at} < ${before}`
-            : sql<boolean>`(${at} < ${before} OR (${at} = ${before} AND slug > ${query.before_slug}))`,
+          day === undefined
+            ? (posted ?? sql<boolean>`true`)
+            : posted === undefined
+              ? sql<boolean>`news_date < ${day}::date`
+              : sql<boolean>`(news_date < ${day}::date OR (news_date = ${day}::date AND ${posted}))`,
         );
       }
       return select.execute();
@@ -76,6 +89,7 @@ export const publicRoutes =
         const row = await db
           .selectFrom('app.published_posts')
           .selectAll()
+          .select(newsDate())
           .where('lang', '=', address.lang)
           .where('slug', '=', address.slug)
           .executeTakeFirst();

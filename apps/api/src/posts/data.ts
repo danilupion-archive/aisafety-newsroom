@@ -21,6 +21,8 @@ export interface Post {
   sources: unknown;
   tags: string[];
   published_at: Date;
+  /** The day its story happened (R-WEB-13), `YYYY-MM-DD`; null for a page. */
+  news_date: string | null;
   translation_of: PostAddress | null;
   content_ref: unknown;
   created_at: Date;
@@ -37,6 +39,12 @@ export const translationOf = (row: {
     ? { lang: row.translation_of_lang, slug: row.translation_of_slug }
     : null;
 
+/**
+ * A post's news date as the API gives it out, `YYYY-MM-DD`: pg would read a date as midnight in the server's time zone,
+ * which JSON then shifts to another day.
+ */
+export const newsDate = () => sql<string | null>`to_char(news_date, 'YYYY-MM-DD')`.as('news_date');
+
 /** The site's clock: a post dated without a time is published at midnight there. */
 export const SITE_TIME_ZONE = 'Europe/Madrid';
 
@@ -50,6 +58,12 @@ const publishedAt = (value: string) =>
   DATE_ONLY.test(value)
     ? sql<Date>`(${value}::date)::timestamp AT TIME ZONE ${SITE_TIME_ZONE}`
     : value;
+
+/** The day a post was posted on the site's clock: a breve's news date when its push gives none (R-WEB-13). */
+const postedDay = (value: string) =>
+  DATE_ONLY.test(value)
+    ? value
+    : sql<string>`(${value}::timestamptz AT TIME ZONE ${SITE_TIME_ZONE})::date`;
 
 /**
  * Creates or replaces a post (§13 `PUT /posts/:lang/:slug`). Pushing an unpublished post publishes it again, unless
@@ -70,6 +84,7 @@ export const upsertPost = async (
     sources: JSON.stringify(body.sources),
     tags: body.tags,
     published_at: publishedAt(body.published_at),
+    news_date: body.type === 'page' ? null : (body.news_date ?? postedDay(body.published_at)),
     translation_of_lang: body.translation_of?.lang ?? null,
     translation_of_slug: body.translation_of?.slug ?? null,
     content_ref: JSON.stringify(body.content_ref),
@@ -85,13 +100,25 @@ export const upsertPost = async (
       }),
     )
     .returningAll()
+    .returning(sql<string | null>`to_char(news_date, 'YYYY-MM-DD')`.as('news_day'))
     // A row the insert created has no previous version: xmax is 0.
     .returning(sql<boolean>`(xmax = 0)`.as('created'))
     .executeTakeFirstOrThrow();
-  const { created, translation_of_lang, translation_of_slug, ...post } = row;
+  const {
+    created,
+    translation_of_lang,
+    translation_of_slug,
+    news_date: _,
+    news_day,
+    ...post
+  } = row;
   return {
     created,
-    post: { ...post, translation_of: translationOf({ translation_of_lang, translation_of_slug }) },
+    post: {
+      ...post,
+      news_date: news_day,
+      translation_of: translationOf({ translation_of_lang, translation_of_slug }),
+    },
   };
 };
 
@@ -130,6 +157,7 @@ export const listPosts = async (db: Database) => {
       'translation_of_lang',
       'translation_of_slug',
       'content_ref',
+      newsDate(),
     ])
     .orderBy('published_at', 'desc')
     .orderBy('lang')

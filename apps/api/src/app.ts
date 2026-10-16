@@ -61,6 +61,7 @@ const CONFLICTS: Readonly<Record<string, string>> = {
   posts_one_translation_per_lang: 'That post already has a translation in this language',
   posts_translation_of_original: 'That post is a translation itself: translate its original',
   posts_translated_is_original: 'This post has translations, so it can’t be a translation itself',
+  posts_page_has_no_news_date: 'A page has no news date',
 };
 
 export const buildApp = ({

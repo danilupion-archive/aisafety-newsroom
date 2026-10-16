@@ -6,9 +6,9 @@ import type { PostSummary } from './api';
 import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { atomFeed, xml } from './feed';
-import { calendarDate, dateParts, longDate } from './format';
-import { otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
-import { nextPage, readCursor } from './paging';
+import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
+import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
+import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
@@ -111,26 +111,43 @@ describe('languages (D10)', () => {
 
 describe('the proxy’s routes (D10, AC-11)', () => {
   it('serves Spanish at the root, from the Spanish pages inside', () => {
-    expect(route('/')).toEqual({ kind: 'page', internal: '/es', post: undefined });
-    expect(route('/temas')).toMatchObject({ kind: 'page', internal: '/es/temas' });
-    expect(route('/feed.xml')).toEqual({ kind: 'page', internal: '/es/feed.xml', post: undefined });
+    expect(route('/')).toEqual({
+      kind: 'page',
+      lang: 'es',
+      internal: '/es',
+      post: undefined,
+      tag: undefined,
+      known: true,
+    });
+    expect(route('/temas')).toMatchObject({ kind: 'page', internal: '/es/temas', known: true });
+    expect(route('/feed.xml')).toMatchObject({
+      internal: '/es/feed.xml',
+      post: undefined,
+      known: true,
+    });
     expect(route('/etiqueta/evals')).toEqual({
       kind: 'page',
+      lang: 'es',
       internal: '/es/etiqueta/evals',
       post: undefined,
+      tag: 'evals',
+      known: true,
     });
   });
 
   it('serves English as it is', () => {
-    expect(route('/en')).toEqual({ kind: 'page', internal: '/en', post: undefined });
+    expect(route('/en')).toMatchObject({ kind: 'page', lang: 'en', internal: '/en', known: true });
     expect(route('/en/topics')).toMatchObject({ kind: 'page', internal: '/en/topics' });
   });
 
   it('knows a post’s address in either language, for the 410 of an unpublished one', () => {
     expect(route('/informe-de-ejemplo')).toEqual({
       kind: 'page',
+      lang: 'es',
       internal: '/es/informe-de-ejemplo',
       post: { lang: 'es', slug: 'informe-de-ejemplo' },
+      tag: undefined,
+      known: true,
     });
     expect(route('/en/example-report')).toMatchObject({
       post: { lang: 'en', slug: 'example-report' },
@@ -142,12 +159,35 @@ describe('the proxy’s routes (D10, AC-11)', () => {
     expect(route('/en')).toMatchObject({ post: undefined });
   });
 
+  it('knows which addresses can’t be a page at all, to answer them as missing (404) without asking the API', () => {
+    for (const address of [
+      '/a/b/c',
+      '/Not-A-Slug',
+      '/en/etiqueta/evals',
+      '/etiqueta',
+      '/etiqueta/Evals',
+      '/en/tag/a/b',
+    ]) {
+      expect(route(address), address).toMatchObject({ kind: 'page', known: false });
+    }
+    // The other language's words are slugs in shape: only the API can say no post has them.
+    expect(route('/topics')).toMatchObject({ known: true, post: { lang: 'es', slug: 'topics' } });
+    expect(route('/en/tag/evals')).toMatchObject({ known: true, tag: 'evals' });
+  });
+
+  it('serves a missing address the not-found page of its language, from inside', () => {
+    expect(missingPage('es')).toBe('/es/missing.html');
+    expect(missingPage('en')).toBe('/en/missing.html');
+    // Never a post's address: a slug has no dot.
+    expect(route('/missing.html')).toMatchObject({ known: false, post: undefined });
+  });
+
   it('serves /es… as it is: only its own rewrite brings the proxy there', () => {
     // Next may run the proxy again on the address it rewrote to; a reader's request for one never gets here (next.config).
     expect(route('/es')).toEqual({ kind: 'internal' });
     expect(route('/es/temas')).toEqual({ kind: 'internal' });
     // /escuela is a Spanish address, not /es's.
-    expect(route('/escuela')).toMatchObject({ kind: 'page', internal: '/es/escuela' });
+    expect(route('/escuela')).toMatchObject({ kind: 'page', internal: '/es/escuela', known: true });
   });
 
   it('sends /es and everything under it to the same address without the prefix, before the proxy', async () => {
@@ -182,6 +222,27 @@ describe('dates (R-WEB-4)', () => {
   it('keeps a date-only value on its own calendar day', () => {
     expect(calendarDate('es', '2026-10-15')).toBe('15 de octubre de 2026');
     expect(calendarDate('en', '2026-10-15')).toBe('15 October 2026');
+  });
+
+  it('gives an instant’s day on the site’s clock', () => {
+    expect(madridDay('2026-10-15T22:30:00Z')).toBe('2026-10-16');
+    expect(madridDay('2026-10-15T21:30:00Z')).toBe('2026-10-15');
+  });
+
+  it('says a post’s news date only when its story happened on another day than it was posted (R-WEB-13)', () => {
+    const posted = { published_at: '2026-10-15T22:30:00Z' };
+    expect(newsNote('es', { ...posted, news_date: '2026-10-12' })).toBe('noticia del 12 oct');
+    expect(newsNote('en', { ...posted, news_date: '2026-10-12' })).toBe('news from 12 Oct');
+    // Another year says so.
+    expect(newsNote('es', { ...posted, news_date: '2025-12-30' })).toBe('noticia del 30 dic 2025');
+    // Posted the day it happened, on Madrid's clock; or no news date (an older API).
+    expect(newsNote('es', { ...posted, news_date: '2026-10-16' })).toBeUndefined();
+    expect(newsNote('es', posted)).toBeUndefined();
+    expect(newsNote('en', { ...posted, news_date: null })).toBeUndefined();
+    // On a post's page, in full.
+    expect(newsNote('es', { ...posted, news_date: '2026-10-12' }, 'long')).toBe(
+      'noticia del 12 de octubre de 2026',
+    );
   });
 });
 
@@ -310,6 +371,44 @@ describe('paging', () => {
     ).toBeUndefined();
   });
 
+  it('reads the order: as posted unless the query asks for the news date, in each language’s words (R-WEB-13)', () => {
+    expect(readOrder('es', {})).toBe('posted');
+    expect(readOrder('es', { orden: 'noticia' })).toBe('news');
+    expect(readOrder('en', { order: 'news' })).toBe('news');
+    expect(readOrder('en', { orden: 'noticia' })).toBe('posted');
+    expect(readOrder('es', { orden: ['noticia'] })).toBe('posted');
+    expect(orderHref('es', '/', 'posted')).toBe('/');
+    expect(orderHref('es', '/', 'news')).toBe('/?orden=noticia');
+    expect(orderHref('en', '/en/tag/evals', 'news')).toBe('/en/tag/evals?order=news');
+  });
+
+  it('pages in news order from the last post’s news date, then its instant and slug', () => {
+    const query = {
+      orden: 'noticia',
+      dia: '2026-10-12',
+      antes: '2026-10-15T08:00:00.000Z',
+      tras: 'x',
+    };
+    expect(readCursor('es', query, 'news')).toEqual({
+      before: '2026-10-15T08:00:00.000Z',
+      beforeSlug: 'x',
+      beforeDate: '2026-10-12',
+    });
+    // Without a real day there's no news-order cursor; as posted, the day is ignored.
+    expect(readCursor('es', { ...query, dia: '2026-02-30' }, 'news')).toBeUndefined();
+    expect(readCursor('es', { ...query, dia: undefined }, 'news')).toBeUndefined();
+    expect(readCursor('es', query)).toEqual({
+      before: '2026-10-15T08:00:00.000Z',
+      beforeSlug: 'x',
+    });
+    expect(nextPage('es', '/', { ...POST, news_date: '2026-10-12' }, 'news')).toBe(
+      '/?orden=noticia&antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo&dia=2026-10-12',
+    );
+    expect(
+      nextPage('en', '/en', { ...POST, slug: 'example', news_date: '2026-10-12' }, 'news'),
+    ).toBe('/en?order=news&before=2026-10-15T08%3A00%3A00.000Z&after=example&day=2026-10-12');
+  });
+
   it('links the next page from the last post shown', () => {
     expect(nextPage('es', '/etiqueta/evals', POST)).toBe(
       '/etiqueta/evals?antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo',
@@ -351,6 +450,16 @@ describe('the timeline’s dates', () => {
       weekdayShort: 'FRI',
     });
     expect(dateParts('es', '2026-09-03T10:00:00Z').month).toBe('SEPT');
+  });
+
+  it('splits a news date into the same parts, on its own calendar day', () => {
+    expect(calendarParts('es', '2026-10-16')).toEqual({
+      day: '16',
+      month: 'OCT',
+      weekday: 'viernes',
+      weekdayShort: 'VIE',
+    });
+    expect(calendarParts('en', '2026-01-01').weekday).toBe('Thursday');
   });
 });
 

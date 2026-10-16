@@ -115,6 +115,23 @@ $$;
 ALTER FUNCTION private.inbox_items_transition() OWNER TO newsroom_owner;
 
 --
+-- Name: page_published_on(text); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.page_published_on(stated text) RETURNS date
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+BEGIN
+  RETURN substring(stated FROM '^\s*(\d{4}-\d{2}-\d{2})(?![\d])')::date;
+EXCEPTION WHEN datetime_field_overflow OR invalid_datetime_format THEN
+  RETURN NULL;
+END
+$$;
+
+
+ALTER FUNCTION private.page_published_on(stated text) OWNER TO newsroom_owner;
+
+--
 -- Name: posts_translation(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
 --
 
@@ -202,6 +219,7 @@ CREATE TABLE app.inbox_items (
     page_kind text,
     page_author text,
     page_duration_seconds integer,
+    page_published_on date GENERATED ALWAYS AS (private.page_published_on(page_published_at)) STORED,
     CONSTRAINT inbox_items_fetch_attempts_positive CHECK ((fetch_attempts >= 0)),
     CONSTRAINT inbox_items_follow_up_is_a_note CHECK (((follows_up IS NULL) OR (url IS NULL))),
     CONSTRAINT inbox_items_logged_has_ref CHECK (((status <> 'logged'::app.inbox_status) OR ((logged_at IS NOT NULL) AND (logged_ref IS NOT NULL)))),
@@ -252,8 +270,10 @@ CREATE TABLE app.posts (
     lang app.post_lang NOT NULL,
     translation_of_lang app.post_lang,
     translation_of_slug text,
+    news_date date,
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
+    CONSTRAINT posts_page_has_no_news_date CHECK (((type <> 'page'::app.post_type) OR (news_date IS NULL))),
     CONSTRAINT posts_slug_format CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 120))),
     CONSTRAINT posts_sources_array CHECK ((jsonb_typeof(sources) = 'array'::text)),
     CONSTRAINT posts_summary_length CHECK ((char_length(summary) <= 600)),
@@ -281,10 +301,14 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
     post.updated_at,
     post.lang,
     post.translation_of_lang,
-    post.translation_of_slug
+    post.translation_of_slug,
+        CASE
+            WHEN (post.type <> 'page'::app.post_type) THEN COALESCE(post.news_date, ((post.published_at AT TIME ZONE 'Europe/Madrid'::text))::date)
+            ELSE NULL::date
+        END AS news_date
    FROM (app.posts post
      JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
-  WHERE ((post.unpublished_at IS NULL) AND (post.published_at <= now()) AND (other.unpublished_at IS NULL) AND (other.published_at <= now()));
+  WHERE ((post.unpublished_at IS NULL) AND (post.published_at <= now()) AND (other.unpublished_at IS NULL) AND (other.published_at <= now()) AND ((post.type = 'page'::app.post_type) OR (COALESCE(post.news_date, ((post.published_at AT TIME ZONE 'Europe/Madrid'::text))::date) = COALESCE(other.news_date, ((other.published_at AT TIME ZONE 'Europe/Madrid'::text))::date))));
 
 
 ALTER VIEW app.published_posts OWNER TO newsroom_owner;
@@ -473,6 +497,14 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION private.inbox_items_transition() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION page_published_on(stated text); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.page_published_on(stated text) FROM PUBLIC;
+GRANT ALL ON FUNCTION private.page_published_on(stated text) TO newsroom_app;
 
 
 --

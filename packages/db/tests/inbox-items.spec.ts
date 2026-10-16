@@ -23,6 +23,55 @@ const insertLink = async (client: pg.Client, url: string): Promise<string> => {
 };
 
 describe('app.inbox_items', () => {
+  it('reads the day a page says it was published, best effort, without ever refusing the fetch (R-API-4)', async () => {
+    const read = await asApp(async (client) => {
+      const id = await insertLink(client, 'https://example.com/fechas');
+      const out: Record<string, string | null> = {};
+      for (const stated of [
+        '2026-10-10T08:00:00-07:00',
+        '2026-10-13',
+        ' 2026-10-14T23:59:59Z',
+        '2026-02-30',
+        '2026-10-131',
+        '20261013',
+        'Fri, 16 Oct 2026 10:00:00 GMT',
+        '',
+      ]) {
+        const { rows } = await client.query<{ day: string | null }>(
+          `UPDATE app.inbox_items SET page_published_at = $2 WHERE id = $1
+           RETURNING to_char(page_published_on, 'YYYY-MM-DD') AS day`,
+          [id, stated],
+        );
+        const [row] = rows;
+        out[stated] = row ? row.day : 'no row';
+      }
+      return out;
+    });
+    expect(read).toEqual({
+      '2026-10-10T08:00:00-07:00': '2026-10-10',
+      '2026-10-13': '2026-10-13',
+      ' 2026-10-14T23:59:59Z': '2026-10-14',
+      '2026-02-30': null,
+      '2026-10-131': null,
+      '20261013': null,
+      'Fri, 16 Oct 2026 10:00:00 GMT': null,
+      '': null,
+    });
+  });
+
+  it('never lets a writer set the page’s day itself: it follows what the page states', async () => {
+    await asApp(async (client) => {
+      const id = await insertLink(client, 'https://example.com/generada');
+      expect(
+        await failure(
+          client,
+          `UPDATE app.inbox_items SET page_published_on = '2026-01-01' WHERE id = $1`,
+          [id],
+        ),
+      ).toEqual({ code: '428C9' });
+    });
+  });
+
   it('keeps one item per normalised link (R-CAP-6)', async () => {
     await asApp(async (client) => {
       await insertLink(client, 'https://example.com/a');

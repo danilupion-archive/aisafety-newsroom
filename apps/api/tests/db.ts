@@ -35,6 +35,7 @@ export interface Fixture {
   note?: string;
   page_text?: string | null;
   page_title?: string | null;
+  page_published_at?: string | null;
   follows_up?: number | null;
   logged_ref?: unknown;
 }
@@ -48,8 +49,10 @@ export const insertItem = async (fixture: Fixture = {}): Promise<number> => {
   const status = fixture.status ?? (url === null ? 'needs_review' : 'ready');
   const [row] = await asSuperuser<{ id: string }>(
     `INSERT INTO app.inbox_items
-       (url, url_normalized, status, fetch_status, note, page_text, page_title, follows_up, logged_ref, logged_at)
-     VALUES ($1, $1, $2::app.inbox_status, $3::app.fetch_status, $4, $5, $6, $7, $8, CASE WHEN $2::text = 'logged' THEN now() END)
+       (url, url_normalized, status, fetch_status, note, page_text, page_title, follows_up, logged_ref, logged_at,
+        page_published_at)
+     VALUES ($1, $1, $2::app.inbox_status, $3::app.fetch_status, $4, $5, $6, $7, $8, CASE WHEN $2::text = 'logged' THEN now() END,
+       $9)
      RETURNING id`,
     [
       url,
@@ -64,6 +67,7 @@ export const insertItem = async (fixture: Fixture = {}): Promise<number> => {
           ? { news_file: 'news/2026-10.md' }
           : null
         : fixture.logged_ref,
+      fixture.page_published_at ?? null,
     ],
   );
   return Number(row?.id);

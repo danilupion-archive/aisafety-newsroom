@@ -32,14 +32,11 @@ const source = z.strictObject({
 });
 
 /**
- * R-WEB-1: a breve is 80 to 150 words in Spanish with 1 to 3 sources; English says the same in about 15% fewer words,
- * so a faithful translation of a short breve still fits. An article is long form and lists its sources too. A page
- * (the about page) is the site's own text: no sources, never listed.
+ * R-WEB-1: a breve is 80 to 150 words in the language it's written in, with 1 to 3 sources; its translation says the
+ * same at whatever length that takes, with no limit of its own (D15). An article is long form and lists its sources
+ * too. A page (the about page) is the site's own text: no sources, never listed.
  */
-export const BREVE_WORDS: Record<Lang, { min: number; max: number }> = {
-  es: { min: 80, max: 150 },
-  en: { min: 65, max: 130 },
-};
+export const BREVE_WORDS = { min: 80, max: 150 };
 const BREVE_SOURCES = { min: 1, max: 3 };
 
 const fields = z.strictObject({
@@ -50,6 +47,12 @@ const fields = z.strictObject({
   sources: z.array(source).max(50),
   tags: z.array(tag).max(10),
   published_at: z.union([z.iso.datetime({ offset: true }), z.iso.date()]),
+  /**
+   * The day the story happened, as its original source dates it (R-WEB-13): a calendar day. A page never has one. A
+   * breve or an article pushed without it (a client older than news dates) is dated by its posted day. Both versions of
+   * a story have the same one, or the site shows neither.
+   */
+  news_date: z.iso.date().optional(),
   /** The post this one translates, in the other language (R-WEB-10); none for an original. */
   translation_of: z.strictObject({ lang, slug }).nullable().default(null),
   /**
@@ -75,6 +78,13 @@ const bodyIn = (language: Lang) =>
         message: 'a translation is of a post in the other language',
       });
     }
+    if (post.type === 'page' && post.news_date !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['news_date'],
+        message: 'a page has no news date',
+      });
+    }
     if (post.type !== 'page' && post.sources.length === 0) {
       context.addIssue({
         code: 'custom',
@@ -84,12 +94,12 @@ const bodyIn = (language: Lang) =>
     }
     if (post.type === 'breve') {
       const words = wordCount(post.body_md);
-      const { min, max } = BREVE_WORDS[language];
-      if (words < min || words > max) {
+      const { min, max } = BREVE_WORDS;
+      if (post.translation_of === null && (words < min || words > max)) {
         context.addIssue({
           code: 'custom',
           path: ['body_md'],
-          message: `a breve in ${language} is ${min}–${max} words; this one has ${words}`,
+          message: `a breve is ${min}–${max} words in the language it’s written in; this one has ${words}`,
         });
       }
       if (post.sources.length > BREVE_SOURCES.max) {
@@ -119,15 +129,31 @@ export const publicListQuery = z
     tag: tag.optional(),
     limit: z.coerce.number().int().min(1).max(500).default(20),
     /**
+     * `posted` (the default): latest published first. `news`: by the day each story happened, newest first, then as
+     * posted (R-WEB-13).
+     */
+    order: z.enum(['posted', 'news']).default('posted'),
+    /**
      * The next page starts after the last post shown: its `published_at`, and its slug for posts that share that
-     * instant (a list is ordered by both). `before` alone gives the posts published before it.
+     * instant (a list is ordered by both). `before` alone gives the posts published before it. In news order the last
+     * post's news date leads (`before_date`); alone, it gives the stories from before that day.
      */
     before: z.iso.datetime({ offset: true }).optional(),
     before_slug: slug.optional(),
+    before_date: z.iso.date().optional(),
   })
   .refine((query) => query.before_slug === undefined || query.before !== undefined, {
     path: ['before_slug'],
     message: 'before_slug goes with before',
-  });
+  })
+  .refine((query) => query.before_date === undefined || query.order === 'news', {
+    path: ['before_date'],
+    message: 'before_date goes with order=news',
+  })
+  .refine(
+    (query) =>
+      query.order !== 'news' || query.before === undefined || query.before_date !== undefined,
+    { path: ['before'], message: 'in news order, before goes with before_date' },
+  );
 
 export const publicTagsQuery = z.object({ lang });

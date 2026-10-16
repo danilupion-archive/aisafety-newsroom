@@ -47,6 +47,8 @@ export interface Item {
   page_title: string | null;
   page_site_name: string | null;
   page_published_at: string | null;
+  /** The day `page_published_at` names, `YYYY-MM-DD`, when it starts with an ISO date (R-API-4). */
+  page_published_on: string | null;
   /** `page` or `video` once fetched (R-FET-7); null before, and for items fetched before it was recorded. */
   page_kind: 'page' | 'video' | null;
   /** A video's channel. */
@@ -94,6 +96,7 @@ const itemQuery = (db: Executor) =>
       'i.page_title',
       'i.page_site_name',
       'i.page_published_at',
+      sql<string | null>`to_char(i.page_published_on, 'YYYY-MM-DD')`.as('page_published_on'),
       'i.page_kind',
       'i.page_author',
       'i.page_duration_seconds',
@@ -111,8 +114,14 @@ const itemQuery = (db: Executor) =>
 
 type QueryRow = Omit<
   ItemRow,
-  'page_text' | 'next_fetch_at' | 'reply_chat_id' | 'reply_message_id' | 'follows_up'
+  | 'page_text'
+  | 'next_fetch_at'
+  | 'reply_chat_id'
+  | 'reply_message_id'
+  | 'follows_up'
+  | 'page_published_on'
 > & {
+  page_published_on: string | null;
   original_id: string | null;
   original_url: string | null;
   original_status: InboxStatus | null;
@@ -149,6 +158,7 @@ const toItem = (row: QueryRow): Item => ({
   page_title: row.page_title,
   page_site_name: row.page_site_name,
   page_published_at: row.page_published_at,
+  page_published_on: row.page_published_on,
   page_kind: row.page_kind === 'page' || row.page_kind === 'video' ? row.page_kind : null,
   page_author: row.page_author,
   page_duration_seconds: row.page_duration_seconds,
@@ -159,17 +169,25 @@ const toItem = (row: QueryRow): Item => ({
   last_error: row.last_error,
 });
 
-/** Items in the given statuses, oldest first, without their page text (§9 `GET /items`). */
+/**
+ * Items in the given statuses without their page text (§9 `GET /items`): as found, oldest first, or by the day each
+ * page says it was published, oldest first and undated ones last (R-API-4).
+ */
 export const listItems = async (
   db: Executor,
-  { statuses, limit }: { statuses: readonly InboxStatus[]; limit: number },
+  {
+    statuses,
+    limit,
+    sort = 'found',
+  }: { statuses: readonly InboxStatus[]; limit: number; sort?: 'found' | 'source' },
 ): Promise<ItemSummary[]> => {
-  const rows = await itemQuery(db)
+  let query = itemQuery(db)
     .select(sql<string | null>`substr(i.page_text, 1, ${PAGE_EXCERPT_LENGTH})`.as('page_excerpt'))
-    .where('i.status', 'in', statuses)
-    .orderBy('i.id')
-    .limit(limit)
-    .execute();
+    .where('i.status', 'in', statuses);
+  if (sort === 'source') {
+    query = query.orderBy(sql`i.page_published_on ASC NULLS LAST`);
+  }
+  const rows = await query.orderBy('i.id').limit(limit).execute();
   return rows.map((row) => ({ ...toItem(row), page_excerpt: row.page_excerpt }));
 };
 

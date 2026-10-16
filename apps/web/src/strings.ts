@@ -26,6 +26,12 @@ export interface Strings {
   /** The home page's first line. */
   intro: string;
   latest: string;
+  /** The timeline in the order its stories happened (R-WEB-13), beside `latest`, as posted. */
+  orderNews: string;
+  /** The two orders' group of links. */
+  orderNav: string;
+  /** On a post posted on another day than its story happened: "noticia del 12 oct". */
+  newsFrom: (date: string) => string;
   older: string;
   nothingYet: string;
   noOlder: string;
@@ -59,8 +65,10 @@ export interface Strings {
   backHome: string;
   type: Record<'breve' | 'article' | 'page', string>;
   gone: { title: string; heading: string; back: (site: string) => string };
-  /** The query parameters of a list's next page: the last post's instant and slug. */
-  cursor: { before: string; slug: string };
+  /** The query parameters of a list's next page: the last post's instant and slug, and in news order its news date. */
+  cursor: { before: string; slug: string; day: string };
+  /** The query parameter of the timeline's order, and its value for news order (R-WEB-13). */
+  order: { key: string; news: string };
 }
 
 export const STRINGS: Record<Lang, Strings> = {
@@ -79,6 +87,9 @@ export const STRINGS: Record<Lang, Strings> = {
     tagline: 'La caja ya está abierta',
     intro: 'Noticias sobre los riesgos de la IA, en pocas líneas y con las fuentes enlazadas.',
     latest: 'Lo último',
+    orderNews: 'Por fecha de la noticia',
+    orderNav: 'Ordenar',
+    newsFrom: (date) => `noticia del ${date}`,
     older: 'Entradas anteriores',
     nothingYet: 'Todavía no hay publicaciones.',
     noOlder: 'No hay publicaciones anteriores.',
@@ -107,7 +118,8 @@ export const STRINGS: Record<Lang, Strings> = {
       heading: 'Esta publicación se ha retirado',
       back: (site) => `Volver a ${site}`,
     },
-    cursor: { before: 'antes', slug: 'tras' },
+    cursor: { before: 'antes', slug: 'tras', day: 'dia' },
+    order: { key: 'orden', news: 'noticia' },
   },
   en: {
     locale: 'en-GB',
@@ -124,6 +136,9 @@ export const STRINGS: Record<Lang, Strings> = {
     tagline: 'The box is already open',
     intro: 'News about AI risk, in a few lines, with the sources linked.',
     latest: 'Latest',
+    orderNews: 'By news date',
+    orderNav: 'Sort',
+    newsFrom: (date) => `news from ${date}`,
     older: 'Older entries',
     nothingYet: 'Nothing published yet.',
     noOlder: 'No older posts.',
@@ -152,6 +167,7 @@ export const STRINGS: Record<Lang, Strings> = {
       heading: 'This post has been withdrawn',
       back: (site) => `Back to ${site}`,
     },
-    cursor: { before: 'before', slug: 'after' },
+    cursor: { before: 'before', slug: 'after', day: 'day' },
+    order: { key: 'order', news: 'news' },
   },
 };

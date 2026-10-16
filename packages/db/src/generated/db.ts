@@ -54,6 +54,7 @@ export interface AppInboxItems {
   page_duration_seconds: number | null;
   page_kind: string | null;
   page_published_at: string | null;
+  page_published_on: Generated<Timestamp | null>;
   page_site_name: string | null;
   page_text: string | null;
   page_title: string | null;
@@ -73,6 +74,7 @@ export interface AppPosts {
   content_ref: Json;
   created_at: Generated<Timestamp>;
   lang: AppPostLang;
+  news_date: Timestamp | null;
   published_at: Timestamp;
   slug: string;
   sources: Generated<Json>;
@@ -89,6 +91,7 @@ export interface AppPosts {
 export interface AppPublishedPosts {
   body_md: string | null;
   lang: AppPostLang | null;
+  news_date: Timestamp | null;
   published_at: Timestamp | null;
   slug: string | null;
   sources: Json | null;

@@ -83,6 +83,30 @@ describe('GET /api/v1/items (§9)', () => {
     });
   });
 
+  it('sorts by the day each page says it was published when asked, oldest first, undated last (R-API-4)', async () => {
+    const recent = await insertItem({ page_published_at: '2026-10-10T08:00:00-07:00' });
+    const undated = await insertItem();
+    const old = await insertItem({ page_published_at: '2026-09-01' });
+    const unreadable = await insertItem({ page_published_at: 'el viernes pasado' });
+    const ids = async (url: string) =>
+      (await get(url)).json<{ id: number }[]>().map((item) => item.id);
+
+    expect(await ids('/api/v1/items')).toEqual([recent, undated, old, unreadable]);
+    expect(await ids('/api/v1/items?sort=found')).toEqual([recent, undated, old, unreadable]);
+    expect(await ids('/api/v1/items?sort=source')).toEqual([old, recent, undated, unreadable]);
+    const items = (await get('/api/v1/items?sort=source')).json<Record<string, unknown>[]>();
+    expect(items.map((item) => item.page_published_on)).toEqual([
+      '2026-09-01',
+      '2026-10-10',
+      null,
+      null,
+    ]);
+    expect((await get(`/api/v1/items/${old}`)).json()).toMatchObject({
+      page_published_on: '2026-09-01',
+    });
+    expect((await get('/api/v1/items?sort=newest')).statusCode).toBe(400);
+  });
+
   it('filters by status and limits the count', async () => {
     const queued = await insertItem({ status: 'queued', fetch_status: 'pending' });
     await insertItem();

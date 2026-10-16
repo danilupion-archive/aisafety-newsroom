@@ -3,8 +3,9 @@ import Link from 'next/link';
 
 import type { PostSummary } from '@/api';
 import type { Lang } from '@/i18n';
+import type { Order } from '@/paging';
 
-import { dateParts } from '@/format';
+import { calendarParts, dateParts, newsNote } from '@/format';
 import { paths } from '@/i18n';
 import { STRINGS } from '@/strings';
 import { label, typePill } from '@/styles';
@@ -100,20 +101,31 @@ const read = css({ color: 'accent', fontWeight: '600' });
 const Entry = ({
   lang,
   post,
+  order,
   featured,
   last,
 }: {
   lang: Lang;
   post: PostSummary;
+  order: Order;
   featured: boolean;
   last: boolean;
 }) => {
   const t = STRINGS[lang];
-  const parts = dateParts(lang, post.published_at);
+  // The order's own date: the day the story happened in news order, the day it was posted otherwise.
+  const byNews = order === 'news' && typeof post.news_date === 'string';
+  const parts = byNews
+    ? calendarParts(lang, post.news_date ?? '')
+    : dateParts(lang, post.published_at);
+  // As posted, a story that happened on another day says which.
+  const note = byNews ? undefined : newsNote(lang, post);
   const href = paths.post(lang, post.slug);
   return (
     <li className={entry}>
-      <time dateTime={post.published_at} className={`${date} ${label}`}>
+      <time
+        dateTime={byNews ? (post.news_date ?? undefined) : post.published_at}
+        className={`${date} ${label}`}
+      >
         <span className={weekdayShort}>{parts.weekdayShort} </span>
         <span className={dayMonth}>
           {parts.day} {parts.month}
@@ -139,6 +151,7 @@ const Entry = ({
           </p>
         )}
         <p className={meta}>
+          {note === undefined ? null : <>{note} · </>}
           {typeof post.source_count === 'number' ? (
             <>{t.sourceCount(post.source_count)} · </>
           ) : null}
@@ -153,15 +166,18 @@ const Entry = ({
 
 /**
  * Posts as a timeline, latest first (SPEC §13 pages): the date in the page's language, a dot per entry on the rail
- * (orange for a breve, light for an article), and each post's card. The newest entry of the first page is larger.
+ * (orange for a breve, light for an article), and each post's card. The newest entry of the first page is larger. In
+ * news order (R-WEB-13) the date is the day each story happened.
  */
 export const Timeline = ({
   lang,
   posts,
+  order = 'posted',
   featureFirst,
 }: {
   lang: Lang;
   posts: readonly PostSummary[];
+  order?: Order;
   featureFirst: boolean;
 }) => (
   <ol className={list}>
@@ -170,6 +186,7 @@ export const Timeline = ({
         key={post.slug}
         lang={lang}
         post={post}
+        order={order}
         featured={featureFirst && index === 0}
         last={index === posts.length - 1}
       />

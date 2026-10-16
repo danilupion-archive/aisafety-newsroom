@@ -31,6 +31,7 @@ const BREVE = {
   ],
   tags: ['labs', 'evals'],
   published_at: '2026-10-15T10:00:00+02:00',
+  news_date: '2026-10-14',
   content_ref: { path: 'posts/es/2026-10-15-informe-de-ejemplo.md', commit: 'abc1234' },
 };
 
@@ -101,11 +102,11 @@ describe('PUT /api/v1/posts/:lang/:slug (§13)', () => {
     expect(edited.json()).toMatchObject({ title: 'Un título corregido' });
   });
 
-  it('holds a breve to 80–150 words in Spanish and 1–3 sources (R-WEB-1)', async () => {
+  it('holds an original breve to 80–150 words and 1–3 sources (R-WEB-1)', async () => {
     const short = await put('es/corta', { ...BREVE, body_md: 'Demasiado corta.' });
     expect(short.statusCode).toBe(400);
     expect(short.json()).toEqual({
-      error: 'body_md: a breve in es is 80–150 words; this one has 2',
+      error: 'body_md: a breve is 80–150 words in the language it’s written in; this one has 2',
     });
 
     const source = BREVE.sources[0];
@@ -119,14 +120,27 @@ describe('PUT /api/v1/posts/:lang/:slug (§13)', () => {
     expect((await put('es/sin-fuentes', { ...BREVE, sources: [] })).statusCode).toBe(400);
   });
 
-  it('holds an English breve to 65–130 words: the same text, in fewer words', async () => {
+  it('holds an English original to the same 80–150 words', async () => {
     expect((await put('en/example-report', EN_BREVE)).statusCode).toBe(201);
     const words = (count: number) => Array.from({ length: count }, () => 'word').join(' ');
-    expect((await put('en/too-short', { ...EN_BREVE, body_md: words(64) })).json()).toEqual({
-      error: 'body_md: a breve in en is 65–130 words; this one has 64',
-    });
-    expect((await put('en/too-long', { ...EN_BREVE, body_md: words(131) })).statusCode).toBe(400);
-    expect((await put('en/just-right', { ...EN_BREVE, body_md: words(130) })).statusCode).toBe(201);
+    expect((await put('en/too-short', { ...EN_BREVE, body_md: words(79) })).statusCode).toBe(400);
+    expect((await put('en/too-long', { ...EN_BREVE, body_md: words(151) })).statusCode).toBe(400);
+    expect((await put('en/just-right', { ...EN_BREVE, body_md: words(150) })).statusCode).toBe(201);
+  });
+
+  it('gives a translation no length of its own: it says what its original says (D15)', async () => {
+    expect((await put('es/informe-de-ejemplo', BREVE)).statusCode).toBeLessThan(300);
+    const words = (count: number) => Array.from({ length: count }, () => 'word').join(' ');
+    const translation = {
+      ...EN_BREVE,
+      translation_of: { lang: 'es', slug: 'informe-de-ejemplo' },
+    };
+    expect((await put('en/translation', { ...translation, body_md: words(190) })).statusCode).toBe(
+      201,
+    );
+    expect((await put('en/translation', { ...translation, body_md: words(60) })).statusCode).toBe(
+      200,
+    );
   });
 
   it('lets an article run long, but still with its sources', async () => {
@@ -170,6 +184,7 @@ describe('pages', () => {
       title: 'Sobre este sitio',
       body_md: 'Texto de ejemplo.',
       sources: [],
+      news_date: undefined,
     };
     expect((await put('es/sobre', about)).statusCode).toBe(201);
     await pushed('en/about', {
@@ -198,7 +213,7 @@ describe('reserved slugs', () => {
     expect((await put('es/topics', BREVE)).statusCode).toBe(400);
     expect((await put('en/sobre', EN_BREVE)).statusCode).toBe(400);
     expect((await put('es/sobre', BREVE)).statusCode).toBe(400);
-    const page = { type: 'page', body_md: 'Texto de ejemplo.', sources: [] };
+    const page = { type: 'page', body_md: 'Texto de ejemplo.', sources: [], news_date: undefined };
     expect((await put('es/sobre', { ...BREVE, ...page })).statusCode).toBe(201);
     expect((await put('en/about', { ...EN_BREVE, ...page })).statusCode).toBe(201);
     expect((await put('es/about', { ...BREVE, ...page })).statusCode).toBe(400);
@@ -334,6 +349,111 @@ describe('DELETE /api/v1/posts/:lang/:slug (AC-7)', () => {
     await put('es/informe-de-ejemplo', BREVE);
     expect((await remove('es/no-existe')).statusCode).toBe(404);
     expect((await remove('en/informe-de-ejemplo')).statusCode).toBe(404);
+  });
+});
+
+describe('news dates (R-WEB-13)', () => {
+  it('takes the day a breve’s story happened, and dates one pushed without it by its posted day', async () => {
+    const created = await put('es/informe-de-ejemplo', BREVE);
+    expect(created.json()).toMatchObject({ news_date: '2026-10-14' });
+    // A client older than news dates: its posted day on the site's clock (22:30 UTC on the 15th is the 16th in Madrid).
+    const late = await put('es/sin-fecha', {
+      ...BREVE,
+      news_date: undefined,
+      published_at: '2026-10-15T22:30:00Z',
+    });
+    expect(late.statusCode).toBe(201);
+    expect(late.json()).toMatchObject({ news_date: '2026-10-16' });
+    const dateOnly = await put('es/solo-dia', {
+      ...BREVE,
+      news_date: undefined,
+      published_at: '2026-10-15',
+    });
+    expect(dateOnly.json()).toMatchObject({ news_date: '2026-10-15' });
+    const article = { ...BREVE, type: 'article', body_md: `${BODY}\n\n`.repeat(20) };
+    expect(
+      (await put('es/articulo-sin-fecha', { ...article, news_date: undefined })).json(),
+    ).toMatchObject({
+      news_date: '2026-10-15',
+    });
+    const page = { ...BREVE, type: 'page', body_md: 'Texto de ejemplo.', sources: [] };
+    expect((await put('es/sobre', page)).json()).toEqual({
+      error: 'news_date: a page has no news date',
+    });
+    expect(
+      (await put('es/fecha-imposible', { ...BREVE, news_date: '2026-02-30' })).statusCode,
+    ).toBe(400);
+    expect(
+      (await put('es/con-hora', { ...BREVE, news_date: '2026-10-14T10:00:00Z' })).statusCode,
+    ).toBe(400);
+  });
+
+  it('lists by news date when asked, newest first; posted stays the default, and both page through', async () => {
+    const dated = (published_at: string, news_date: string) => ({ published_at, news_date });
+    // Posted last, about something a month old: first by posted date, last by news date.
+    await story(
+      'vieja',
+      'old',
+      dated('2026-10-14', '2026-09-01'),
+      dated('2026-10-14', '2026-09-01'),
+    );
+    await story(
+      'nueva',
+      'new',
+      dated('2026-10-10', '2026-10-10'),
+      dated('2026-10-10', '2026-10-10'),
+    );
+    for (const name of ['empate-b', 'empate-a']) {
+      const same = dated('2026-10-12T09:00:00Z', '2026-10-05');
+      await story(name, `${name}-en`, same, same);
+    }
+    const list = async (url: string) =>
+      (await read(url)).json<{ slug: string; published_at: string; news_date: string }[]>();
+
+    expect(await slugs('/public/posts?lang=es')).toEqual([
+      'vieja',
+      'empate-a',
+      'empate-b',
+      'nueva',
+    ]);
+    const byNews = await list('/public/posts?lang=es&order=news');
+    expect(byNews.map((post) => [post.slug, post.news_date])).toEqual([
+      ['nueva', '2026-10-10'],
+      ['empate-a', '2026-10-05'],
+      ['empate-b', '2026-10-05'],
+      ['vieja', '2026-09-01'],
+    ]);
+
+    const first = await list('/public/posts?lang=es&order=news&limit=2');
+    const last = first.at(-1);
+    const next = await list(
+      `/public/posts?lang=es&order=news&limit=2&before_date=${last?.news_date}&before=${last?.published_at}&before_slug=${last?.slug}`,
+    );
+    expect(next.map((post) => post.slug)).toEqual(['empate-b', 'vieja']);
+    // The day alone: stories from before it.
+    expect(await slugs('/public/posts?lang=es&order=news&before_date=2026-10-05')).toEqual([
+      'vieja',
+    ]);
+
+    expect((await read('/public/posts?lang=es&before_date=2026-10-05')).statusCode).toBe(400);
+    expect(
+      (await read(`/public/posts?lang=es&order=news&before=${last?.published_at}`)).statusCode,
+    ).toBe(400);
+    expect((await read('/public/posts?lang=es&order=oldest')).statusCode).toBe(400);
+  });
+
+  it('shows a story only while both versions carry the same news date', async () => {
+    await story('desfase', 'mismatch', {}, { news_date: '2026-10-13' });
+    expect((await read('/public/posts/es/desfase')).statusCode).toBe(404);
+    expect((await read('/public/posts?lang=en')).json()).toEqual([]);
+    await pushed('en/mismatch', { ...EN_BREVE, translation_of: { lang: 'es', slug: 'desfase' } });
+    expect((await read('/public/posts/es/desfase')).json()).toMatchObject({
+      news_date: '2026-10-14',
+    });
+    const posts = (await app.inject({ method: 'GET', url: '/api/v1/posts', headers: auth })).json<
+      { news_date: string | null }[]
+    >();
+    expect(posts.map((post) => post.news_date)).toEqual(['2026-10-14', '2026-10-14']);
   });
 });
 

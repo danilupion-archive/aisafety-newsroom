@@ -65,7 +65,22 @@ const ROOT_FILES = new Set([
 export type Route =
   | { kind: 'file' }
   | { kind: 'internal' }
-  | { kind: 'page'; internal: string; post: { lang: Lang; slug: string } | undefined };
+  | {
+      kind: 'page';
+      lang: Lang;
+      internal: string;
+      post: { lang: Lang; slug: string } | undefined;
+      /** A tag's page's tag, for the proxy to check that it exists. */
+      tag: string | undefined;
+      /**
+       * Whether the address is in the shape of one of the site's pages: the home, the topics, the about page, the feed,
+       * a post, a tag's page. One that isn't is missing for certain (404), without asking the API.
+       */
+      known: boolean;
+    };
+
+/** The internal page a missing address is served (404, by the proxy): the not-found page inside its language's layout. */
+export const missingPage = (lang: Lang): string => `/${lang}/missing.html`;
 
 export const route = (pathname: string): Route => {
   if (ROOT_FILES.has(pathname) || pathname.startsWith('/_next/')) {
@@ -78,11 +93,26 @@ export const route = (pathname: string): Route => {
   const [slug, ...rest] = path.segments;
   const post =
     slug !== undefined && rest.length === 0 && isSlug(slug) ? { lang: path.lang, slug } : undefined;
+  const tag =
+    slug === PATH_WORDS[path.lang].tag &&
+    rest.length === 1 &&
+    rest[0] !== undefined &&
+    TAG.test(rest[0])
+      ? rest[0]
+      : undefined;
   return {
     kind: 'page',
+    lang: path.lang,
     internal:
       path.lang === DEFAULT_LANG ? `/${DEFAULT_LANG}${pathname === '/' ? '' : pathname}` : pathname,
     post,
+    tag,
+    // A slug's shape is a page's (a post's, the topics' or the about page's), but never the tag word alone.
+    known:
+      slug === undefined ||
+      (slug === 'feed.xml' && rest.length === 0) ||
+      tag !== undefined ||
+      (post !== undefined && slug !== PATH_WORDS[path.lang].tag),
   };
 };
 

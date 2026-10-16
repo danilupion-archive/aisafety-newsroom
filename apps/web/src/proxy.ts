@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 import type { Unpublished } from './api';
+import type { Lang } from './i18n';
 
-import { PATHNAME_HEADER, route } from './i18n';
+import { missingPage, PATH_WORDS, PATHNAME_HEADER, route } from './i18n';
 import { contentSecurityPolicy, gonePage } from './security';
 import { site } from './site';
 
@@ -12,6 +13,10 @@ import { site } from './site';
  * post answers 410 (AC-7), which a Next.js page can't; every page gets the Content Security Policy. The unpublished
  * posts come from the API, kept for at most 60 s (R-WEB-6); if the API can't be reached, the last list stands and it's
  * asked again 10 s later.
+ *
+ * A missing address answers 404 with the not-found page of its language, its text in the page itself: an address that
+ * is no page's shape, a post's that the API doesn't have, a tag no published post carries. A page's own notFound()
+ * would answer 404 too, but Next draws that page in the browser only. If the API can't say, the page decides.
  */
 
 const TTL_MS = 60_000;
@@ -44,6 +49,42 @@ const unpublishedPosts = async (apiUrl: string): Promise<ReadonlySet<string>> =>
     // The API is away or slow: keep the list we have.
   }
   return unpublished.posts;
+};
+
+/** Whether the API has a post (true), had it (`gone`), never had it (false), or can't say (undefined). */
+const postExists = async (
+  apiUrl: string,
+  { lang, slug }: { lang: Lang; slug: string },
+): Promise<boolean | 'gone' | undefined> => {
+  try {
+    const response = await fetch(`${apiUrl}/public/posts/${lang}/${slug}`, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (response.status === 410) {
+      return 'gone';
+    }
+    return response.ok ? true : response.status === 404 ? false : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Whether a published post in the language carries the tag, or undefined if the API can't say. */
+const tagExists = async (apiUrl: string, lang: Lang, tag: string): Promise<boolean | undefined> => {
+  try {
+    const response = await fetch(`${apiUrl}/public/tags?lang=${lang}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      return undefined;
+    }
+    return ((await response.json()) as { tag: string }[]).some((row) => row.tag === tag);
+  } catch {
+    return undefined;
+  }
 };
 
 /** The proxy's own page, which loads nothing: the site's policy, without analytics. */
@@ -92,6 +133,32 @@ export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, pathname);
   const init = { request: { headers } };
+  // A post's address, unless it's one of the language's own pages: the topics, and the about page (a page of its own,
+  // whatever the API has).
+  const words = PATH_WORDS[target.lang];
+  const post =
+    target.post && target.post.slug !== words.topics && target.post.slug !== words.about
+      ? target.post
+      : undefined;
+  const exists = !target.known
+    ? false
+    : post
+      ? await postExists(config.apiUrl, post)
+      : target.tag === undefined
+        ? true
+        : await tagExists(config.apiUrl, target.lang, target.tag);
+  if (exists === 'gone') {
+    return html(gonePage(target.lang, config.name[target.lang]), 410);
+  }
+  if (exists === false) {
+    const missing = request.nextUrl.clone();
+    missing.pathname = missingPage(target.lang);
+    missing.search = '';
+    return withPolicy(
+      NextResponse.rewrite(missing, { ...init, status: 404 }),
+      config.analytics?.scriptUrl,
+    );
+  }
   if (target.internal === pathname) {
     return withPolicy(NextResponse.next(init), config.analytics?.scriptUrl);
   }

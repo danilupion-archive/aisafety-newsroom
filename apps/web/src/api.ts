@@ -1,7 +1,7 @@
 import { cache } from 'react';
 
 import type { Lang } from './i18n';
-import type { Cursor } from './paging';
+import type { Cursor, Order } from './paging';
 
 import { site } from './site';
 
@@ -23,6 +23,8 @@ export interface PostSummary {
   updated_at: string;
   /** How many sources it has, for the timeline's "2 fuentes"; absent from an API older than the count. */
   source_count?: number;
+  /** The day its story happened, `YYYY-MM-DD` (R-WEB-13); absent from an API older than news dates. */
+  news_date?: string | null;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */
@@ -67,16 +69,22 @@ const json = async <T>(path: string): Promise<T> => {
 
 export const latestPosts = (
   lang: Lang,
-  options: { tag?: string; after?: Cursor; limit?: number } = {},
+  options: { tag?: string; after?: Cursor; limit?: number; order?: Order } = {},
 ) => {
   const query = new URLSearchParams({ lang });
   if (options.tag !== undefined) {
     query.set('tag', options.tag);
   }
+  if (options.order === 'news') {
+    query.set('order', 'news');
+  }
   if (options.after !== undefined) {
     query.set('before', options.after.before);
     if (options.after.beforeSlug !== undefined) {
       query.set('before_slug', options.after.beforeSlug);
+    }
+    if (options.order === 'news' && options.after.beforeDate !== undefined) {
+      query.set('before_date', options.after.beforeDate);
     }
   }
   query.set('limit', String(options.limit ?? 20));

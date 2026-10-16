@@ -5,9 +5,11 @@ import { failure, inRolledBackTransaction } from './db.js';
 import { superuserUrl } from './env.js';
 
 const INSERT_POST = `INSERT INTO app.posts
-    (slug, lang, translation_of_lang, translation_of_slug, type, title, body_md, published_at, content_ref, unpublished_at)
-  VALUES ($1, $2, $3, $4, $7, 'Un título de ejemplo', 'Texto de ejemplo.', $5, '{"path": "posts/x.md"}', $6)`;
+    (slug, lang, translation_of_lang, translation_of_slug, type, title, body_md, published_at, content_ref, unpublished_at,
+     news_date)
+  VALUES ($1, $2, $3, $4, $7, 'Un título de ejemplo', 'Texto de ejemplo.', $5, '{"path": "posts/x.md"}', $6, $8)`;
 
+/** A breve or article is dated by its story (R-WEB-13), 30 September unless given; `news_date: ''` leaves it out. */
 const postValues = (slug: string, extra: Record<string, string> = {}) => [
   slug,
   extra.lang ?? 'es',
@@ -16,6 +18,9 @@ const postValues = (slug: string, extra: Record<string, string> = {}) => [
   extra.published_at ?? '2026-10-01',
   extra.unpublished_at ?? null,
   extra.type ?? 'breve',
+  extra.news_date === ''
+    ? null
+    : (extra.news_date ?? (extra.type === 'page' ? null : '2026-09-30')),
 ];
 
 const insertPost = (client: pg.Client, slug: string, extra: Record<string, string> = {}) =>
@@ -29,8 +34,8 @@ describe('app.posts', () => {
         expect(
           await failure(
             client,
-            `INSERT INTO app.posts (slug, lang, type, title, body_md, published_at, content_ref)
-             VALUES ($1, 'es', 'breve', 't', 'b', now(), '{}')`,
+            `INSERT INTO app.posts (slug, lang, type, title, body_md, published_at, content_ref, news_date)
+             VALUES ($1, 'es', 'breve', 't', 'b', now(), '{}', '2026-09-30')`,
             [slug],
           ),
         ).toEqual({ code: '23514', constraint: 'posts_slug_format' });
@@ -120,6 +125,93 @@ describe('app.posts', () => {
       ['en/withdrawn', '2026-10-10'],
       ['es/retirado', '2026-10-10'],
       ['es/traducida', '2026-10-11'],
+    ]);
+  });
+
+  it('never dates a page by a story (R-WEB-13)', async () => {
+    await inRolledBackTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE newsroom_app');
+      expect(
+        await failure(
+          client,
+          INSERT_POST,
+          postValues('sobre', { type: 'page', news_date: '2026-09-30' }),
+        ),
+      ).toEqual({ code: '23514', constraint: 'posts_page_has_no_news_date' });
+    });
+  });
+
+  it('shows a story only while both versions carry the same news date (R-WEB-13)', async () => {
+    const visible = await inRolledBackTransaction(async (client) => {
+      await insertPost(client, 'pareja', { news_date: '2026-09-28' });
+      await insertPost(client, 'pair', {
+        lang: 'en',
+        translation_of: 'es/pareja',
+        news_date: '2026-09-28',
+      });
+      // A date corrected in one version and not yet in the other: neither shows, and neither is gone.
+      await insertPost(client, 'desfase', { news_date: '2026-09-28' });
+      await insertPost(client, 'mismatch', {
+        lang: 'en',
+        translation_of: 'es/desfase',
+        news_date: '2026-09-27',
+      });
+      await insertPost(client, 'sobre', { type: 'page' });
+      await insertPost(client, 'about', { lang: 'en', type: 'page', translation_of: 'es/sobre' });
+      await client.query('SET LOCAL ROLE newsroom_public');
+      const published = await client.query<{ address: string; news_date: string | null }>(
+        `SELECT lang || '/' || slug AS address, to_char(news_date, 'YYYY-MM-DD') AS news_date
+         FROM app.published_posts ORDER BY address`,
+      );
+      const gone = await client.query('SELECT slug FROM app.unpublished_posts');
+      return { published: published.rows, gone: gone.rows };
+    });
+    expect(visible.published).toEqual([
+      { address: 'en/about', news_date: null },
+      { address: 'en/pair', news_date: '2026-09-28' },
+      { address: 'es/pareja', news_date: '2026-09-28' },
+      { address: 'es/sobre', news_date: null },
+    ]);
+    expect(visible.gone).toEqual([]);
+  });
+
+  it('lists a breve without a news date (pushed before them) by its posted day, and lets it go as before', async () => {
+    const rows = await inRolledBackTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE newsroom_app');
+      await insertPost(client, 'antigua', { news_date: '', published_at: '2026-10-01T22:30:00Z' });
+      await insertPost(client, 'old', {
+        lang: 'en',
+        translation_of: 'es/antigua',
+        news_date: '',
+        published_at: '2026-10-01T22:30:00Z',
+      });
+      // One version pushed again with its day, the other not yet: the same day, so the story still shows.
+      await insertPost(client, 'reciente', { news_date: '', published_at: '2026-10-05T08:00:00Z' });
+      await insertPost(client, 'recent', {
+        lang: 'en',
+        translation_of: 'es/reciente',
+        news_date: '2026-10-05',
+        published_at: '2026-10-05T08:00:00Z',
+      });
+      await client.query('SET LOCAL ROLE newsroom_public');
+      const { rows } = await client.query<{ address: string; news_date: string }>(
+        `SELECT lang || '/' || slug AS address, to_char(news_date, 'YYYY-MM-DD') AS news_date
+         FROM app.published_posts ORDER BY address`,
+      );
+      await client.query('RESET ROLE');
+      await client.query('SET LOCAL ROLE newsroom_app');
+      // Unpublishing it is an update like any other: nothing about its missing date refuses it.
+      expect(
+        await failure(client, `UPDATE app.posts SET unpublished_at = now() WHERE slug = 'antigua'`),
+      ).toBeNull();
+      return rows;
+    });
+    // 22:30 UTC on 1 October is 2 October in Madrid.
+    expect(rows).toEqual([
+      { address: 'en/old', news_date: '2026-10-02' },
+      { address: 'en/recent', news_date: '2026-10-05' },
+      { address: 'es/antigua', news_date: '2026-10-02' },
+      { address: 'es/reciente', news_date: '2026-10-05' },
     ]);
   });
 

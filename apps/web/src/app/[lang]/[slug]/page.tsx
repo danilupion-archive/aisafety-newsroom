@@ -12,7 +12,7 @@ import { getPost, type Post } from '@/api';
 import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
 import { Translations } from '@/components/Translations';
-import { longDate } from '@/format';
+import { longDate, newsNote } from '@/format';
 import { paths } from '@/i18n';
 import { alternates, pageLang } from '@/params';
 import { site } from '@/site';
@@ -111,6 +111,8 @@ const PostPage = async (props: Props) => {
   }
   const t = STRINGS[lang];
   const [firstTag] = post.tags;
+  // Posted on another day than its story happened: which day that was (R-WEB-13).
+  const newsDay = newsNote(lang, post, 'long');
   return (
     <article className={column}>
       <Link href={paths.home(lang)} className={back}>
@@ -128,6 +130,12 @@ const PostPage = async (props: Props) => {
             <span className={kickerText}>
               {t.type[post.type]} ·{' '}
               <time dateTime={post.published_at}>{longDate(lang, post.published_at)}</time>
+              {newsDay === undefined ? null : (
+                <>
+                  {' · '}
+                  <time dateTime={post.news_date ?? undefined}>{newsDay}</time>
+                </>
+              )}
             </span>
           </p>
         )}

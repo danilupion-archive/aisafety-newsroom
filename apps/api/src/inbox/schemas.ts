@@ -23,6 +23,11 @@ export const listQuery = z.object({
     )
     .pipe(z.array(z.enum(INBOX_STATUSES)).min(1, 'status needs at least one status')),
   limit: z.coerce.number().int().min(1).max(50).default(50),
+  /**
+   * `found` (the default): as Dani sent them, oldest first. `source`: by the day each page says it was published,
+   * oldest first, undated ones last (R-API-4).
+   */
+  sort: z.enum(['found', 'source']).default('found'),
 });
 
 export const loggedBody = z.strictObject({
