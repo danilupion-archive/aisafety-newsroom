@@ -1,5 +1,20 @@
 # @aisafety-newsroom/api
 
+## 0.4.0
+
+### Minor Changes
+
+- ef0e8be: YouTube links are read as videos (R-FET-7): every form of a link to one video is recognised as one item, and the worker
+  records its channel, full description, length and date from the watch page, or its title and channel from oEmbed when
+  the page has no player data. Items say what kind of thing was fetched (`page_kind`), and the bot's reply gives a video's
+  length and channel.
+
+### Patch Changes
+
+- Updated dependencies [ef0e8be]
+  - @aisafety-newsroom/domain@0.5.0
+  - @aisafety-newsroom/db@0.2.0
+
 ## 0.3.3
 
 ### Patch Changes
