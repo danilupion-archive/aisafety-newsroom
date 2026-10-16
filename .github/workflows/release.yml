@@ -39,10 +39,13 @@ jobs:
             echo "::error::Releases start from main, not $GITHUB_REF"
             exit 1
           fi
-          sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
-            --jq '.workflow_runs[0].head_sha // empty')"
+          # A push to main or a run started by hand there (`gh workflow run ci.yml`), from this repository: a fork's pull
+          # request from a branch it calls main also matches branch=main.
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=30" \
+            --jq ".workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\")
+              and .head_repository.full_name == \"$GITHUB_REPOSITORY\") | .head_sha" | head -n 1)"
           if [ -z "$sha" ]; then
-            echo "::error::CI hasn't passed on a push to main yet"
+            echo "::error::CI hasn't passed on main yet"
             exit 1
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"

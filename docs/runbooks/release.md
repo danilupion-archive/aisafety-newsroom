@@ -9,9 +9,10 @@ gh run watch   # pick the 📦 Release run
 
 The workflow (`.github/workflows/release.yml`) has three jobs:
 
-1. **Tested commit**, on a GitHub-hosted runner: finds the newest commit on `main` that CI passed on. If `main` has
-   moved past it, nothing happens: either CI hasn't finished on a newer commit (release once it passes), or the newer
-   commits are a release's own.
+1. **Tested commit**, on a GitHub-hosted runner: finds the newest commit on `main` that CI passed on, in a push's run
+   or one started by hand (`gh workflow run ci.yml`, which skips the checks that compare with the previous push). If
+   `main` has moved past it, nothing happens: either CI hasn't finished on a newer commit (release once it passes), or
+   the newer commits are a release's own.
 2. **Version**, on the self-hosted runner: applies the changesets (versions and changelogs) and commits
    "Release: bump versions [skip ci]".
 3. **Build and deploy**, on the self-hosted runner: builds and pushes the image of every deployable whose version is
