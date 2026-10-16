@@ -1,6 +1,6 @@
 {
   "name": "@aisafety-newsroom/web",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "The public site, in Spanish and English: breves and articles approved in aisafety-media (no sessions, no cookies)",
   "type": "module",
