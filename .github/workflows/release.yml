@@ -1,16 +1,13 @@
 name: 📦 Release
 
-# After CI passes on main:
-#   1. version: apply the changesets (versions and changelogs) and commit the result.
-#   2. deploy: build and push the image of every deployable whose version is ahead of the umbrella chart, then write
-#      the new tags into the chart. Argo CD deploys main to production (SPEC §15).
-# One workflow with two jobs, as aiontheballot's: both jobs work on the commit CI tested, never on whatever main points
-# to by the time they start.
+# Started by hand on main (`gh workflow run release.yml`), after CI passes there (SPEC §15):
+#   1. tested: find the newest commit on main that CI passed on, on a GitHub-hosted runner.
+#   2. version: apply the changesets (versions and changelogs) and commit the result.
+#   3. deploy: build and push the image of every deployable whose version is ahead of the umbrella chart, then write
+#      the new tags into the chart. Argo CD deploys main to production.
+# version and deploy run on the self-hosted runner, which takes only jobs its owner started by hand from main's
+# workflows. Both work on the commit CI tested, never on whatever main points to by the time they start.
 on:
-  workflow_run:
-    workflows: ['🧪 CI']
-    branches: [main]
-    types: [completed]
   workflow_dispatch:
 
 env:
@@ -24,13 +21,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  tested:
+    name: Tested commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      sha: ${{ steps.find.outputs.sha }}
+    steps:
+      - name: Find the newest commit on main that CI passed on
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Releases start from main, not $GITHUB_REF"
+            exit 1
+          fi
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')"
+          if [ -z "$sha" ]; then
+            echo "::error::CI hasn't passed on a push to main yet"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
   version:
     name: Version
-    # A pull request whose head branch is called main also passes the branches filter, hence the event check.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
-    runs-on: [self-hosted, release-runner]
+    needs: tested
+    runs-on: [self-hosted, newsroom-release]
     timeout-minutes: 15
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
@@ -38,7 +58,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ needs.tested.outputs.sha }}
           # Changesets links each changelog entry to the commit that added it.
           fetch-depth: 0
 
@@ -58,12 +78,13 @@ jobs:
       - name: Commit the release
         id: commit
         env:
-          TESTED: ${{ github.event.workflow_run.head_sha || github.sha }}
+          TESTED: ${{ needs.tested.outputs.sha }}
           HUSKY: 0
         run: |
           git fetch --quiet origin main
           if [ "$(git rev-parse origin/main)" != "$TESTED" ]; then
-            echo "::notice::main has moved past $TESTED. The release after CI passes on the newer commit includes this one."
+            echo "::notice::main is past $TESTED, the newest commit CI passed on: either CI hasn't finished on a newer"
+            echo "::notice::commit (release once it passes), or the newer ones are this workflow's own (nothing to do)."
             exit 0
           fi
           git add -A
@@ -78,7 +99,7 @@ jobs:
     name: Build and deploy
     needs: version
     if: needs.version.outputs.sha != ''
-    runs-on: [self-hosted, release-runner]
+    runs-on: [self-hosted, newsroom-release]
     timeout-minutes: 60
     steps:
       - name: Checkout
