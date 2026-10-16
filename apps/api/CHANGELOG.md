@@ -1,5 +1,17 @@
 # @aisafety-newsroom/api
 
+## 0.3.2
+
+### Patch Changes
+
+- e287bac: The site in PandorIA's night design: navy and orange, Hanken Grotesk served by the site itself, the box mark in the
+  header and the browser tab, and the wordmark with its IA in orange. The home and tag pages are a timeline (the date,
+  a dot on the rail, each post's card with its tags, type and source count); a post shows its sources in their own box
+  and links its translation as a button. The header links to the same page in the other language. The API's public list
+  says how many sources each post has (`source_count`).
+- 9e21280: The worker skips axios.com, like x.com: its bot protection refuses every automated read, so the bot now says straight
+  away that the link is saved and not fetched, instead of failing with a 403.
+
 ## 0.3.1
 
 ### Patch Changes
