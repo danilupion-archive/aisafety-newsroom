@@ -7,9 +7,9 @@ aisafety-newsroom-migrations:
 aisafety-newsroom-api:
   nameOverride: api
   image:
-    tag: '0.3.2.84e8408'
+    tag: '0.3.3.4cff6e5'
 aisafety-newsroom-web:
   enabled: false
   nameOverride: web
   image:
-    tag: '0.3.0.84e8408'
+    tag: '0.4.0.4cff6e5'
