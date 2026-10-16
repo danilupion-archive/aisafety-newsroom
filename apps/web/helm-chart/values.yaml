@@ -27,7 +27,7 @@ securityContext:
 
 # The site (SPEC §13; names and addresses from configuration, R-WEB-9). One host for both languages (D10).
 site:
-  # Its public address, e.g. https://newsroom.danilupion.com: canonical links, the feeds and the sitemap.
+  # Its public address, e.g. https://newsroom.example.test: canonical links, the feeds and the sitemap.
   url: ''
   # Its name in each language, in the header, page titles and feeds.
   name:
@@ -61,7 +61,7 @@ env: []
 route:
   enabled: false
   # e.g. - name: example-gateway
-  #        namespace: example-gateway
+  #        namespace: example-gateways
   parentRefs: []
   hostnames: []
   annotations: {}

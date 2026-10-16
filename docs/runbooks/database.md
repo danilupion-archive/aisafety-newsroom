@@ -10,23 +10,24 @@ The `newsroom` database lives on the cluster's shared Postgres. What it holds, a
 
 ## Backups
 
-They follow the cluster's plan (gitops `docs/backup-policy-plan.md`, TASK-005: a nightly `pg_dump -Fc` of every
-database, copied off the node by cluster backups), which **isn't running yet**. Until it is, the risk above is accepted (SPEC
-§15).
+They're the cluster's: dumps of every database, kept and documented with the deployment manifests in gitops. The table
+above is what's at stake between two of them (SPEC §15).
 
 ## Restoring from a dump
 
-Once dumps exist, restore into the existing, empty database, as the owner, so the grants to the runtime roles come
-back with it:
+Restore into the existing, empty database, as the owner, so the grants to the runtime roles come back with it. The
+cluster's names come from `scripts/ops.env` (keys in `scripts/ops.env.example`):
 
 ```sh
 # on a machine that reaches the cluster; the dump is newsroom.dump
-kubectl --context "$KUBE_CONTEXT" -n postgresql exec -i postgresql-0 -- \
+set -a; . scripts/ops.env; set +a
+kubectl --context "$KUBE_CONTEXT" -n "$DB_NAMESPACE" exec -i "$DB_POD" -- \
   sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_restore -U postgres -d newsroom --clean --if-exists --no-owner \
     --role=newsroom_owner' < newsroom.dump
 ```
 
-Then restart the API and the worker (`kubectl -n aisafety-newsroom rollout restart deployment`), and check
+Then restart the API and the worker (`kubectl --context "$KUBE_CONTEXT" -n aisafety-newsroom rollout restart
+deployment`), and check
 `/pending` in Telegram.
 
 ## Starting again from empty

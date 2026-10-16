@@ -6,7 +6,8 @@
 #   4. seals the token and a new webhook secret (R-CAP-2) into a gitops checkout;
 #   5. writes the bot's settings into the app's gitops values, for you to review, commit and push.
 # Nothing secret is printed or written unencrypted: the token lives in a shell variable, reaches curl through stdin and
-# kubectl through /dev/fd, never argv or a file.
+# kubectl through /dev/fd, never argv or a file. The cluster, the gitops layout and the public host come from
+# scripts/ops.env.
 #
 # Usage: scripts/seal-telegram-secret.sh <path-to-gitops>
 # Run it in a terminal: it asks for the token (input hidden). Refuses to overwrite: to rotate, delete the sealed file
@@ -15,14 +16,20 @@
 set -euo pipefail
 
 GITOPS="${1:?usage: $0 <path-to-gitops>}"
-# Overridable for a dry run against a throwaway certificate and a stand-in Bot API.
-read -r -a KUBESEAL_ARGS <<<"${KUBESEAL_ARGS:---context "$KUBE_CONTEXT" --controller-namespace sealed-secrets --controller-name sealed-secrets}"
+# shellcheck source-path=SCRIPTDIR source=lib/ops-env.sh
+. "$(dirname "$0")/lib/ops-env.sh"
+ops_env_require GITOPS_APP_SECRETS_DIR GITOPS_APP_VALUES
+# KUBESEAL_ARGS and TELEGRAM_API are overridable for a dry run against a throwaway certificate and a stand-in Bot API.
+ops_env_kubeseal_args
 TELEGRAM_API="${TELEGRAM_API:-https://api.telegram.org}"
-WEBHOOK_URL="${WEBHOOK_URL:-https://newsroom.danilupion.com/telegram/webhook}"
+if [ -z "${WEBHOOK_URL:-}" ]; then
+  ops_env_require NEWSROOM_URL
+  WEBHOOK_URL="$NEWSROOM_URL/telegram/webhook"
+fi
 
-DIR="$GITOPS/clusters/example/resources/apps/aisafety-newsroom/secrets"
+DIR="$GITOPS/$GITOPS_APP_SECRETS_DIR"
 OUT="$DIR/aisafety-newsroom-telegram.yaml"
-VALUES="$GITOPS/clusters/example/values/apps/aisafety-newsroom.yaml"
+VALUES="$GITOPS/$GITOPS_APP_VALUES"
 [ -d "$DIR" ] || { echo "Not a gitops checkout with aisafety-newsroom: $DIR is missing" >&2; exit 1; }
 [ -f "$VALUES" ] || { echo "No values file: $VALUES is missing" >&2; exit 1; }
 [ ! -e "$OUT" ] || { echo "Refusing to overwrite $OUT" >&2; exit 1; }

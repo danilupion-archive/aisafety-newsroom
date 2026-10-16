@@ -8,3 +8,5 @@ if ! pnpm release:check; then
   exit 1
 fi
 scripts/check-deployables-released.sh origin/main
+# This repo is public: nothing pushed may name the infrastructure (CLAUDE.md; the list lives outside the repo).
+scripts/check-no-infra.sh origin/main

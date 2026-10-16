@@ -1,5 +1,5 @@
-# Local development and test database, mirroring production on the cluster: the same Postgres image as the
-# cluster `postgresql` chart, and the same roles (an owner plus non-owner runtime roles, as the chart's `extraRoles`
+# Local development and test database, mirroring production: the same Postgres image as the
+# cluster's Postgres chart, and the same roles (an owner plus non-owner runtime roles, as the chart's `extraRoles`
 # create them). See SPEC.md §7.
 #
 #   pnpm db:up        # start Postgres on :5433 (override with NEWSROOM_PG_PORT); aiontheballot's uses :5432

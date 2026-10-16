@@ -1,6 +1,6 @@
 apiVersion: v2
 name: aisafety-newsroom
-description: Umbrella chart for aisafety-newsroom, deployed by Argo CD on the cluster (SPEC §15)
+description: Umbrella chart for aisafety-newsroom, deployed by Argo CD (SPEC §15)
 type: application
 version: 0.1.0
 appVersion: '0.0.0'

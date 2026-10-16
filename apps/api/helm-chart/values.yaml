@@ -105,7 +105,7 @@ networkPolicy:
   #   - namespace: envoy-gateway-system
   #     podLabels:
   #       gateway.envoyproxy.io/owning-gateway-name: example-gateway
-  #       gateway.envoyproxy.io/owning-gateway-namespace: example-gateway
+  #       gateway.envoyproxy.io/owning-gateway-namespace: example-gateways
   gateways: []
   # The site's pods' app.kubernetes.io/name: the web chart's nameOverride in the umbrella (web). They must match.
   webName: web
@@ -119,7 +119,7 @@ envFrom: []
 route:
   enabled: false
   # e.g. - name: example-gateway
-  #        namespace: example-gateway
+  #        namespace: example-gateways
   parentRefs: []
   hostnames: []
   annotations: {}

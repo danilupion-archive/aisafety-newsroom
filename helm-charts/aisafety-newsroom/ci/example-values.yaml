@@ -32,7 +32,7 @@ aisafety-newsroom-api:
     webhookUrl: https://newsroom.example.test/telegram/webhook
   route:
     enabled: true
-    parentRefs: [{ name: example-gateway, namespace: example-gateway }]
+    parentRefs: [{ name: example-gateway, namespace: example-gateways }]
     hostnames: [newsroom.example.test]
 aisafety-newsroom-web:
   enabled: true
@@ -48,5 +48,5 @@ aisafety-newsroom-web:
     { scriptUrl: https://plausible.example.test/js/script.js, domain: newsroom.example.test }
   route:
     enabled: true
-    parentRefs: [{ name: example-gateway, namespace: example-gateway }]
+    parentRefs: [{ name: example-gateway, namespace: example-gateways }]
     hostnames: [newsroom.example.test]

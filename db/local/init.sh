@@ -1,5 +1,5 @@
 #!/bin/sh
-# Mirrors what the cluster `postgresql` chart provisions in the cluster: an owner role that owns the database, and
+# Mirrors what the cluster's Postgres chart provisions: an owner role that owns the database, and
 # runtime roles that own nothing. Local development only: the passwords come from compose.yaml and are not secrets.
 set -eu
 

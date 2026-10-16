@@ -1,9 +1,9 @@
 # Using the newsroom from aisafety-media
 
 aisafety-media is the newsroom's only client (SPEC §10): `tools/newsroom.py` for the inbox and the site's posts,
-`tools/miniflux.py` for `/sweep`'s feeds. Both are Python stdlib only and read their tokens from the Mac's Keychain.
+`tools/miniflux.py` for `/sweep`'s feeds. Both are Python stdlib only and read their tokens from the macOS Keychain.
 
-## Once, on the Mac
+## Once, on the machine aisafety-media runs on
 
 1. **The API token** is already in the Keychain (service `aisafety-newsroom`, account `api-token`): the seal script
    stored it. Check it from aisafety-media:
@@ -41,7 +41,7 @@ the items wait in the inbox.
 
 Every post goes up in both languages (SPEC D11): `/post` pushes the story's two versions, and the site shows it once
 both are up; `/post unpublish` takes both down. Posts' addresses are on the API's host (SPEC D10):
-`https://newsroom.danilupion.com/es/<slug>`. `NEWSROOM_SITE_URL` changes the host `tools/newsroom.py` prints them on.
+`https://<host>/es/<slug>`. `NEWSROOM_SITE_URL` changes the host `tools/newsroom.py` prints them on.
 
 ## Testing a change locally
 

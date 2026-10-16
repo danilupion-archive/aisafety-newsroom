@@ -6,7 +6,7 @@ v0.3 changes: the site is in Spanish and English from v1, on `newsroom.danilupio
 next to the API (D10); every post is published in both languages, and the site shows a
 story only when both versions are (D11, R-WEB-10).
 
-v0.2 changes: everything runs on the cluster and n8n is no longer part of the system;
+v0.2 changes: everything runs on Dani's Kubernetes cluster and n8n is no longer part of the system;
 the stack follows aiontheballot at a smaller scale; drafting with a local model is
 deferred until M1 has been used; the site is Dani's own.
 
@@ -18,11 +18,11 @@ Requirements are numbered (`R-CAP-3`) so code, tests and reviews can refer to th
 
 ## 1. Purpose
 
-Software that supports [aisafety-media](../aisafety-media), Dani's workspace for
+Software that supports aisafety-media, Dani's workspace for
 researching AI safety and producing content. It does three things:
 
 1. **Capture.** Dani sends a link or note from the phone through Telegram in a few
-   seconds. Nothing is lost if the Mac or the home network is off.
+   seconds. Nothing is lost if Dani's computer is off.
 2. **Triage.** Captured pages are fetched on the server and their text and metadata
    stored, so that aisafety-media's `/news` can log them in bulk without fetching each
    one. RSS feeds in Miniflux give `/sweep` a reliable first pass.
@@ -67,29 +67,28 @@ and `/sweep` and indexed by `tools/news.py` there. Tags and alert rules live in
 co-leads Pausemos la IA (PauseAI Spain), but the site doesn't speak for the organisation
 and needs no review by it.
 
-**The stack** follows [aiontheballot](../aiontheballot) (its ADR-0001, hosting, and
+**The stack** follows aiontheballot (its ADR-0001, hosting, and
 ADR-0003, application stack) at a smaller scale. §15 lists what's kept and what's left
 out.
 
-**Infrastructure** (managed in `../gitops`, Argo CD; checked 2026-10-15):
+**Infrastructure** is Dani's, managed in a private gitops repo with Argo CD. This repo is
+public (D6), so it names none of it: hosts, addresses and how the cluster is laid out
+live in gitops, and the sealing scripts read them from an untracked `scripts/ops.env`.
+What the system relies on:
 
-| Service                            | Where                                                          | Notes                                                                                                                                                                    |
-| ---------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Kubernetes, Argo CD, SealedSecrets | the cluster (one node)                             | Where this system runs                                                                                                                                                   |
-| PostgreSQL 18                      | the cluster, shared `postgresql` instance                   | Reachable only inside the cluster. Databases and login roles come from the cluster chart's `databases[]` (`extraRoles`)                                                  |
-| Gateways                           | the cluster                                                 | `example-gateway` (`<public gateway IP>`) and `private-gateway` (`<private gateway IP>`, private network only). Both carry `*.example.test`; external-dns manages `example.test`             |
-| VPN                          | the cluster (`vpn.example.test`)                    | The Mac is on this private network. Non-admin nodes reach only `private-gateway`. MagicDNS is off                                                                                |
-| the registry                             | the cluster (`registry.example.test`, private gateway)      | Container images                                                                                                                                                         |
-| Miniflux                           | the cluster (`miniflux.example.test`, **public** gateway) | API behind `X-Auth-Token`                                                                                                                                                |
-| GlitchTip                          | the cluster                                                 | Apps send to its in-cluster Service; the UI is on the private network                                                                                                            |
-| Plausible                          | the cluster (`plausible.example.test`, public)            | Cookieless analytics                                                                                                                                                     |
-| CI runners                         | release-runner (Docker Desktop on the Mac)                         | Self-hosted ARC `RunnerDeployment`s, today only for `another repo` and `another repo`, with a VPN sidecar to push to the registry. They run only while the Mac is on |
-| Backups                            | —                                                              | The gitops backup plan hasn't started: no Postgres dumps and no cluster backups yet                                                                                               |
-| n8n                                | another machine                                              | Not used by this system (§2). another machine has its own private network and no route to the cluster's Postgres                                                                      |
+| Service                            | Used for                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| Kubernetes, Argo CD, SealedSecrets | Running the system, deployed from this repo's umbrella chart            |
+| PostgreSQL 18                      | The `newsroom` database, on a shared instance reachable only in-cluster |
+| A public gateway (Gateway API)     | The one public host (D8, D10)                                           |
+| A private container registry       | The images the release pushes                                           |
+| A self-hosted runner               | Building releases, started by hand (§15)                                |
+| GlitchTip                          | Server-side errors, sent inside the cluster                             |
+| Plausible                          | Cookieless analytics                                                    |
+| Miniflux                           | RSS for `/sweep`, its API behind a token                                |
 
-**The Mac** is release-runner: a Mac, on the home network at
-`<home network IP>` and on the private network. Nothing on the cluster can open
-a connection to it. Ollama isn't installed.
+**The Mac** is Dani's computer. It runs aisafety-media's commands, and nothing in the
+cluster can open a connection to it.
 
 ## 4. Principles
 
@@ -101,8 +100,8 @@ a connection to it. Ollama isn't installed.
   `/news` confirms it against the page before logging.
 - **P3. Nothing public without Dani's approval.** There is no automated path from
   capture to the public site.
-- **P4. Capture depends on neither the Mac nor the home network.** Capture, fetching
-  and storage run on the cluster. Only aisafety-media's commands run on the Mac.
+- **P4. Capture doesn't depend on the Mac.** Capture, fetching and storage run on the
+  cluster. Only aisafety-media's commands run on the Mac.
 - **P5. Idempotent and boring.** Every operation can be retried safely. State
   transitions are explicit.
 - **P6. No secrets in any repo.** Secrets live in sealed secrets (gitops) and the macOS
@@ -122,10 +121,10 @@ Readers ─▶ [public] <host>/es, /en ─▶ web ─▶ api public read routes 
                                           (in-cluster only, read-only role)
 
 Mac ─▶ [public] <host>/api/v1 ─▶ api   inbox (/news), posts (/post), bearer token
-Mac ─▶ [public] miniflux.example.test    /sweep, Miniflux token
+Mac ─▶ [public] Miniflux               /sweep, Miniflux token
 ```
 
-Everything except Telegram, the readers and the Mac runs on the cluster, in the
+Everything except Telegram, Miniflux, the readers and the Mac runs on the cluster, in the
 `aisafety-newsroom` namespace.
 
 ### Components
@@ -299,8 +298,7 @@ primary_url}`. The page text goes in delimited, as untrusted data, and the promp
   of the page's own links; `published_date` must match the metadata or appear in the
   text; the summary is capped at 60 words. Otherwise the field is null.
 - The model is picked by running the candidates on 20 real items and comparing against
-  `/news` output. The Mac's 32 GB, shared with Docker Desktop, leave room for more than a
-  7–9B model.
+  `/news` output. The Mac's memory decides how large a model fits.
 
 ## 9. Inbox API
 
@@ -395,13 +393,13 @@ These are requirements on the content repo, implemented there.
 
 | #   | Decision                                                                                                    | Was          |
 | --- | ----------------------------------------------------------------------------------------------------------- | ------------ |
-| D1  | The bot, API, worker and database run on the cluster; n8n isn't part of the system                       | Q2, Q3       |
+| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system            | Q2, Q3       |
 | D2  | The inbox lives in a `newsroom` database on the shared Postgres                                             | Q2           |
 | D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                               | Q5           |
 | D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation    | Q1 (in part) |
 | D5  | Drafting with a local model waits until M1 has been used                                                    | Q4           |
 | D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                            | —            |
-| D7  | The inbox and posts API are on a public host behind a bearer token, not on the private network                      | —            |
+| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                | —            |
 | D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`; the site may share it | Q1 (in part) |
 | D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file       | —            |
 | D10 | The site is in Spanish and English from v1, both on `newsroom.danilupion.com` under `/es/` and `/en/`       | Q1 (in part) |
@@ -416,8 +414,8 @@ These are requirements on the content repo, implemented there.
   `last_sweep` through the Miniflux API (`X-Auth-Token`; check the endpoints against
   the deployed version). The lead session triages them by title and summary, opens only
   the candidates, logs them, and marks the processed entries read.
-- **R-RSS-3** Must: `MINIFLUX_URL` (`https://miniflux.example.test`, public, behind its
-  token) and `MINIFLUX_TOKEN` come from the environment or the Keychain (service
+- **R-RSS-3** Must: `MINIFLUX_URL` (Miniflux's address; its API is behind the token)
+  and `MINIFLUX_TOKEN` come from the environment or the Keychain (service
   `miniflux`, account `api-token`), read by aisafety-media's `tools/miniflux.py`.
   Everything it does stays inside the category.
 - **R-RSS-4** May (later): Miniflux entries that match a keyword list go into the inbox,
@@ -574,53 +572,48 @@ docs/runbooks/
 
 **Deployment:**
 
-- Images are `registry.example.test/aisafety-newsroom/<component>:<version>.<sha>`,
-  never `:latest`, with base images pinned by digest.
+- Images are `<registry>/aisafety-newsroom/<component>:<version>.<sha>`, the registry
+  set by the runner and gitops, never `:latest`, with base images pinned by digest.
 - CI is GitHub Actions, with actions pinned by SHA:
-  - pushes to `main`, releases and pull requests from the repo's own branches run on
-    the self-hosted runner;
-  - pull requests from forks, and Renovate's (dependency versions nobody has reviewed yet),
-    run on GitHub-hosted runners;
+  - every CI job runs on GitHub-hosted runners, whoever opened the pull request;
   - there are no `pull_request_target` workflows;
-  - after CI passes on `main`, a release workflow pushes the images and writes their
-    tags into the umbrella chart's `values.yaml`.
+  - releases are started by hand on `main` (`gh workflow run release.yml`) once CI has
+    passed there. The release finds the newest commit CI passed on, versions it, builds
+    and pushes the images on the self-hosted runner, and writes their tags into the
+    umbrella chart's `values.yaml`;
+  - the self-hosted runner refuses every job its owner didn't start by hand from
+    `main`'s workflows (its job-started hook, set in gitops): pushes, pull requests,
+    forks and Renovate never run on it.
 - Argo CD syncs the secrets first, then the migration Job (a Sync hook), then everything
   else. Migrations are expand/contract, since old pods serve until the rollout ends.
 - Pods have a `/healthz` with no dependencies. The API and web run 2 replicas; the
   worker runs 1, replaced by recreating it.
 
-**gitops changes** (following `gitops/docs/app-onboarding.md`):
+**gitops changes** (in the private gitops repo):
 
-- `catalog/apps/aisafety-newsroom/applicationset.yaml`, and
-  `clusters/example/values/apps/aisafety-newsroom.yaml` with the hosts and
-  routes;
-- `clusters/example/resources/apps/aisafety-newsroom/`: the sealed secrets, the
-  the registry pull secret and the default ServiceAccount patch;
-- the `newsroom` database, with `newsroom_app` and `newsroom_public` as `extraRoles`, in
-  `values/data/postgresql.yaml`, and its secret in `resources/data/postgresql/`;
-- the repo and namespace in `projects/apps.yaml`;
-- a the registry project with pull and push robots;
-- a runner on release-runner for the repo: a `RunnerDeployment` with
-  `repository: danilupion/aisafety-newsroom` and its own GitHub token, otherwise like
-  `runner-another repo.yaml`.
+- the Argo CD application, and its values: hosts, routes, the registry;
+- the sealed secrets, the registry's pull secret and the default ServiceAccount patch;
+- the `newsroom` database, with `newsroom_app` and `newsroom_public` as extra roles, and
+  its secret;
+- the repo and namespace in the Argo CD project;
+- a registry project with pull and push robots;
+- the release runner for the repo, with its job-started hook.
 
 **Monitoring:**
 
 - the API, the worker and the web report errors to GlitchTip;
 - the worker also reports items that have sat in `queued` for more than 1 h.
 
-**Backups** are a separate piece of work, in gitops: the cluster's plan dumps every
-database nightly (`backup-policy-plan.md`, TASK-005), but it isn't running yet. Until it
-is, losing the database loses inbox items not yet logged; posts are rebuilt by
-re-pushing (P1). Accepted for now.
+**Backups** of the database are gitops' concern. Restoring one loses the inbox items
+captured since; posts are rebuilt by re-pushing (P1).
 
 **Runbooks** (`docs/runbooks/`): rotating the bot token and webhook secret, rotating the
 API token, re-pushing every post, restoring the database.
 
 ## 16. Acceptance criteria
 
-- **AC-1** A link shared to the bot gets "Saved #n" within 5 s while the Mac and the home
-  network are off. Within 2 min the item is `ready` and the reply shows the page title.
+- **AC-1** A link shared to the bot gets "Saved #n" within 5 s while the Mac is off.
+  Within 2 min the item is `ready` and the reply shows the page title.
 - **AC-2** Sending the same link again (with tracking parameters) creates no new item
   and appends the note.
 - **AC-3** A link to x.com is skipped for fetching and still reaches `/news` with its
@@ -647,11 +640,11 @@ API token, re-pushing every post, restoring the database.
 
 ## 17. Milestones
 
-| M   | Delivers                                                                                                                  | Depends on |
-| --- | ------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| M0  | Monorepo, CI and chart; the gitops changes (runner, the registry, database, secrets, Argo CD); an empty API and worker deployed | —          |
-| M1  | BOT, DB, WRK, inbox API, `tools/newsroom.py`, `/news` queue mode                                                          | M0         |
-| M2  | Decide on drafting with a local model from M1's use; build it only if it's worth it                                       | Q4         |
-| M3  | Miniflux category and feeds; `/sweep` reads them                                                                          | Q8         |
-| M4  | Site with breves in Spanish and English: posts API, pages, feeds; `/breve`, `/post`                                       | Q1         |
-| M5  | Articles                                                                                                                  | Q7         |
+| M   | Delivers                                                                                                                    | Depends on |
+| --- | --------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| M0  | Monorepo, CI and chart; the gitops changes (runner, registry, database, secrets, Argo CD); an empty API and worker deployed | —          |
+| M1  | BOT, DB, WRK, inbox API, `tools/newsroom.py`, `/news` queue mode                                                            | M0         |
+| M2  | Decide on drafting with a local model from M1's use; build it only if it's worth it                                         | Q4         |
+| M3  | Miniflux category and feeds; `/sweep` reads them                                                                            | Q8         |
+| M4  | Site with breves in Spanish and English: posts API, pages, feeds; `/breve`, `/post`                                         | Q1         |
+| M5  | Articles                                                                                                                    | Q7         |

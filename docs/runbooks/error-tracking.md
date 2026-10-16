@@ -14,17 +14,18 @@ What each reports:
 
 ## Set it up
 
-1. **Create three projects** in GlitchTip (its UI is on the private network): `aisafety-newsroom-api`,
-   `aisafety-newsroom-worker` and `aisafety-newsroom-web`, platform Node.js.
+1. **Create three projects** in GlitchTip: `aisafety-newsroom-api`, `aisafety-newsroom-worker` and
+   `aisafety-newsroom-web`, platform Node.js.
 
-2. **Seal their DSNs** in a terminal. Paste each from the project's settings (Client Keys); the script rewrites the
-   host to GlitchTip's in-cluster Service:
+2. **Seal their DSNs** in a terminal (`<gitops>` is your gitops checkout). Paste each from the project's settings
+   (Client Keys); the script rewrites the host to GlitchTip's in-cluster one (`ERROR_TRACKING_HOST` in
+   `scripts/ops.env`):
 
    ```sh
    scripts/seal-glitchtip-dsns.sh <gitops>
    ```
 
-3. **Configure them** in gitops' `clusters/example/values/apps/aisafety-newsroom.yaml`:
+3. **Configure them** in the app's values file in gitops (`GITOPS_APP_VALUES`):
 
    ```yaml
    aisafety-newsroom-api:
@@ -38,10 +39,9 @@ What each reports:
        networkPolicy:
          # The worker's policy lets it reach only what it lists: GlitchTip's web pods too.
          errorTracking:
-           namespace: glitchtip
+           namespace: <GlitchTip's namespace>
            podLabels:
-             app.kubernetes.io/name: glitchtip
-             app.kubernetes.io/component: web
+             <label of its web pods>: <value>
    aisafety-newsroom-web:
      errorTracking:
        dsnSecret:
