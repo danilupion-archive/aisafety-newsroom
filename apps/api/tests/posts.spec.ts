@@ -395,7 +395,9 @@ describe('the site’s reads (R-WEB-6)', () => {
 
     const posts = (await read('/public/posts?lang=es')).json<Record<string, unknown>[]>();
     expect(posts.map((post) => post.slug)).toEqual(['reciente', 'antigua']);
-    expect(posts[0]).toMatchObject({ lang: 'es' });
+    // How many sources it has, for the list's "2 fuentes", without the sources themselves.
+    expect(posts[0]).toMatchObject({ lang: 'es', source_count: 1 });
+    expect(posts[0]).not.toHaveProperty('sources');
     expect(posts[0]).not.toHaveProperty('body_md');
     expect(posts[0]).not.toHaveProperty('content_ref');
     expect(await slugs('/public/posts?lang=en')).toEqual(['recent', 'old']);

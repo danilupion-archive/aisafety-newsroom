@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import type { Lang } from './i18n';
 import type { Cursor } from './paging';
 
@@ -19,6 +21,8 @@ export interface PostSummary {
   tags: string[];
   published_at: string;
   updated_at: string;
+  /** How many sources it has, for the timeline's "2 fuentes"; absent from an API older than the count. */
+  source_count?: number;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */
@@ -98,20 +102,25 @@ export const allPosts = async (lang: Lang): Promise<PostSummary[]> => {
   }
 };
 
-/** One post or page; 'gone' once unpublished, undefined if it never was. */
-export const getPost = async (lang: Lang, slug: string): Promise<Post | 'gone' | undefined> => {
-  const response = await read(`/public/posts/${lang}/${encodeURIComponent(slug)}`);
-  // An address the API refuses (400) is no post either: a reader's typo is a 404, never a 500.
-  if (response.status === 404 || response.status === 400) {
-    return undefined;
-  }
-  if (response.status === 410) {
-    return 'gone';
-  }
-  if (!response.ok) {
-    throw new Error(`The API answered ${response.status} for a post`);
-  }
-  return (await response.json()) as Post;
-};
+/**
+ * One post or page; 'gone' once unpublished, undefined if it never was. Asked once per request: the layout (for the
+ * header's link to the other language) and the page share the answer.
+ */
+export const getPost = cache(
+  async (lang: Lang, slug: string): Promise<Post | 'gone' | undefined> => {
+    const response = await read(`/public/posts/${lang}/${encodeURIComponent(slug)}`);
+    // An address the API refuses (400) is no post either: a reader's typo is a 404, never a 500.
+    if (response.status === 404 || response.status === 400) {
+      return undefined;
+    }
+    if (response.status === 410) {
+      return 'gone';
+    }
+    if (!response.ok) {
+      throw new Error(`The API answered ${response.status} for a post`);
+    }
+    return (await response.json()) as Post;
+  },
+);
 
 export const tagCounts = (lang: Lang) => json<TagCount[]>(`/public/tags?lang=${lang}`);

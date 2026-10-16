@@ -35,7 +35,11 @@ const plainPage = (lang: Lang, title: string, body: readonly string[]): string =
     `<html lang="${lang}">`,
     '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
     `<meta name="robots" content="noindex"><title>${xml(title)}</title></head>`,
-    '<body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem">',
+    // The site's night colours, inline: these pages load nothing, not even the site's font.
+    '<style>html{color-scheme:dark;background:#0F172A}body{font-family:system-ui,sans-serif;color:#F1F5F9;' +
+      'max-width:40rem;margin:3rem auto;padding:0 1rem;line-height:1.6}h1{font-size:2rem;line-height:1.15}' +
+      'a{color:#FF9416}</style>',
+    '<body>',
     ...body,
     '</body>',
     '</html>',

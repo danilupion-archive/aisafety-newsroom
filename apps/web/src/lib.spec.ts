@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { PostSummary } from './api';
 
+import { splitWordmark } from './brand';
 import { atomFeed, xml } from './feed';
-import { calendarDate, longDate } from './format';
-import { paths, preferredLang } from './i18n';
+import { calendarDate, dateParts, longDate } from './format';
+import { otherLanguageHref, paths, preferredLang } from './i18n';
 import { nextPage, readCursor } from './paging';
 import { contentSecurityPolicy, gonePage, notFoundPage } from './security';
 import { readSite } from './site';
@@ -217,5 +218,74 @@ describe('paging', () => {
     expect(nextPage('en', '/en', { ...POST, slug: 'example' })).toBe(
       '/en?before=2026-10-15T08%3A00%3A00.000Z&after=example',
     );
+  });
+});
+
+describe('the wordmark', () => {
+  it('sets a name’s trailing IA apart, for the accent colour', () => {
+    expect(splitWordmark('PandorIA')).toEqual({ lead: 'Pandor', ia: 'IA' });
+  });
+
+  it('leaves any other name whole', () => {
+    expect(splitWordmark('Noticias de ejemplo')).toEqual({ lead: 'Noticias de ejemplo', ia: '' });
+    expect(splitWordmark('Pandoria')).toEqual({ lead: 'Pandoria', ia: '' });
+    // Nothing before the IA: the whole name, plain.
+    expect(splitWordmark('IA')).toEqual({ lead: 'IA', ia: '' });
+  });
+});
+
+describe('the timeline’s dates', () => {
+  it('splits a date into its day, month, and weekday in each language, in Madrid’s time', () => {
+    expect(dateParts('es', '2026-10-15T22:30:00Z')).toEqual({
+      day: '16',
+      month: 'OCT',
+      weekday: 'viernes',
+      weekdayShort: 'VIE',
+    });
+    expect(dateParts('en', '2026-10-15T22:30:00Z')).toEqual({
+      day: '16',
+      month: 'OCT',
+      weekday: 'Friday',
+      weekdayShort: 'FRI',
+    });
+    expect(dateParts('es', '2026-09-03T10:00:00Z').month).toBe('SEPT');
+  });
+});
+
+describe('the link to the other language', () => {
+  it('goes to the same page in the other language, in its words', () => {
+    expect(otherLanguageHref('es', '/es')).toBe('/en');
+    expect(otherLanguageHref('en', '/en/topics')).toBe('/es/temas');
+    expect(otherLanguageHref('es', '/es/sobre')).toBe('/en/about');
+    expect(otherLanguageHref('es', '/es/etiqueta/evals')).toBe('/en/tag/evals');
+    expect(otherLanguageHref('en', '/en/tag/evals')).toBe('/es/etiqueta/evals');
+  });
+
+  it('goes to a post’s translation when it has one, and to the other home when it doesn’t', () => {
+    expect(otherLanguageHref('es', '/es/informe', { lang: 'en', slug: 'report' })).toBe(
+      '/en/report',
+    );
+    expect(otherLanguageHref('es', '/es/informe')).toBe('/en');
+  });
+
+  it('goes to the other home from anything else', () => {
+    expect(otherLanguageHref('es', undefined)).toBe('/en');
+    expect(otherLanguageHref('es', '/es/etiqueta/Not a tag')).toBe('/en');
+    expect(otherLanguageHref('es', '/es/a/b/c')).toBe('/en');
+    // Another language's path is no page of this one.
+    expect(otherLanguageHref('es', '/en/topics')).toBe('/en');
+  });
+});
+
+describe('a post’s sources, counted', () => {
+  it('says one or many in each language', () => {
+    expect([STRINGS.es.sourceCount(1), STRINGS.es.sourceCount(3)]).toEqual([
+      '1 fuente',
+      '3 fuentes',
+    ]);
+    expect([STRINGS.en.sourceCount(1), STRINGS.en.sourceCount(2)]).toEqual([
+      '1 source',
+      '2 sources',
+    ]);
   });
 });

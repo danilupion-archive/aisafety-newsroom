@@ -1,8 +1,9 @@
 import { defineConfig } from '@pandacss/dev';
 
 /**
- * A plain, readable site (R-WEB-4): one column, the system's fonts (nothing loads from another host), contrast that
- * passes WCAG 2.2 AA in light and dark.
+ * PandorIA's one theme, night (R-WEB-4): navy and orange, one typeface (Hanken Grotesk, served by the site itself, so
+ * nothing loads from another host). Every text colour on every background it's used on passes WCAG 2.2 AA; orange is
+ * never text on a light background.
  */
 export default defineConfig({
   preflight: true,
@@ -11,23 +12,50 @@ export default defineConfig({
   jsxFramework: 'react',
   outdir: 'styled-system',
   presets: ['@pandacss/preset-base', '@pandacss/preset-panda'],
-  conditions: { extend: { dark: '@media (prefers-color-scheme: dark)' } },
   theme: {
     extend: {
-      semanticTokens: {
+      tokens: {
         colors: {
-          page: { value: { base: '#ffffff', _dark: '#15171a' } },
-          text: { value: { base: '#1d2125', _dark: '#e8eaed' } },
-          muted: { value: { base: '#5a636e', _dark: '#a9b1bb' } },
-          rule: { value: { base: '#d8dde3', _dark: '#3a4048' } },
-          link: { value: { base: '#0b57a4', _dark: '#8ab8f0' } },
+          // The page and what sits on it: cards, and the darker box of a post's sources.
+          page: { value: '#0F172A' },
+          card: { value: '#1E293B' },
+          deep: { value: '#0B1220' },
+          // Borders, the timeline's rail, quiet fills.
+          rule: { value: '#334155' },
+          // Headings and links; running text; dates, counts and asides.
+          text: { value: '#F1F5F9' },
+          body: { value: '#CBD5E1' },
+          muted: { value: '#94A3B8' },
+          accent: { value: '#FF9416' },
+          accentSoft: { value: 'rgba(255, 148, 22, 0.15)' },
+        },
+        fonts: {
+          body: { value: "'Hanken Grotesk Variable', system-ui, sans-serif" },
         },
       },
     },
   },
   globalCss: {
-    body: { bg: 'page', color: 'text', fontFamily: 'system-ui, sans-serif', lineHeight: '1.6' },
-    a: { color: 'link', textDecoration: 'underline', textUnderlineOffset: '0.15em' },
-    'a:focus-visible': { outline: '2px solid', outlineColor: 'link', outlineOffset: '2px' },
+    html: { colorScheme: 'dark', bg: 'page' },
+    body: {
+      bg: 'page',
+      color: 'text',
+      fontFamily: 'body',
+      lineHeight: '1.6',
+      WebkitFontSmoothing: 'antialiased',
+    },
+    a: { color: 'inherit', textDecoration: 'none' },
+    'a:hover': {
+      textDecoration: 'underline',
+      textDecorationColor: 'accent',
+      textDecorationThickness: '2px',
+      textUnderlineOffset: '0.2em',
+    },
+    '*:focus-visible': {
+      outline: '2px solid',
+      outlineColor: 'accent',
+      outlineOffset: '3px',
+      borderRadius: '4px',
+    },
   },
 });

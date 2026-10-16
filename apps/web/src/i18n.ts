@@ -1,5 +1,7 @@
 import { isLang, type Lang, PATH_WORDS } from '@aisafety-newsroom/domain/languages';
 
+import { TAG } from './tags';
+
 /**
  * The site's languages (R-WEB-4, D10), shared with the API: Spanish and English on one host, each under its own
  * prefix, with its own words for the site's paths. Spanish is the default: the main readers are in Spain.
@@ -19,6 +21,37 @@ export const paths = {
   topics: (lang: Lang) => `/${lang}/${PATH_WORDS[lang].topics}`,
   about: (lang: Lang) => `/${lang}/${PATH_WORDS[lang].about}`,
   feed: (lang: Lang) => `/${lang}/feed.xml`,
+};
+
+/** The request header the proxy passes a page's path in: a layout isn't told it, and the header's switch needs it. */
+export const PATHNAME_HEADER = 'x-site-pathname';
+
+/**
+ * The same page in the other language, for the header's switch: the home, the topics, the about page and a tag's page
+ * in that language's words; a post's translation when it has one. That language's home for anything else, a post with
+ * no translation included.
+ */
+export const otherLanguageHref = (
+  lang: Lang,
+  pathname: string | undefined,
+  translation?: { lang: Lang; slug: string },
+): string => {
+  const other = otherLang(lang);
+  const [, first, second, third, ...rest] = (pathname ?? '').split('/');
+  const words = PATH_WORDS[lang];
+  if (first !== lang || rest.length > 0 || !second) {
+    return paths.home(other);
+  }
+  if (third !== undefined) {
+    return second === words.tag && TAG.test(third) ? paths.tag(other, third) : paths.home(other);
+  }
+  if (second === words.topics) {
+    return paths.topics(other);
+  }
+  if (second === words.about) {
+    return paths.about(other);
+  }
+  return translation?.lang === other ? paths.post(other, translation.slug) : paths.home(other);
 };
 
 /** A language tag's weight in an Accept-Language entry: `q=0.8`, 1 without one, 0 if it isn't a number. */

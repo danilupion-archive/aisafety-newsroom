@@ -1,23 +1,58 @@
 import type { Metadata } from 'next';
 
 import { renderMarkdown } from '@aisafety-newsroom/domain/markdown';
+import { css } from '@styled-system/css';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
 import type { Lang } from '@/i18n';
 
 import { getPost, type Post } from '@/api';
+import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
 import { Translations } from '@/components/Translations';
-import { calendarDate, longDate } from '@/format';
+import { longDate } from '@/format';
 import { paths } from '@/i18n';
 import { alternates, pageLang } from '@/params';
 import { site } from '@/site';
 import { STRINGS } from '@/strings';
-import { muted, pageTitle, prose, sectionTitle } from '@/styles';
-import { isSlug } from '@/tags';
+import { column, label, pageTitle, prose, tagPill } from '@/styles';
+import { isSlug, tagLabel } from '@/tags';
 
 type Props = { params: Promise<{ lang: string; slug: string }> };
+
+const back = css({
+  display: 'inline-block',
+  marginTop: '6',
+  paddingY: '2.5',
+  color: 'muted',
+  fontWeight: '600',
+  fontSize: '0.9375rem',
+});
+const kicker = css({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '3',
+  marginTop: '3',
+});
+const kickerText = css({ color: 'muted' });
+const summary = css({
+  color: 'body',
+  fontSize: { base: '1.1875rem', md: '1.375rem' },
+  lineHeight: '1.5',
+  marginBottom: '2',
+});
+const endRow = css({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '4',
+  marginTop: '7',
+  marginBottom: '4',
+});
 
 /** The post, or undefined: an unpublished one answers 410 from the proxy before it gets here (AC-7). */
 const find = async (props: Props): Promise<{ lang: Lang; post: Post | undefined }> => {
@@ -66,7 +101,7 @@ export const generateMetadata = async (props: Props): Promise<Metadata> => {
 
 /**
  * A breve or an article: its text, rendered safely (R-WEB-5), its sources with their access dates, its tags (R-WEB-1),
- * and its versions in the other language (R-WEB-10), each labelled in its own language.
+ * and its version in the other language (R-WEB-10), labelled in that language.
  */
 const PostPage = async (props: Props) => {
   await connection();
@@ -75,37 +110,36 @@ const PostPage = async (props: Props) => {
     notFound();
   }
   const t = STRINGS[lang];
+  const [firstTag] = post.tags;
   return (
-    <article>
+    <article className={column}>
+      <Link href={paths.home(lang)} className={back}>
+        <span aria-hidden="true">← </span>
+        {t.allEntries}
+      </Link>
       <header>
         {post.type === 'page' ? null : (
-          <p className={muted}>
-            {t.type[post.type]} ·{' '}
-            <time dateTime={post.published_at}>{longDate(lang, post.published_at)}</time>
+          <p className={`${kicker} ${label}`}>
+            {firstTag === undefined ? null : (
+              <Link href={paths.tag(lang, firstTag)} className={tagPill}>
+                {tagLabel(lang, firstTag)}
+              </Link>
+            )}
+            <span className={kickerText}>
+              {t.type[post.type]} ·{' '}
+              <time dateTime={post.published_at}>{longDate(lang, post.published_at)}</time>
+            </span>
           </p>
         )}
         <h1 className={pageTitle}>{post.title}</h1>
-        <Translations translations={post.translations} />
+        {post.summary === '' ? null : <p className={summary}>{post.summary}</p>}
       </header>
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(post.body_md) }} />
-      {post.sources.length === 0 ? null : (
-        <section aria-labelledby="sources">
-          <h2 id="sources" className={sectionTitle}>
-            {t.sources}
-          </h2>
-          <ol>
-            {post.sources.map((source) => (
-              <li key={source.url}>
-                <a href={source.url} rel="noopener noreferrer">
-                  {source.title}
-                </a>{' '}
-                <span className={muted}>({t.accessed(calendarDate(lang, source.accessed))})</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-      <Tags lang={lang} tags={post.tags} />
+      <Sources lang={lang} sources={post.sources} />
+      <footer className={endRow}>
+        <Translations translations={post.translations} />
+        <Tags lang={lang} tags={post.tags} />
+      </footer>
     </article>
   );
 };

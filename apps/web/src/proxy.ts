@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import type { Unpublished } from './api';
 
-import { isLang, paths, preferredLang } from './i18n';
+import { isLang, PATHNAME_HEADER, paths, preferredLang } from './i18n';
 import { contentSecurityPolicy, gonePage, notFoundPage } from './security';
 import { site } from './site';
 
@@ -16,7 +16,13 @@ import { site } from './site';
 /** A post's address: /<lang>/<slug>. */
 const POST = /^\/([a-z]{2})\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 /** The site's own files outside the languages. */
-const ROOT_FILES = new Set(['/healthz', '/sitemap.xml', '/robots.txt', '/favicon.ico']);
+const ROOT_FILES = new Set([
+  '/healthz',
+  '/sitemap.xml',
+  '/robots.txt',
+  '/favicon.ico',
+  '/icon.svg',
+]);
 const TTL_MS = 60_000;
 /** After a failed read: soon enough to notice the API is back, rare enough not to wait on it every request. */
 const RETRY_MS = 10_000;
@@ -90,7 +96,11 @@ export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   ) {
     return html(gonePage(post[1], config.name[post[1]]), 410);
   }
-  const response = NextResponse.next();
+  // The layout's header links to the same page in the other language; a layout isn't told the path, so it's passed on.
+  // Set here for every page, whatever a client sent under the same name.
+  const headers = new Headers(request.headers);
+  headers.set(PATHNAME_HEADER, pathname);
+  const response = NextResponse.next({ request: { headers } });
   response.headers.set(
     'Content-Security-Policy',
     contentSecurityPolicy(config.analytics?.scriptUrl, process.env.NODE_ENV === 'development'),

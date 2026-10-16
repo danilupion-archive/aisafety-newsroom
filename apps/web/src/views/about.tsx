@@ -1,12 +1,15 @@
 import { renderMarkdown } from '@aisafety-newsroom/domain/markdown';
+import { css } from '@styled-system/css';
 import { connection } from 'next/server';
 
 import { getPost } from '@/api';
 import { Translations } from '@/components/Translations';
 import { STRINGS } from '@/strings';
-import { pageTitle, prose } from '@/styles';
+import { column, pageTitle, prose } from '@/styles';
 
 import { type AboutProps, readAbout } from './about-route';
+
+const end = css({ marginTop: '7', marginBottom: '4' });
 
 /**
  * Who writes the site and why (R-WEB-3), in one language: the page whose slug is the language's word for it, pushed
@@ -18,17 +21,21 @@ export const AboutView = async ({ word, params }: AboutProps & { word: string })
   const page = await getPost(lang, word);
   if (page === undefined || page === 'gone') {
     return (
-      <>
+      <div className={column}>
         <h1 className={pageTitle}>{STRINGS[lang].about}</h1>
-        <p>{STRINGS[lang].aboutPending}</p>
-      </>
+        <p className={prose}>{STRINGS[lang].aboutPending}</p>
+      </div>
     );
   }
   return (
-    <article>
+    <article className={column}>
       <h1 className={pageTitle}>{page.title}</h1>
-      <Translations translations={page.translations} />
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(page.body_md) }} />
+      {page.translations.length === 0 ? null : (
+        <p className={end}>
+          <Translations translations={page.translations} />
+        </p>
+      )}
     </article>
   );
 };

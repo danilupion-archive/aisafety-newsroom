@@ -28,7 +28,7 @@ export const publicRoutes =
 
     /**
      * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
-     * sitemap. No pages.
+     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves.
      */
     app.get('/public/posts', async (request, reply) => {
       const query = parse(publicListQuery, request.query, reply);
@@ -38,6 +38,7 @@ export const publicRoutes =
       let select = db
         .selectFrom('app.published_posts')
         .select(['lang', 'slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
         .where('lang', '=', query.lang)
         .where('type', '<>', 'page')
         .orderBy('published_at', 'desc')
