@@ -1,6 +1,14 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.5** · 2026-10-16 · Owner: Dani
+Status: **draft v0.6** · 2026-10-17 · Owner: Dani
+
+v0.6 changes: the site says on every page and in its feeds that its texts are written
+by AI, picked and checked by Dani (R-WEB-3); its tagline is "La caja ya está abierta".
+YouTube links are captured as videos, with channel, length and description (R-CAP-5,
+R-FET-7); transcripts are fetched on the Mac (R-MED-6); how a video source shows on the
+site is specified, not built (R-WEB-12). Miniflux waits: sources are checked by hand
+(D13). The texts are CC BY 4.0 (D14; Q10 closed). A breve's length applies to the
+language it's written in, not to its translation (D15; Q12 closed).
 
 v0.5 changes: Spanish is at the site's root and English under `/en/`; `/es/…` redirects to
 the same address without the prefix (D10, AC-11).
@@ -172,10 +180,14 @@ the Service, and a NetworkPolicy enforces it.
 - **R-CAP-5** Must: normalise the URL:
   - lowercase the scheme and host;
   - drop the fragment;
-  - drop tracking parameters: `utm_*`, `fbclid`, `gclid`, `igshid`, `ref`, and `s` and
-    `t` on x.com;
+  - drop tracking parameters: `utm_*`, `fbclid`, `gclid`, `igshid`, `ref`, `s` and `t`
+    on x.com, and `si`, `feature` and `pp` on YouTube;
   - treat `twitter.com` as `x.com`;
-  - drop the trailing slash.
+  - drop the trailing slash;
+  - write every link to a YouTube video (`watch?v=`, `youtu.be/`, `/shorts/`, `/live/`,
+    `/embed/`; on `www.`, `m.` and `music.youtube.com` too) as
+    `https://www.youtube.com/watch?v=<id>`, with nothing else: a start time (`t`) doesn't
+    make another source, and the item's `url` keeps the link as sent.
 - **R-CAP-6** Must: deduplicate on the normalised URL. When an item already exists:
   - if it's still open (`queued`, `ready` or `needs_review`), append the new note to it
     and reply "Already saved #17 (status)";
@@ -227,6 +239,7 @@ and is reviewed in every PR.
 | `http_status`, `final_url`, `content_type`          | int, text, text             |                                                                     |
 | `page_title`, `page_site_name`, `page_published_at` | text                        | from page metadata, verbatim                                        |
 | `page_text`                                         | text                        | extracted main text, ≤ 20,000 chars; cleared after 90 days `[Q9]`   |
+| `page_kind`, `page_author`, `page_duration_seconds` | text, text, int             | `page` or `video`; a video's channel and its length (R-FET-7)       |
 | `fetched_at`, `logged_at`                           | timestamptz                 |                                                                     |
 | `logged_ref`                                        | jsonb                       | `{news_file, entry_date, tags, relevance}` from aisafety-media      |
 | `discard_reason`, `last_error`                      | text                        |                                                                     |
@@ -286,6 +299,22 @@ queued ──fetched, or host skipped──▶ ready ─────┐
   page that crashes the worker ends in `needs_review` after 3 tries instead of looping.
 - **R-FET-6** Must: page content is untrusted data. It is stored as text, rendered
   nowhere public, and never followed as instructions.
+- **R-FET-7** Must: a link to a YouTube video (R-CAP-5) is read from the video's watch
+  page, whatever form was sent, and the item is marked as a video (`page_kind: video`;
+  any other fetch is a `page`):
+  - from the page's player data (`ytInitialPlayerResponse`, read as JSON up to its
+    closing brace and never run): the title, the channel (`page_author`), the full
+    description as the item's text, the length (`page_duration_seconds`; none for a
+    stream still on the air) and the publication date. Data about another video is
+    ignored;
+  - a page without that data (YouTube may show a data centre's address a "confirm you're
+    not a bot" page, or a consent page) gets the title and the channel from YouTube's
+    public oEmbed endpoint, fetched under R-FET-4's rules; if that fails too, the page's
+    own metadata stands;
+  - the bot's edited reply adds the length and the channel:
+    "#42 · <title> (video, 13 min, <channel>)".
+
+  The transcript isn't fetched here (R-MED-6).
 
 ### 8.2 Drafting with a local model (M2, not committed)
 
@@ -384,6 +413,11 @@ These are requirements on the content repo, implemented there.
   `/breve` drafts a breve in both languages, `/post <lang>/<slug>` pushes an approved story
   (both versions) to the site, and only Dani sets `approved`.
 
+- **R-MED-6** Must: for a video (R-FET-7), `/news` has its description, channel and length
+  from the newsroom. When writing about what is said in it, the transcript is fetched on
+  the Mac, at that moment, never by the worker: YouTube is hardest on data centres'
+  addresses, and transcripts are what it guards most.
+
 ## 11. Open questions
 
 | #   | Question                                                                     | Leaning                                                                                                |
@@ -393,8 +427,6 @@ These are requirements on the content repo, implemented there.
 | Q7  | Articles in v1, or breves first?                                             | Breves first                                                                                           |
 | Q8  | Which "Where to look" sources have usable feeds?                             | Checked: the watchlist's Feeds (2026-10-15)                                                            |
 | Q9  | How long to keep `page_text` (size, copyright)?                              | Clear it 90 days after `logged` or `discarded`                                                         |
-| Q10 | Licence for the site's content (breves, articles)                            | CC BY 4.0, like aiontheballot's content                                                                |
-| Q12 | An English breve's length (R-WEB-1)                                          | 65–130 words: Spanish's 80–150, about 15% less                                                         |
 | Q13 | Images from the news on posts: which may be used, how credited, stored where | Optional per post, with source and credit; a copy the site serves, never a hotlink; none until decided |
 
 ### Decided (v0.2–v0.4)
@@ -413,6 +445,9 @@ These are requirements on the content repo, implemented there.
 | D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                 | Q1 (in part) |
 | D11 | Every post is published in both languages; the site shows a story only when both versions are                                      | Q11          |
 | D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11) | Q1           |
+| D13 | Miniflux waits: Dani checks the sources by hand for now, and R-RSS-1–3 apply once it's set up                                      | —            |
+| D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it     | Q10          |
+| D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                    | Q12          |
 
 ## 12. Miniflux for `/sweep`
 
@@ -435,8 +470,8 @@ These are requirements on the content repo, implemented there.
 ### Content
 
 - **R-WEB-1** Must: two content types, each written in Spanish or English:
-  - **breve**: a title, 1–3 sources, 80–150 words in Spanish or 65–130 in English, which
-    says the same in fewer words `[Q12]`;
+  - **breve**: a title, 1–3 sources, 80–150 words in the language it's written in; its
+    translation says the same at whatever length that takes, with no limit of its own (D15);
   - **article**: long form.
 
   Each lists its sources (title, link, access date) and its tags.
@@ -444,8 +479,11 @@ These are requirements on the content repo, implemented there.
 - **R-WEB-2** Must: content comes only from aisafety-media through the posts API.
   Nothing from the inbox reaches the site (P2, P3).
 - **R-WEB-3** Must: no AI-generated images; non-partisan; honest about uncertainty.
-  Every page says who writes it (Dani) and links to the about page, which says who Dani
-  is. The site doesn't speak for Pausemos la IA.
+  Open about how it's made: the texts are written by AI, and Dani picks the stories and
+  checks every text. Every page says so in its footer, with Dani's name (linked to a page
+  about Dani when gitops gives one) and a link to the about page ("Cómo se hace"), which
+  explains the process; each post says it above its sources, and each feed entry at its
+  end. The site doesn't speak for Pausemos la IA.
 - **R-WEB-10** Must: every post is published in Spanish and English (D11): written in
   one language and translated into the other. A translation names its original, which
   has been pushed already; a story is one original and its translation, never a
@@ -483,13 +521,18 @@ Spanish posts, are refused as slugs in both languages, so no post hides behind a
   the accent `#FF9416` on navy only. One typeface, Hanken Grotesk, served by the site
   itself. The mark, a box with its lid ajar and light escaping, in the header, as the
   site's icon and as the bot's avatar; the name with its trailing "IA" in the accent;
-  taglines "Los riesgos de la IA, día a día" and "AI risk, day by day". From PauseAI only
+  taglines "La caja ya está abierta" and "The box is already open". From PauseAI only
   the two colours, never its typeface or its marks: the site is Dani's own (D4).
 - **R-WEB-5** Must: Markdown is rendered to sanitised HTML. No raw HTML from posts.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
 - **R-WEB-7** Should: Plausible for analytics and nothing else (no cookie banner
   needed); GlitchTip for server-side errors. No error SDK in the browser in v1.
+- **R-WEB-12** Should (not built yet): a source that is a video shows as a link with its
+  length and channel ("vídeo · 13 min · <channel>", "video · 13 min · <channel>"), which
+  the source's entry in the posts API then carries. No embedded player: one tracks its
+  viewers and loads from another host, against R-WEB-7. A still the site serves itself,
+  which loads the player only when clicked, may come with images (Q13).
 
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9. A post's address is its language and its slug.

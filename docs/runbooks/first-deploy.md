@@ -91,6 +91,59 @@ From aisafety-media, `python3 tools/newsroom.py pending` does the same.
 
 In the cluster: the migration Job succeeded, two API pods are ready, and `newsroom` has the `app` schema.
 
+## 5. Turn on the site
+
+The site stays off until gitops gives it its host, its names and its editor (SPEC R-WEB-9). It reads the API inside
+the cluster as `newsroom_public`, so the API needs that login too: without it `/public` answers 503 and every page of
+the site fails with a 500. Add to the app's values file (`GITOPS_APP_VALUES`), with your own values:
+
+```yaml
+aisafety-newsroom-api:
+  # newsroom_public's connection, sealed by scripts/seal-gitops-secrets.sh with the others.
+  publicDatabaseUrlSecret:
+    name: aisafety-newsroom-public-db
+
+aisafety-newsroom-web:
+  enabled: true
+  image:
+    repository: <registry>/aisafety-newsroom/web
+  site:
+    url: https://<site host>
+    name:
+      es: <name>
+      en: <name>
+    # Who picks and checks the texts (R-WEB-3), and, optional, a page about them that the name links to.
+    author: <name>
+    authorUrl: <https://…>
+  # Optional: Plausible (the site's own pa-….js) and GlitchTip (docs/runbooks/error-tracking.md).
+  analytics:
+    scriptUrl: https://<plausible>/js/pa-….js
+  errorTracking:
+    dsnSecret:
+      name: aisafety-newsroom-web-glitchtip
+  route:
+    enabled: true
+    parentRefs:
+      - name: <public gateway>
+        namespace: <its namespace>
+    hostnames:
+      - <site host>
+```
+
+The site's host needs its DNS record and a certificate on the gateway, however gitops provides them; a `www.` host,
+if you want one, is a redirect route in gitops beside the app's other resources.
+
+Check it once Argo CD has synced (`SITE` is `https://<site host>`):
+
+```sh
+curl -s -o /dev/null -w '%{http_code}\n' "$SITE/"      # 200: the Spanish home, which needs the API
+curl -s -o /dev/null -w '%{http_code}\n' "$SITE/en"    # 200
+curl -s -o /dev/null -w '%{redirect_url}\n' "$SITE/es" # $SITE/: Spanish lives at the root
+```
+
+A 500 on `/` with a 200 on `/healthz` means the site is up but can't read the API: check the API's
+`publicDatabaseUrlSecret` first.
+
 ## If the migration Job can't pull its image
 
 `kubectl --context "$KUBE_CONTEXT" -n aisafety-newsroom get events` showing `401 Unauthorized` on
