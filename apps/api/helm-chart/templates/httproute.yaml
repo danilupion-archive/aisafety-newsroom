@@ -1,5 +1,5 @@
 {{- if .Values.route.enabled }}
-# The API host (SPEC §5): only these paths reach the API; anything else on the host gets the gateway's 404.
+# The API's paths on the host (SPEC §5): only these reach the API; the rest goes to the site's route, or the gateway's 404.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

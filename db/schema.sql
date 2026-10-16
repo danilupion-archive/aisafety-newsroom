@@ -67,6 +67,18 @@ CREATE TYPE app.inbox_status AS ENUM (
 ALTER TYPE app.inbox_status OWNER TO newsroom_owner;
 
 --
+-- Name: post_lang; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.post_lang AS ENUM (
+    'es',
+    'en'
+);
+
+
+ALTER TYPE app.post_lang OWNER TO newsroom_owner;
+
+--
 -- Name: post_type; Type: TYPE; Schema: app; Owner: newsroom_owner
 --
 
@@ -101,6 +113,38 @@ $$;
 
 
 ALTER FUNCTION private.inbox_items_transition() OWNER TO newsroom_owner;
+
+--
+-- Name: posts_translation(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.posts_translation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.translation_of_lang IS NULL THEN
+    RETURN NEW;
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('app.posts translations'));
+  IF EXISTS (
+    SELECT FROM app.posts
+    WHERE lang = NEW.translation_of_lang AND slug = NEW.translation_of_slug AND translation_of_lang IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'post %/% is a translation itself', NEW.translation_of_lang, NEW.translation_of_slug
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'posts_translation_of_original';
+  END IF;
+  IF EXISTS (
+    SELECT FROM app.posts WHERE translation_of_lang = NEW.lang AND translation_of_slug = NEW.slug
+  ) THEN
+    RAISE EXCEPTION 'post %/% has translations of its own', NEW.lang, NEW.slug
+      USING ERRCODE = 'check_violation', CONSTRAINT = 'posts_translated_is_original';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+ALTER FUNCTION private.posts_translation() OWNER TO newsroom_owner;
 
 --
 -- Name: touch_updated_at(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
@@ -199,12 +243,17 @@ CREATE TABLE app.posts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     unpublished_at timestamp with time zone,
+    lang app.post_lang NOT NULL,
+    translation_of_lang app.post_lang,
+    translation_of_slug text,
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
     CONSTRAINT posts_slug_format CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 120))),
     CONSTRAINT posts_sources_array CHECK ((jsonb_typeof(sources) = 'array'::text)),
     CONSTRAINT posts_summary_length CHECK ((char_length(summary) <= 600)),
-    CONSTRAINT posts_title_length CHECK (((char_length(title) >= 1) AND (char_length(title) <= 300)))
+    CONSTRAINT posts_title_length CHECK (((char_length(title) >= 1) AND (char_length(title) <= 300))),
+    CONSTRAINT posts_translation_other_lang CHECK ((translation_of_lang <> lang)),
+    CONSTRAINT posts_translation_pair CHECK (((translation_of_lang IS NULL) = (translation_of_slug IS NULL)))
 );
 
 
@@ -215,17 +264,21 @@ ALTER TABLE app.posts OWNER TO newsroom_owner;
 --
 
 CREATE VIEW app.published_posts WITH (security_barrier='true') AS
- SELECT slug,
-    type,
-    title,
-    summary,
-    body_md,
-    sources,
-    tags,
-    published_at,
-    updated_at
-   FROM app.posts
-  WHERE ((unpublished_at IS NULL) AND (published_at <= now()));
+ SELECT post.slug,
+    post.type,
+    post.title,
+    post.summary,
+    post.body_md,
+    post.sources,
+    post.tags,
+    post.published_at,
+    post.updated_at,
+    post.lang,
+    post.translation_of_lang,
+    post.translation_of_slug
+   FROM (app.posts post
+     JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
+  WHERE ((post.unpublished_at IS NULL) AND (post.published_at <= now()) AND (other.unpublished_at IS NULL) AND (other.published_at <= now()));
 
 
 ALTER VIEW app.published_posts OWNER TO newsroom_owner;
@@ -247,10 +300,12 @@ ALTER TABLE app.telegram_updates OWNER TO newsroom_owner;
 --
 
 CREATE VIEW app.unpublished_posts WITH (security_barrier='true') AS
- SELECT slug,
-    unpublished_at
-   FROM app.posts
-  WHERE (unpublished_at IS NOT NULL);
+ SELECT post.slug,
+    COALESCE(post.unpublished_at, other.unpublished_at) AS unpublished_at,
+    post.lang
+   FROM (app.posts post
+     LEFT JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
+  WHERE ((post.unpublished_at IS NOT NULL) OR (other.unpublished_at IS NOT NULL));
 
 
 ALTER VIEW app.unpublished_posts OWNER TO newsroom_owner;
@@ -275,11 +330,19 @@ ALTER TABLE ONLY app.inbox_items
 
 
 --
+-- Name: posts posts_one_translation_per_lang; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.posts
+    ADD CONSTRAINT posts_one_translation_per_lang UNIQUE (translation_of_lang, translation_of_slug, lang);
+
+
+--
 -- Name: posts posts_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
 --
 
 ALTER TABLE ONLY app.posts
-    ADD CONSTRAINT posts_pkey PRIMARY KEY (slug);
+    ADD CONSTRAINT posts_pkey PRIMARY KEY (lang, slug);
 
 
 --
@@ -330,7 +393,7 @@ CREATE UNIQUE INDEX inbox_items_url_normalized_key ON app.inbox_items USING btre
 -- Name: posts_published; Type: INDEX; Schema: app; Owner: newsroom_owner
 --
 
-CREATE INDEX posts_published ON app.posts USING btree (published_at DESC) WHERE ((unpublished_at IS NULL) AND (type <> 'page'::app.post_type));
+CREATE INDEX posts_published ON app.posts USING btree (lang, published_at DESC, slug) WHERE ((unpublished_at IS NULL) AND (type <> 'page'::app.post_type));
 
 
 --
@@ -362,11 +425,26 @@ CREATE TRIGGER posts_touch_updated_at BEFORE UPDATE ON app.posts FOR EACH ROW EX
 
 
 --
+-- Name: posts posts_translation; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER posts_translation BEFORE INSERT OR UPDATE OF translation_of_lang, translation_of_slug ON app.posts FOR EACH ROW EXECUTE FUNCTION private.posts_translation();
+
+
+--
 -- Name: inbox_items inbox_items_follows_up_fkey; Type: FK CONSTRAINT; Schema: app; Owner: newsroom_owner
 --
 
 ALTER TABLE ONLY app.inbox_items
     ADD CONSTRAINT inbox_items_follows_up_fkey FOREIGN KEY (follows_up) REFERENCES app.inbox_items(id);
+
+
+--
+-- Name: posts posts_translation_of_fkey; Type: FK CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.posts
+    ADD CONSTRAINT posts_translation_of_fkey FOREIGN KEY (translation_of_lang, translation_of_slug) REFERENCES app.posts(lang, slug);
 
 
 --
@@ -389,6 +467,13 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION private.inbox_items_transition() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION posts_translation(); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.posts_translation() FROM PUBLIC;
 
 
 --

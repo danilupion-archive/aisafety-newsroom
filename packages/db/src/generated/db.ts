@@ -9,6 +9,8 @@ export type AppFetchStatus = 'failed' | 'ok' | 'pending' | 'skipped';
 
 export type AppInboxStatus = 'discarded' | 'logged' | 'needs_review' | 'queued' | 'ready';
 
+export type AppPostLang = 'en' | 'es';
+
 export type AppPostType = 'article' | 'breve' | 'page';
 
 export type Generated<T> =
@@ -67,12 +69,15 @@ export interface AppPosts {
   body_md: string;
   content_ref: Json;
   created_at: Generated<Timestamp>;
+  lang: AppPostLang;
   published_at: Timestamp;
   slug: string;
   sources: Generated<Json>;
   summary: Generated<string>;
   tags: Generated<string[]>;
   title: string;
+  translation_of_lang: AppPostLang | null;
+  translation_of_slug: string | null;
   type: AppPostType;
   unpublished_at: Timestamp | null;
   updated_at: Generated<Timestamp>;
@@ -80,12 +85,15 @@ export interface AppPosts {
 
 export interface AppPublishedPosts {
   body_md: string | null;
+  lang: AppPostLang | null;
   published_at: Timestamp | null;
   slug: string | null;
   sources: Json | null;
   summary: string | null;
   tags: string[] | null;
   title: string | null;
+  translation_of_lang: AppPostLang | null;
+  translation_of_slug: string | null;
   type: AppPostType | null;
   updated_at: Timestamp | null;
 }
@@ -96,6 +104,7 @@ export interface AppTelegramUpdates {
 }
 
 export interface AppUnpublishedPosts {
+  lang: AppPostLang | null;
   slug: string | null;
   unpublished_at: Timestamp | null;
 }

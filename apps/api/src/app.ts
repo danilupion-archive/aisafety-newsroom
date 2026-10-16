@@ -54,6 +54,15 @@ const constraintOf = (error: unknown): string | undefined =>
     ? error.constraint
     : undefined;
 
+/** The database's rules a request can break, as conflicts (409) that say which rule: R-DB-1, R-WEB-10. */
+const CONFLICTS: Readonly<Record<string, string>> = {
+  inbox_items_transition: 'That item can’t make that move',
+  posts_translation_of_fkey: 'The post it translates hasn’t been pushed: push that one first',
+  posts_one_translation_per_lang: 'That post already has a translation in this language',
+  posts_translation_of_original: 'That post is a translation itself: translate its original',
+  posts_translated_is_original: 'This post has translations, so it can’t be a translation itself',
+};
+
 export const buildApp = ({
   apiToken,
   db,
@@ -109,11 +118,12 @@ export const buildApp = ({
   app.setNotFoundHandler(async (_request, reply) => reply.code(404).send({ error: 'Not found' }));
 
   // Every error in the API's shape (§9). Client errors keep Fastify's message (a body that isn't JSON, one too large);
-  // the transition trigger is a conflict (R-DB-1); anything else is logged and answered without its message, which
-  // could carry a query or a value.
+  // a database rule the request broke is a conflict (CONFLICTS); anything else is logged and answered without its
+  // message, which could carry a query or a value.
   app.setErrorHandler(async (error: Error & { statusCode?: number }, request, reply) => {
-    if (constraintOf(error) === 'inbox_items_transition') {
-      return reply.code(409).send({ error: 'That item can’t make that move' });
+    const conflict = CONFLICTS[constraintOf(error) ?? ''];
+    if (conflict !== undefined) {
+      return reply.code(409).send({ error: conflict });
     }
     const status = error.statusCode ?? 500;
     if (status < 500) {

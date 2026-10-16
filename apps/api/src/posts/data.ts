@@ -2,10 +2,17 @@ import type { Database } from '@aisafety-newsroom/db/client';
 
 import { sql } from 'kysely';
 
-import type { PostBody } from './schemas.js';
+import type { Lang, PostBody } from './schemas.js';
+
+/** Where a post lives on the site: /<lang>/<slug>. */
+export interface PostAddress {
+  lang: Lang;
+  slug: string;
+}
 
 /** A post as the posts API returns it: everything, where it came from included. */
 export interface Post {
+  lang: Lang;
   slug: string;
   type: 'breve' | 'article' | 'page';
   title: string;
@@ -14,11 +21,21 @@ export interface Post {
   sources: unknown;
   tags: string[];
   published_at: Date;
+  translation_of: PostAddress | null;
   content_ref: unknown;
   created_at: Date;
   updated_at: Date;
   unpublished_at: Date | null;
 }
+
+/** The two columns that hold a translation's original, as one address or none. */
+export const translationOf = (row: {
+  translation_of_lang: Lang | null;
+  translation_of_slug: string | null;
+}): PostAddress | null =>
+  row.translation_of_lang !== null && row.translation_of_slug !== null
+    ? { lang: row.translation_of_lang, slug: row.translation_of_slug }
+    : null;
 
 /** The site's clock: a post dated without a time is published at midnight there. */
 export const SITE_TIME_ZONE = 'Europe/Madrid';
@@ -35,12 +52,14 @@ const publishedAt = (value: string) =>
     : value;
 
 /**
- * Creates or replaces a post (§13 `PUT /posts/:slug`). Pushing an unpublished post publishes it again. The same push
- * twice gives the same post (R-API-3); `created` says whether it's new.
+ * Creates or replaces a post (§13 `PUT /posts/:lang/:slug`). Pushing an unpublished post publishes it again, unless
+ * the push says it's unpublished (a rebuild's). The same push twice gives the same post (R-API-3); `created` says
+ * whether it's new. A translation's original must have been pushed already, published or not, and the database keeps
+ * a story to one original (R-WEB-10). The site shows either version only once both are published (D11).
  */
 export const upsertPost = async (
   db: Database,
-  slug: string,
+  { lang, slug }: PostAddress,
   body: PostBody,
 ): Promise<{ created: boolean; post: Post }> => {
   const values = {
@@ -51,52 +70,73 @@ export const upsertPost = async (
     sources: JSON.stringify(body.sources),
     tags: body.tags,
     published_at: publishedAt(body.published_at),
+    translation_of_lang: body.translation_of?.lang ?? null,
+    translation_of_slug: body.translation_of?.slug ?? null,
     content_ref: JSON.stringify(body.content_ref),
   };
   const row = await db
     .insertInto('app.posts')
-    .values({ slug, ...values })
+    .values({ lang, slug, ...values, unpublished_at: body.unpublished ? sql<Date>`now()` : null })
     .onConflict((conflict) =>
-      conflict.column('slug').doUpdateSet({ ...values, unpublished_at: null }),
+      conflict.columns(['lang', 'slug']).doUpdateSet({
+        ...values,
+        // Already unpublished, it keeps when.
+        unpublished_at: body.unpublished ? sql<Date>`coalesce(posts.unpublished_at, now())` : null,
+      }),
     )
     .returningAll()
     // A row the insert created has no previous version: xmax is 0.
     .returning(sql<boolean>`(xmax = 0)`.as('created'))
     .executeTakeFirstOrThrow();
-  const { created, ...post } = row;
-  return { created, post };
+  const { created, translation_of_lang, translation_of_slug, ...post } = row;
+  return {
+    created,
+    post: { ...post, translation_of: translationOf({ translation_of_lang, translation_of_slug }) },
+  };
 };
 
 /**
- * Unpublishes a post (§13 `DELETE /posts/:slug`): its page answers 410 and it leaves the feeds. The row stays, so
- * pushing it again restores it. Undefined if there's no such post.
+ * Unpublishes a post (§13 `DELETE /posts/:lang/:slug`): its page answers 410 and it leaves the feeds, and its other
+ * version with it (D11). The row stays, so pushing it again restores it. Undefined if there's no such post.
  */
 export const unpublishPost = async (
   db: Database,
-  slug: string,
-): Promise<{ slug: string; unpublished_at: Date } | undefined> => {
+  { lang, slug }: PostAddress,
+): Promise<(PostAddress & { unpublished_at: Date }) | undefined> => {
   const row = await db
     .updateTable('app.posts')
     .set({ unpublished_at: sql<Date>`coalesce(unpublished_at, now())` })
+    .where('lang', '=', lang)
     .where('slug', '=', slug)
-    .returning(['slug', 'unpublished_at'])
+    .returning(['lang', 'slug', 'unpublished_at'])
     .executeTakeFirst();
-  return row?.unpublished_at ? { slug: row.slug, unpublished_at: row.unpublished_at } : undefined;
+  return row?.unpublished_at
+    ? { lang: row.lang, slug: row.slug, unpublished_at: row.unpublished_at }
+    : undefined;
 };
 
 /** Every post, unpublished ones included, for aisafety-media to reconcile (§13 `GET /posts`, R-WEB-8). */
-export const listPosts = (db: Database) =>
-  db
+export const listPosts = async (db: Database) => {
+  const rows = await db
     .selectFrom('app.posts')
     .select([
+      'lang',
       'slug',
       'type',
       'title',
       'published_at',
       'updated_at',
       'unpublished_at',
+      'translation_of_lang',
+      'translation_of_slug',
       'content_ref',
     ])
     .orderBy('published_at', 'desc')
+    .orderBy('lang')
     .orderBy('slug')
     .execute();
+  return rows.map(({ translation_of_lang, translation_of_slug, ...row }) => ({
+    ...row,
+    translation_of: translationOf({ translation_of_lang, translation_of_slug }),
+  }));
+};

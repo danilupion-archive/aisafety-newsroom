@@ -4,7 +4,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { sql } from 'kysely';
 
 import { parse } from '../parse.js';
-import { publicListQuery, slug } from '../posts/schemas.js';
+import { translationOf } from '../posts/data.js';
+import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.js';
 
 /**
  * The site's reads (R-WEB-6): published posts only, as newsroom_public, which reaches nothing else (SPEC §7). Outside
@@ -25,7 +26,10 @@ export const publicRoutes =
       return;
     }
 
-    /** Latest first, without their body: for the home page, a tag's page, the feed and the sitemap. No pages. */
+    /**
+     * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
+     * sitemap. No pages.
+     */
     app.get('/public/posts', async (request, reply) => {
       const query = parse(publicListQuery, request.query, reply);
       if (!query) {
@@ -33,7 +37,8 @@ export const publicRoutes =
       }
       let select = db
         .selectFrom('app.published_posts')
-        .select(['slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .select(['lang', 'slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .where('lang', '=', query.lang)
         .where('type', '<>', 'page')
         .orderBy('published_at', 'desc')
         .orderBy('slug')
@@ -54,47 +59,79 @@ export const publicRoutes =
       return select.execute();
     });
 
-    /** One post (or page) with its body and sources; 410 once unpublished (§13), 404 if it never was. */
-    app.get<{ Params: { slug: string } }>('/public/posts/:slug', async (request, reply) => {
-      const name = parse(slug, request.params.slug, reply);
-      if (name === undefined) {
+    /**
+     * One post (or page) with its body and sources, and the other version of its story (R-WEB-10): its original if it's
+     * a translation, its translation if not. Shown only when both are published (D11). 410 once either version is
+     * unpublished (§13), 404 if it never was public.
+     */
+    app.get<{ Params: { lang: string; slug: string } }>(
+      '/public/posts/:lang/:slug',
+      async (request, reply) => {
+        const address = parse(postAddress, request.params, reply);
+        if (!address) {
+          return reply;
+        }
+        const name = `${address.lang}/${address.slug}`;
+        const row = await db
+          .selectFrom('app.published_posts')
+          .selectAll()
+          .where('lang', '=', address.lang)
+          .where('slug', '=', address.slug)
+          .executeTakeFirst();
+        if (row) {
+          const { translation_of_lang, translation_of_slug, ...post } = row;
+          const original = translationOf({ translation_of_lang, translation_of_slug });
+          const story = original ?? address;
+          const translations = await db
+            .selectFrom('app.published_posts')
+            .select(['lang', 'slug', 'title'])
+            .where((eb) =>
+              eb.or([
+                eb.and([eb('lang', '=', story.lang), eb('slug', '=', story.slug)]),
+                eb.and([
+                  eb('translation_of_lang', '=', story.lang),
+                  eb('translation_of_slug', '=', story.slug),
+                ]),
+              ]),
+            )
+            .where('lang', '<>', address.lang)
+            .orderBy('lang')
+            .execute();
+          return { ...post, translation_of: original, translations };
+        }
+        const gone = await db
+          .selectFrom('app.unpublished_posts')
+          .selectAll()
+          .where('lang', '=', address.lang)
+          .where('slug', '=', address.slug)
+          .executeTakeFirst();
+        return gone
+          ? reply
+              .code(410)
+              .send({ error: `Post ${name} was unpublished`, unpublished_at: gone.unpublished_at })
+          : reply.code(404).send({ error: `No post ${name}` });
+      },
+    );
+
+    /** Unpublished posts' addresses, for the site's proxy to answer 410 without asking for each page (AC-7). */
+    app.get('/public/unpublished', async () =>
+      db
+        .selectFrom('app.unpublished_posts')
+        .select(['lang', 'slug'])
+        .orderBy('lang')
+        .orderBy('slug')
+        .execute(),
+    );
+
+    /** Every tag in one language with its count of published posts, for the tag pages. */
+    app.get('/public/tags', async (request, reply) => {
+      const query = parse(publicTagsQuery, request.query, reply);
+      if (!query) {
         return reply;
       }
-      const post = await db
-        .selectFrom('app.published_posts')
-        .selectAll()
-        .where('slug', '=', name)
-        .executeTakeFirst();
-      if (post) {
-        return post;
-      }
-      const gone = await db
-        .selectFrom('app.unpublished_posts')
-        .selectAll()
-        .where('slug', '=', name)
-        .executeTakeFirst();
-      return gone
-        ? reply
-            .code(410)
-            .send({ error: `Post ${name} was unpublished`, unpublished_at: gone.unpublished_at })
-        : reply.code(404).send({ error: `No post ${name}` });
-    });
-
-    /** The slugs of unpublished posts, for the site's proxy to answer 410 without asking for each page (AC-7). */
-    app.get('/public/unpublished', async () => {
-      const rows = await db
-        .selectFrom('app.unpublished_posts')
-        .select('slug')
-        .orderBy('slug')
-        .execute();
-      return rows.map((row) => row.slug);
-    });
-
-    /** Every tag with its count of published posts, for the tag pages. */
-    app.get('/public/tags', async () => {
       const rows = await sql<{ tag: string; posts: string }>`
         SELECT tag, count(*) AS posts FROM app.published_posts, unnest(tags) AS tag
-        WHERE type <> 'page' GROUP BY tag ORDER BY tag
+        WHERE type <> 'page' AND lang = ${query.lang} GROUP BY tag ORDER BY tag
       `.execute(db);
       return rows.rows.map((row) => ({ tag: row.tag, posts: Number(row.posts) }));
     });
