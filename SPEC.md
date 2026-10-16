@@ -1,10 +1,14 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.3** · 2026-10-16 · Owner: Dani
+Status: **draft v0.4** · 2026-10-16 · Owner: Dani
 
-v0.3 changes: the site is in Spanish and English from v1, on `newsroom.danilupion.com`
-next to the API (D10); every post is published in both languages, and the site shows a
-story only when both versions are (D11, R-WEB-10).
+v0.4 changes: the site is PandorIA, at `pandoria.es`, with a look of its own (D12,
+R-WEB-11); the API and the bot stay on `newsroom.danilupion.com` (D8). Images on posts
+are an open question (Q13).
+
+v0.3 changes: the site is in Spanish and English from v1 (D10); every post is published
+in both languages, and the site shows a story only when both versions are (D11,
+R-WEB-10).
 
 v0.2 changes: everything runs on Dani's Kubernetes cluster and n8n is no longer part of the system;
 the stack follows aiontheballot at a smaller scale; drafting with a local model is
@@ -26,7 +30,7 @@ researching AI safety and producing content. It does three things:
 2. **Triage.** Captured pages are fetched on the server and their text and metadata
    stored, so that aisafety-media's `/news` can log them in bulk without fetching each
    one. RSS feeds in Miniflux give `/sweep` a reliable first pass.
-3. **Publish.** A public site in Spanish and English, Dani's own, shows short news items
+3. **Publish.** PandorIA (`pandoria.es`), a public site in Spanish and English, Dani's own, shows short news items
    (_breves_) and articles that Dani has approved in aisafety-media.
 
 ## 2. Scope
@@ -80,7 +84,7 @@ What the system relies on:
 | ---------------------------------- | ----------------------------------------------------------------------- |
 | Kubernetes, Argo CD, SealedSecrets | Running the system, deployed from this repo's umbrella chart            |
 | PostgreSQL 18                      | The `newsroom` database, on a shared instance reachable only in-cluster |
-| A public gateway (Gateway API)     | The one public host (D8, D10)                                           |
+| A public gateway (Gateway API)     | The public hosts: the API's and the site's (D8, D12)                    |
 | A private container registry       | The images the release pushes                                           |
 | A self-hosted runner               | Building releases, started by hand (§15)                                |
 | GlitchTip                          | Server-side errors, sent inside the cluster                             |
@@ -117,7 +121,7 @@ Phone ─▶ Telegram ─▶ [public] <host>/telegram/webhook ─▶ api ──�
                      worker: fetch + extract ──────────────────────┼─▶ Postgres
                         └─▶ the web (public addresses only)        │   newsroom
                                                                    │
-Readers ─▶ [public] <host>/es, /en ─▶ web ─▶ api public read routes ─┘
+Readers ─▶ [public] <site>/es, /en ─▶ web ─▶ api public read routes ─┘
                                           (in-cluster only, read-only role)
 
 Mac ─▶ [public] <host>/api/v1 ─▶ api   inbox (/news), posts (/post), bearer token
@@ -138,10 +142,11 @@ Everything except Telegram, Miniflux, the readers and the Mac runs on the cluste
 | SITE | Public site                    | Next.js in `apps/web`                                                          |
 | CLI  | `tools/newsroom.py` on the Mac | Lives in **aisafety-media**, since it's content tooling; contract defined here |
 
-**Host.** One, on the public gateway, and configuration, never code (D8, D10):
-`<host>` is `newsroom.danilupion.com`. `/telegram/webhook` and `/api/v1/*` go to the API;
-every other path goes to the site (the path split aiontheballot uses), whose addresses
-all start with a language, `/es/` or `/en/`.
+**Hosts.** Two, on the public gateway, and configuration, never code (D8, D12): the
+API's `<host>` is `newsroom.danilupion.com`, where only `/telegram/webhook` and
+`/api/v1/*` are routed; the site's `<site>` is `pandoria.es`, whose addresses all start
+with a language, `/es/` or `/en/` (`www.pandoria.es` redirects there). The site reads the
+API inside the cluster, so it never calls the API's host.
 
 The API's public read routes are on no gateway: only the web pods reach them, through
 the Service, and a NetworkPolicy enforces it.
@@ -263,9 +268,9 @@ queued ──fetched, or host skipped──▶ ready ─────┐
   `410`), or a link R-FET-4 refuses, goes there at once. The bot's "Saved #n" reply is edited
   either way (R-CAP-7).
 
-- **R-FET-3** Must: hosts that block fetching, starting with `x.com`, are skipped
-  (`fetch_status: skipped`). The item goes to `ready` and relies on the note. The host
-  list is configuration.
+- **R-FET-3** Must: hosts that block fetching, starting with `x.com` and `axios.com`
+  (Cloudflare's bot protection), are skipped (`fetch_status: skipped`). The item goes to
+  `ready` and relies on the note. The host list is configuration.
 - **R-FET-4** Must: the worker reaches only the public internet:
   - its NetworkPolicy allows DNS, Postgres, GlitchTip, and ports 80 and 443 on every
     address except the private, loopback, link-local, shared and multicast ranges;
@@ -378,32 +383,33 @@ These are requirements on the content repo, implemented there.
 
 ## 11. Open questions
 
-| #   | Question                                                    | Leaning                                        |
-| --- | ----------------------------------------------------------- | ---------------------------------------------- |
-| Q1  | The site's name in each language (its host is decided: D10) | In the design canvas, before M4 ships          |
-| Q4  | Is drafting with a local model worth building? (§8.2)       | Decide after using M1                          |
-| Q6  | Will others send items later?                               | Designed for, not built                        |
-| Q7  | Articles in v1, or breves first?                            | Breves first                                   |
-| Q8  | Which "Where to look" sources have usable feeds?            | Checked: the watchlist's Feeds (2026-10-15)    |
-| Q9  | How long to keep `page_text` (size, copyright)?             | Clear it 90 days after `logged` or `discarded` |
-| Q10 | Licence for the site's content (breves, articles)           | CC BY 4.0, like aiontheballot's content        |
-| Q12 | An English breve's length (R-WEB-1)                         | 65–130 words: Spanish's 80–150, about 15% less |
+| #   | Question                                                                     | Leaning                                                                                                |
+| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Q4  | Is drafting with a local model worth building? (§8.2)                        | Decide after using M1                                                                                  |
+| Q6  | Will others send items later?                                                | Designed for, not built                                                                                |
+| Q7  | Articles in v1, or breves first?                                             | Breves first                                                                                           |
+| Q8  | Which "Where to look" sources have usable feeds?                             | Checked: the watchlist's Feeds (2026-10-15)                                                            |
+| Q9  | How long to keep `page_text` (size, copyright)?                              | Clear it 90 days after `logged` or `discarded`                                                         |
+| Q10 | Licence for the site's content (breves, articles)                            | CC BY 4.0, like aiontheballot's content                                                                |
+| Q12 | An English breve's length (R-WEB-1)                                          | 65–130 words: Spanish's 80–150, about 15% less                                                         |
+| Q13 | Images from the news on posts: which may be used, how credited, stored where | Optional per post, with source and credit; a copy the site serves, never a hotlink; none until decided |
 
-### Decided (v0.2, v0.3)
+### Decided (v0.2–v0.4)
 
-| #   | Decision                                                                                                    | Was          |
-| --- | ----------------------------------------------------------------------------------------------------------- | ------------ |
-| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system            | Q2, Q3       |
-| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                             | Q2           |
-| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                               | Q5           |
-| D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation    | Q1 (in part) |
-| D5  | Drafting with a local model waits until M1 has been used                                                    | Q4           |
-| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                            | —            |
-| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                | —            |
-| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`; the site may share it | Q1 (in part) |
-| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file       | —            |
-| D10 | The site is in Spanish and English from v1, both on `newsroom.danilupion.com` under `/es/` and `/en/`       | Q1 (in part) |
-| D11 | Every post is published in both languages; the site shows a story only when both versions are               | Q11          |
+| #   | Decision                                                                                                                           | Was          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system                                   | Q2, Q3       |
+| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                                                    | Q2           |
+| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                                                      | Q5           |
+| D4  | The site is Dani's own; the about page mentions co-leading Pausemos la IA; no review by the organisation                           | Q1 (in part) |
+| D5  | Drafting with a local model waits until M1 has been used                                                                           | Q4           |
+| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                                                   | —            |
+| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                       | —            |
+| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                               | Q1 (in part) |
+| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                              | —            |
+| D10 | The site is in Spanish and English from v1, both on one host under `/es/` and `/en/`                                               | Q1 (in part) |
+| D11 | Every post is published in both languages; the site shows a story only when both versions are                                      | Q11          |
+| D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11) | Q1           |
 
 ## 12. Miniflux for `/sweep`
 
@@ -467,6 +473,12 @@ both languages, so no post hides behind a page.
   dates and tag names, and a link to the other language labelled in that language; Open
   Graph and canonical metadata; usable at phone width; accessible (semantic HTML,
   `lang` on every page, contrast, alt text; WCAG 2.2 AA as the target).
+- **R-WEB-11** Should: the look of D12. One dark theme: navy `#0F172A`, cards `#1E293B`,
+  the accent `#FF9416` on navy only. One typeface, Hanken Grotesk, served by the site
+  itself. The mark, a box with its lid ajar and light escaping, in the header, as the
+  site's icon and as the bot's avatar; the name with its trailing "IA" in the accent;
+  taglines "Los riesgos de la IA, día a día" and "AI risk, day by day". From PauseAI only
+  the two colours, never its typeface or its marks: the site is Dani's own (D4).
 - **R-WEB-5** Must: Markdown is rendered to sanitised HTML. No raw HTML from posts.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
@@ -489,9 +501,10 @@ already unpublished, for a rebuild; any other push publishes it. Each push is on
 the public routes show a story once both are published (D11).
 
 **Public read routes** (no token, on no gateway, as `newsroom_public`), each for one
-language: `GET /public/posts?lang=` (latest first, no pages; `tag`, `limit`, and for the
-next page the last post's `published_at` and slug as `before` and `before_slug`, since
-posts can share an instant), `GET /public/posts/:lang/:slug` (with the story's other
+language: `GET /public/posts?lang=` (latest first, no pages, each with its
+`source_count` for the timeline; `tag`, `limit`, and for the next page the last post's
+`published_at` and slug as `before` and `before_slug`, since posts can share an
+instant), `GET /public/posts/:lang/:slug` (with the story's other
 version as `translations`; `404` until both are published, `410` once either is
 unpublished), `GET /public/tags?lang=`,
 and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. A
@@ -501,7 +514,7 @@ and `GET /public/unpublished`, the addresses the site's proxy answers `410` for.
   published post, and every unpublished one as unpublished (its address answers `410`
   again, and its translation can name it), originals before their translations.
 - **R-WEB-9** Must: the site stays off in a deployment until gitops gives it its address,
-  its name in each language and its author (SPEC Q1), so it can be merged before they're
+  its name in each language and its author (D12), so it can be merged before they're
   decided.
 
 ## 14. Security
@@ -646,5 +659,5 @@ API token, re-pushing every post, restoring the database.
 | M1  | BOT, DB, WRK, inbox API, `tools/newsroom.py`, `/news` queue mode                                                            | M0         |
 | M2  | Decide on drafting with a local model from M1's use; build it only if it's worth it                                         | Q4         |
 | M3  | Miniflux category and feeds; `/sweep` reads them                                                                            | Q8         |
-| M4  | Site with breves in Spanish and English: posts API, pages, feeds; `/breve`, `/post`                                         | Q1         |
+| M4  | Site with breves in Spanish and English: posts API, pages, feeds; `/breve`, `/post`                                         | —          |
 | M5  | Articles                                                                                                                    | Q7         |
