@@ -28,6 +28,38 @@ export const label = ({ id, page_title, url }: Labelled): string => {
   return `#${id} · ${short}`;
 };
 
+/** A video's length as Dani reads it: whole minutes, at least one, and hours from the first. */
+const minutes = (seconds: number): string => {
+  const total = Math.max(1, Math.round(seconds / 60));
+  const hours = Math.floor(total / 60);
+  const rest = total % 60;
+  if (hours === 0) {
+    return `${total} min`;
+  }
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+};
+
+/**
+ * The reply once an item is fetched (R-CAP-7): its label, and for a video its length and channel (R-FET-7), so a talk
+ * of two hours or the wrong channel shows at once.
+ */
+export const fetchedLabel = ({
+  video,
+  ...item
+}: Labelled & {
+  video: { author: string | null; durationSeconds: number | null } | undefined;
+}): string => {
+  if (!video) {
+    return label(item);
+  }
+  const details = [
+    'video',
+    video.durationSeconds === null ? null : minutes(video.durationSeconds),
+    video.author,
+  ].filter((part) => part !== null);
+  return `${label(item)} (${details.join(', ')})`;
+};
+
 export const pendingList = (items: (Labelled & { status: InboxStatus })[]): string =>
   items.length === 0
     ? 'Nothing pending.'

@@ -1,10 +1,10 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 
-import { hostOf } from '@aisafety-newsroom/domain/url';
+import { hostOf, youtubeVideoId, youtubeWatchUrl } from '@aisafety-newsroom/domain/url';
 
 import type { TelegramApi } from '../telegram/api.js';
 
-import { label } from '../telegram/replies.js';
+import { fetchedLabel } from '../telegram/replies.js';
 import { extract } from './extract.js';
 import { type Fetched, FetchRefused, pageType } from './fetch-url.js';
 import {
@@ -16,6 +16,7 @@ import {
   saveFailure,
   saveFetched,
 } from './jobs.js';
+import { extractVideo } from './youtube.js';
 /** HTML past this is refused even though PDFs may be larger (R-FET-2: HTML up to 5 MB, PDFs up to 30 MB). */
 export const HTML_MAX_BYTES = 5 * 1024 * 1024;
 export const MAX_BYTES = 30 * 1024 * 1024;
@@ -90,13 +91,18 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     return;
   }
 
+  // A YouTube video is read from its watch page, whichever form of link was sent (R-FET-7).
+  const video = youtubeVideoId(item.url);
   try {
-    const fetched = await deps.fetch(item.url);
+    const fetched = await deps.fetch(video ? youtubeWatchUrl(video) : item.url);
     const type = pageType(fetched.contentType, fetched.bytes);
     if (type === 'text/html' && fetched.bytes.byteLength > HTML_MAX_BYTES) {
       throw new FetchRefused('tooLarge');
     }
-    const extracted = await extract(type, fetched.bytes, fetched.charset);
+    const extracted =
+      video && type === 'text/html'
+        ? await extractVideo(fetched, video, deps.fetch)
+        : await extract(type, fetched.bytes, fetched.charset);
     const stored = await saveFetched(deps.db, item.id, {
       status: fetched.status,
       finalUrl: fetched.finalUrl,
@@ -105,7 +111,12 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     });
     await editReply(
       replyOf(stored),
-      label({ id: item.id, page_title: extracted.title, url: item.url }),
+      fetchedLabel({
+        id: item.id,
+        page_title: extracted.title,
+        url: item.url,
+        video: extracted.video,
+      }),
       deps,
     );
   } catch (error) {

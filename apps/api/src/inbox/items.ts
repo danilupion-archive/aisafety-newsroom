@@ -47,6 +47,11 @@ export interface Item {
   page_title: string | null;
   page_site_name: string | null;
   page_published_at: string | null;
+  /** `page` or `video` once fetched (R-FET-7); null before, and for items fetched before it was recorded. */
+  page_kind: 'page' | 'video' | null;
+  /** A video's channel. */
+  page_author: string | null;
+  page_duration_seconds: number | null;
   fetched_at: Date | null;
   logged_at: Date | null;
   logged_ref: unknown;
@@ -89,6 +94,9 @@ const itemQuery = (db: Executor) =>
       'i.page_title',
       'i.page_site_name',
       'i.page_published_at',
+      'i.page_kind',
+      'i.page_author',
+      'i.page_duration_seconds',
       'i.fetched_at',
       'i.logged_at',
       'i.logged_ref',
@@ -141,6 +149,9 @@ const toItem = (row: QueryRow): Item => ({
   page_title: row.page_title,
   page_site_name: row.page_site_name,
   page_published_at: row.page_published_at,
+  page_kind: row.page_kind === 'page' || row.page_kind === 'video' ? row.page_kind : null,
+  page_author: row.page_author,
+  page_duration_seconds: row.page_duration_seconds,
   fetched_at: row.fetched_at,
   logged_at: row.logged_at,
   logged_ref: row.logged_ref,

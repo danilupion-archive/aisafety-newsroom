@@ -54,6 +54,35 @@ describe('GET /api/v1/items (§9)', () => {
     expect(items[0]).not.toHaveProperty('reply_chat_id');
   });
 
+  it('says what kind of thing was fetched, and for a video its channel and length (R-FET-7)', async () => {
+    const video = await insertItem({ page_title: 'Una charla de ejemplo' });
+    await asSuperuser(
+      `UPDATE app.inbox_items SET page_kind = 'video', page_author = 'Canal de ejemplo', page_duration_seconds = 754
+       WHERE id = $1`,
+      [video],
+    );
+    const before = await insertItem();
+    const fields = (item: Record<string, unknown> | undefined) => ({
+      page_kind: item?.page_kind,
+      page_author: item?.page_author,
+      page_duration_seconds: item?.page_duration_seconds,
+    });
+    const items = (await get('/api/v1/items')).json<Record<string, unknown>[]>();
+    expect(fields(items.find((item) => item.id === video))).toEqual({
+      page_kind: 'video',
+      page_author: 'Canal de ejemplo',
+      page_duration_seconds: 754,
+    });
+    expect(fields(items.find((item) => item.id === before))).toEqual({
+      page_kind: null,
+      page_author: null,
+      page_duration_seconds: null,
+    });
+    expect(fields((await get(`/api/v1/items/${video}`)).json())).toMatchObject({
+      page_kind: 'video',
+    });
+  });
+
   it('filters by status and limits the count', async () => {
     const queued = await insertItem({ status: 'queued', fetch_status: 'pending' });
     await insertItem();

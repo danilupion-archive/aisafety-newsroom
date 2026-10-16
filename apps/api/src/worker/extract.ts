@@ -21,6 +21,8 @@ export interface Extracted {
   publishedAt: string | null;
   /** The main text, at most PAGE_TEXT_MAX characters; null when there's none to read. */
   text: string | null;
+  /** Only for a video (R-FET-7): who published it and how long it is; its text is its description. */
+  video?: { author: string | null; durationSeconds: number | null };
 }
 
 const NOTHING: Extracted = { title: null, siteName: null, publishedAt: null, text: null };
@@ -32,7 +34,7 @@ const NOTHING: Extracted = { title: null, siteName: null, publishedAt: null, tex
 const clean = (text: string): string =>
   text.replaceAll('\u0000', '').replace(/(?![\t\n\r])\p{Cc}/gu, ' ');
 
-const capped = (text: string): string | null => {
+export const capped = (text: string): string | null => {
   const tidy = clean(text)
     .replace(/[^\S\n]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
@@ -43,7 +45,7 @@ const capped = (text: string): string | null => {
   return tidy.length > PAGE_TEXT_MAX ? tidy.slice(0, PAGE_TEXT_MAX) : tidy;
 };
 
-const oneLine = (value: string | null | undefined): string | null => {
+export const oneLine = (value: string | null | undefined): string | null => {
   const tidy =
     value === null || value === undefined ? '' : clean(value).replace(/\s+/g, ' ').trim();
   return tidy === '' ? null : tidy;

@@ -151,6 +151,34 @@ describe('app.inbox_items', () => {
     });
   });
 
+  it('knows a fetched link as a page or a video, and only a video has a length (R-FET-7)', async () => {
+    await asApp(async (client) => {
+      const id = await insertLink(client, 'https://example.com/a');
+      const set = (columns: string, values: unknown[]) =>
+        failure(client, `UPDATE app.inbox_items SET ${columns} WHERE id = $1`, [id, ...values]);
+      expect(await set('page_kind = $2', ['podcast'])).toEqual({
+        code: '23514',
+        constraint: 'inbox_items_page_kind_known',
+      });
+      expect(await set('page_kind = $2', ['page'])).toBeNull();
+      expect(
+        await set('page_kind = $2, page_author = $3, page_duration_seconds = $4', [
+          'video',
+          'Canal de ejemplo',
+          754,
+        ]),
+      ).toBeNull();
+      expect(await set('page_duration_seconds = $2', [0])).toEqual({
+        code: '23514',
+        constraint: 'inbox_items_page_duration_positive',
+      });
+      expect(await set('page_kind = $2, page_duration_seconds = $3', ['page', 60])).toEqual({
+        code: '23514',
+        constraint: 'inbox_items_page_duration_of_video',
+      });
+    });
+  });
+
   it('stamps updated_at on every change', async () => {
     await inRolledBackTransaction(async (client) => {
       const id = await insertLink(client, 'https://example.com/a');

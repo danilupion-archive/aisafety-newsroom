@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { hostOf, normalizeUrl } from './url.js';
+import { hostOf, normalizeUrl, youtubeVideoId } from './url.js';
 
 describe('normalizeUrl (R-CAP-5)', () => {
   it('lowercases the scheme and host, not the path', () => {
@@ -79,6 +79,53 @@ describe('normalizeUrl (R-CAP-5)', () => {
     expect(normalizeUrl('tg://resolve?domain=x')).toBeNull();
     expect(normalizeUrl('ftp://example.com/file')).toBeNull();
     expect(normalizeUrl('not a url')).toBeNull();
+  });
+});
+
+describe('YouTube videos (R-CAP-5)', () => {
+  const WATCH = 'https://www.youtube.com/watch?v=AbCdEfGhI-_';
+
+  it('finds the video in every form YouTube writes it', () => {
+    for (const link of [
+      'https://www.youtube.com/watch?v=AbCdEfGhI-_',
+      'https://youtube.com/watch?v=AbCdEfGhI-_&list=PLexample&index=2',
+      'http://m.youtube.com/watch?feature=share&v=AbCdEfGhI-_',
+      'https://music.youtube.com/watch?v=AbCdEfGhI-_&si=abc',
+      'https://youtu.be/AbCdEfGhI-_?si=xyz',
+      'youtu.be/AbCdEfGhI-_',
+      'https://www.youtube.com/shorts/AbCdEfGhI-_?feature=share',
+      'https://www.youtube.com/live/AbCdEfGhI-_?si=abc',
+      'https://www.youtube.com/embed/AbCdEfGhI-_',
+      'https://www.youtube-nocookie.com/embed/AbCdEfGhI-_',
+      'https://WWW.YouTube.com/watch?v=AbCdEfGhI-_#comments',
+    ]) {
+      expect(youtubeVideoId(link), link).toBe('AbCdEfGhI-_');
+      expect(normalizeUrl(link), link).toBe(WATCH);
+    }
+  });
+
+  it('drops the start time too: the same video is one source, and the item keeps the link as sent', () => {
+    expect(normalizeUrl('https://youtu.be/AbCdEfGhI-_?t=95')).toBe(WATCH);
+    expect(normalizeUrl('https://www.youtube.com/watch?v=AbCdEfGhI-_&t=1m35s')).toBe(WATCH);
+  });
+
+  it('is no video without an id of the right shape, or off YouTube', () => {
+    expect(youtubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull();
+    expect(youtubeVideoId('https://www.youtube.com/watch?v=AbCdEfGhI-_x')).toBeNull();
+    expect(youtubeVideoId('https://www.youtube.com/@somechannel')).toBeNull();
+    expect(youtubeVideoId('https://www.youtube.com/playlist?list=PLexample')).toBeNull();
+    expect(youtubeVideoId('https://example.com/watch?v=AbCdEfGhI-_')).toBeNull();
+    expect(youtubeVideoId('https://youtu.be.example.com/AbCdEfGhI-_')).toBeNull();
+    expect(youtubeVideoId('not a url')).toBeNull();
+  });
+
+  it('drops YouTube’s share parameters from its other links', () => {
+    expect(
+      normalizeUrl('https://www.youtube.com/playlist?list=PLexample&si=abc&feature=shared&pp=x'),
+    ).toBe('https://www.youtube.com/playlist?list=PLexample');
+    expect(normalizeUrl('https://example.com/a?si=1&feature=2&pp=3')).toBe(
+      'https://example.com/a?si=1&feature=2&pp=3',
+    );
   });
 });
 

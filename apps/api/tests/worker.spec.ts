@@ -80,6 +80,9 @@ const item = async (id: number) => {
     page_site_name: string | null;
     page_published_at: string | null;
     page_text: string | null;
+    page_kind: string | null;
+    page_author: string | null;
+    page_duration_seconds: number | null;
     last_error: string | null;
     retry_in_seconds: number | null;
   }>(
@@ -175,6 +178,90 @@ describe('claiming (R-FET-1, R-FET-5)', () => {
     );
     expect(await runOnce(deps(async () => page()))).toBe(0);
     expect(await item(id)).toMatchObject({ status: 'queued' });
+  });
+});
+
+describe('a YouTube video (R-FET-7)', () => {
+  const ID = 'AbCdEfGhI-_';
+  const WATCH = `https://www.youtube.com/watch?v=${ID}`;
+  const watchPage = (player: unknown): Fetched =>
+    page(
+      `<!doctype html><html><head><meta property="og:site_name" content="YouTube"></head><body>
+      <script>var ytInitialPlayerResponse = ${JSON.stringify(player)};</script></body></html>`,
+    );
+
+  it('reads the video from its watch page, whatever link was sent, and says so in the reply', async () => {
+    const id = await queue(`https://youtu.be/${ID}?si=share&t=42`);
+    const edits: Edit[] = [];
+    const fetched: string[] = [];
+    await runOnce(
+      deps(async (url) => {
+        fetched.push(url);
+        return watchPage({
+          videoDetails: {
+            videoId: ID,
+            title: 'Una charla de ejemplo',
+            author: 'Canal de ejemplo',
+            lengthSeconds: '754',
+            shortDescription: 'Una descripción ficticia de la charla.',
+          },
+          microformat: { playerMicroformatRenderer: { publishDate: '2026-10-10T08:00:00-07:00' } },
+        });
+      }, edits),
+    );
+    expect(fetched).toEqual([WATCH]);
+    expect(await item(id)).toMatchObject({
+      status: 'ready',
+      fetch_status: 'ok',
+      page_kind: 'video',
+      page_title: 'Una charla de ejemplo',
+      page_site_name: 'YouTube',
+      page_author: 'Canal de ejemplo',
+      page_duration_seconds: 754,
+      page_published_at: '2026-10-10T08:00:00-07:00',
+      page_text: 'Una descripción ficticia de la charla.',
+    });
+    expect(edits).toEqual([
+      {
+        chatId: 500,
+        messageId: 9001,
+        text: `#${id} · Una charla de ejemplo (video, 13 min, Canal de ejemplo)`,
+      },
+    ]);
+  });
+
+  it('asks oEmbed for the title and channel when the watch page has no player data', async () => {
+    const id = await queue(WATCH);
+    const fetched: string[] = [];
+    await runOnce(
+      deps(async (url) => {
+        fetched.push(url);
+        if (url.startsWith('https://www.youtube.com/oembed?')) {
+          return {
+            ...page(
+              JSON.stringify({ title: 'Una charla de ejemplo', author_name: 'Canal de ejemplo' }),
+            ),
+            contentType: 'application/json',
+          };
+        }
+        return watchPage({ playabilityStatus: { status: 'LOGIN_REQUIRED' } });
+      }),
+    );
+    expect(fetched).toHaveLength(2);
+    expect(await item(id)).toMatchObject({
+      status: 'ready',
+      page_kind: 'video',
+      page_title: 'Una charla de ejemplo',
+      page_author: 'Canal de ejemplo',
+      page_duration_seconds: null,
+      page_text: null,
+    });
+  });
+
+  it('records any other page as a page', async () => {
+    const id = await queue();
+    await runOnce(deps(async () => page()));
+    expect(await item(id)).toMatchObject({ page_kind: 'page', page_author: null });
   });
 });
 

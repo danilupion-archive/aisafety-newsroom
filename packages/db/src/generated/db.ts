@@ -50,6 +50,9 @@ export interface AppInboxItems {
   logged_ref: Json | null;
   next_fetch_at: Timestamp | null;
   note: Generated<string>;
+  page_author: string | null;
+  page_duration_seconds: number | null;
+  page_kind: string | null;
   page_published_at: string | null;
   page_site_name: string | null;
   page_text: string | null;
