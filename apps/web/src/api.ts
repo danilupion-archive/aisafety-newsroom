@@ -1,3 +1,4 @@
+import type { Lang } from './i18n';
 import type { Cursor } from './paging';
 
 import { site } from './site';
@@ -10,6 +11,7 @@ export interface Source {
 }
 
 export interface PostSummary {
+  lang: Lang;
   slug: string;
   type: 'breve' | 'article' | 'page';
   title: string;
@@ -19,9 +21,17 @@ export interface PostSummary {
   updated_at: string;
 }
 
+/** Another published version of a post's story, in the other language (R-WEB-10). */
+export interface Translation {
+  lang: Lang;
+  slug: string;
+  title: string;
+}
+
 export interface Post extends PostSummary {
   body_md: string;
   sources: Source[];
+  translations: Translation[];
 }
 
 export interface TagCount {
@@ -29,9 +39,15 @@ export interface TagCount {
   posts: number;
 }
 
+/** An unpublished post's address, for the proxy's 410 (AC-7). */
+export interface Unpublished {
+  lang: Lang;
+  slug: string;
+}
+
 /**
  * Never cached here: reads stay inside the cluster and are cheap, and a cache that revalidates in the background would
- * serve an answer past its 60 s to the first visitor after it (R-WEB-6, AC-7). The feed's own `max-age=60` is the
+ * serve an answer past its 60 s to the first visitor after it (R-WEB-6, AC-7). The feeds' own `max-age=60` is the
  * only wait.
  */
 const read = async (path: string): Promise<Response> =>
@@ -45,8 +61,11 @@ const json = async <T>(path: string): Promise<T> => {
   return (await response.json()) as T;
 };
 
-export const latestPosts = (options: { tag?: string; after?: Cursor; limit?: number } = {}) => {
-  const query = new URLSearchParams();
+export const latestPosts = (
+  lang: Lang,
+  options: { tag?: string; after?: Cursor; limit?: number } = {},
+) => {
+  const query = new URLSearchParams({ lang });
   if (options.tag !== undefined) {
     query.set('tag', options.tag);
   }
@@ -63,12 +82,12 @@ export const latestPosts = (options: { tag?: string; after?: Cursor; limit?: num
 /** The API's largest page. */
 const MAX_PAGE = 500;
 
-/** Every published post, page by page: for the sitemap. */
-export const allPosts = async (): Promise<PostSummary[]> => {
+/** Every published post in one language, page by page: for the sitemap. */
+export const allPosts = async (lang: Lang): Promise<PostSummary[]> => {
   const posts: PostSummary[] = [];
   for (;;) {
     const last = posts.at(-1);
-    const page = await latestPosts({
+    const page = await latestPosts(lang, {
       limit: MAX_PAGE,
       after: last ? { before: last.published_at, beforeSlug: last.slug } : undefined,
     });
@@ -80,9 +99,10 @@ export const allPosts = async (): Promise<PostSummary[]> => {
 };
 
 /** One post or page; 'gone' once unpublished, undefined if it never was. */
-export const getPost = async (slug: string): Promise<Post | 'gone' | undefined> => {
-  const response = await read(`/public/posts/${encodeURIComponent(slug)}`);
-  if (response.status === 404) {
+export const getPost = async (lang: Lang, slug: string): Promise<Post | 'gone' | undefined> => {
+  const response = await read(`/public/posts/${lang}/${encodeURIComponent(slug)}`);
+  // An address the API refuses (400) is no post either: a reader's typo is a 404, never a 500.
+  if (response.status === 404 || response.status === 400) {
     return undefined;
   }
   if (response.status === 410) {
@@ -94,4 +114,4 @@ export const getPost = async (slug: string): Promise<Post | 'gone' | undefined> 
   return (await response.json()) as Post;
 };
 
-export const tagCounts = () => json<TagCount[]>('/public/tags');
+export const tagCounts = (lang: Lang) => json<TagCount[]>(`/public/tags?lang=${lang}`);

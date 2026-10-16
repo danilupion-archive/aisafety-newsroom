@@ -29,22 +29,24 @@ aisafety-newsroom-api:
   telegram:
     secret: { name: aisafety-newsroom-telegram }
     allowedUserIds: '123456789'
-    webhookUrl: https://newsroom-api.example.test/telegram/webhook
+    webhookUrl: https://newsroom.example.test/telegram/webhook
   route:
     enabled: true
     parentRefs: [{ name: example-gateway, namespace: example-gateway }]
-    hostnames: [newsroom-api.example.test]
+    hostnames: [newsroom.example.test]
 aisafety-newsroom-web:
   enabled: true
   image: { repository: registry.example/aisafety-newsroom/web, tag: 0.1.0.abc1234 }
   site:
-    { url: https://newsroom-site.example.test, name: Sitio de ejemplo, author: Autora de ejemplo }
+    url: https://newsroom.example.test
+    name: { es: Sitio de ejemplo, en: Example site }
+    author: Autora de ejemplo
   errorTracking:
     dsnSecret: { name: aisafety-newsroom-web-glitchtip }
   # Renders analytics and the route, so lint covers them.
   analytics:
-    { scriptUrl: https://plausible.example.test/js/script.js, domain: newsroom-site.example.test }
+    { scriptUrl: https://plausible.example.test/js/script.js, domain: newsroom.example.test }
   route:
     enabled: true
     parentRefs: [{ name: example-gateway, namespace: example-gateway }]
-    hostnames: [newsroom-site.example.test]
+    hostnames: [newsroom.example.test]

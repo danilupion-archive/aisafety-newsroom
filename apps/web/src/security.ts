@@ -1,4 +1,8 @@
+import type { Lang } from './i18n';
+
 import { xml } from './feed';
+import { LANGS, paths } from './i18n';
+import { STRINGS } from './strings';
 
 /**
  * The site's Content Security Policy, as aiontheballot's public site sets it: scripts may be inline (Next writes the
@@ -24,17 +28,39 @@ export const contentSecurityPolicy = (
   ].join('; ');
 };
 
-/** The page an unpublished post's address answers with, status 410 (AC-7): plain HTML, no layout, no script. */
-export const gonePage = (siteName: string): string =>
+/** A page the proxy answers with itself: plain HTML, no layout, no script, kept out of search engines. */
+const plainPage = (lang: Lang, title: string, body: readonly string[]): string =>
   [
     '<!doctype html>',
-    '<html lang="es">',
+    `<html lang="${lang}">`,
     '<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<meta name="robots" content="noindex"><title>Publicación retirada · ${xml(siteName)}</title></head>`,
+    `<meta name="robots" content="noindex"><title>${xml(title)}</title></head>`,
     '<body style="font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem">',
-    '<h1>Esta publicación se ha retirado</h1>',
-    `<p><a href="/">Volver a ${xml(siteName)}</a></p>`,
+    ...body,
     '</body>',
     '</html>',
     '',
   ].join('\n');
+
+/** The page an unpublished post's address answers with, status 410 (AC-7), in the post's language. */
+export const gonePage = (lang: Lang, siteName: string): string => {
+  const { gone } = STRINGS[lang];
+  return plainPage(lang, `${gone.title} · ${siteName}`, [
+    `<h1>${xml(gone.heading)}</h1>`,
+    `<p><a href="${paths.home(lang)}">${xml(gone.back(siteName))}</a></p>`,
+  ]);
+};
+
+/**
+ * The page an address outside both languages answers with, status 404: in both, since nothing says which the reader
+ * wanted.
+ */
+export const notFoundPage = (names: Record<Lang, string>): string =>
+  plainPage(
+    'es',
+    `${STRINGS.es.notFound} · ${STRINGS.en.notFound}`,
+    LANGS.flatMap((lang) => [
+      `<h1 lang="${lang}">${xml(STRINGS[lang].notFound)}</h1>`,
+      `<p lang="${lang}"><a href="${paths.home(lang)}">${xml(STRINGS[lang].gone.back(names[lang]))}</a></p>`,
+    ]),
+  );

@@ -1,26 +1,23 @@
-/** Dates and labels as a reader in Spain reads them (R-WEB-4: Spanish interface). */
+import type { Lang } from './i18n';
 
-const LONG = new Intl.DateTimeFormat('es-ES', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'Europe/Madrid',
-});
+import { STRINGS } from './strings';
 
-/** "15 de octubre de 2026", in Madrid's time. */
-export const longDate = (value: string): string => LONG.format(new Date(value));
+/** Dates as each language's readers write them, on the site's clock, Madrid's (R-WEB-4). */
+
+/** "16 de octubre de 2026" or "16 October 2026", in Madrid's time. */
+export const longDate = (lang: Lang, value: string): string =>
+  new Intl.DateTimeFormat(STRINGS[lang].locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Europe/Madrid',
+  }).format(new Date(value));
 
 /** A date-only value ("2026-10-15", a source's access date) as the same calendar day, whatever the time zone. */
-export const calendarDate = (value: string): string =>
-  new Intl.DateTimeFormat('es-ES', {
+export const calendarDate = (lang: Lang, value: string): string =>
+  new Intl.DateTimeFormat(STRINGS[lang].locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${value.slice(0, 10)}T00:00:00Z`));
-
-export const TYPE_LABEL: Record<'breve' | 'article' | 'page', string> = {
-  breve: 'Breve',
-  article: 'Artículo',
-  page: 'Página',
-};

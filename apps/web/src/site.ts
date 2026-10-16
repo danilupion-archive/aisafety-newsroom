@@ -1,11 +1,14 @@
+import type { Lang } from './i18n';
+
 /**
  * The site's configuration, read when a page renders (never at build time, so the image works for any deployment).
- * Names and addresses come from configuration, never from code: the site's name and host are still open (SPEC Q1).
+ * Names and addresses come from configuration, never from code (R-WEB-9).
  */
 export interface Site {
-  /** The site's public address, without a trailing slash, for canonical links, the feed and the sitemap. */
+  /** The site's public address, without a trailing slash, for canonical links, the feeds and the sitemap. */
   url: string;
-  name: string;
+  /** Its name in each language: the header, page titles and feeds. */
+  name: Record<Lang, string>;
   /** Who writes it (R-WEB-3). */
   author: string;
   /** The API's public read routes, inside the cluster (R-WEB-6). */
@@ -23,7 +26,10 @@ export const readSite = (env: Env): Site => {
   const domain = env.PLAUSIBLE_DOMAIN;
   return {
     url: trimSlash(env.SITE_URL ?? 'http://localhost:3000'),
-    name: env.SITE_NAME ?? 'Sitio de ejemplo',
+    name: {
+      es: env.SITE_NAME_ES ?? 'Sitio de ejemplo',
+      en: env.SITE_NAME_EN ?? 'Example site',
+    },
     author: env.AUTHOR_NAME ?? 'Autor de ejemplo',
     apiUrl: trimSlash(env.API_URL ?? 'http://127.0.0.1:3001'),
     analytics: scriptUrl && domain ? { scriptUrl, domain } : undefined,

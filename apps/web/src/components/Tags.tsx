@@ -1,6 +1,10 @@
 import { css } from '@styled-system/css';
 import Link from 'next/link';
 
+import type { Lang } from '@/i18n';
+
+import { paths } from '@/i18n';
+import { STRINGS } from '@/strings';
 import { muted } from '@/styles';
 import { tagLabel } from '@/tags';
 
@@ -13,12 +17,12 @@ const list = css({
   margin: '0',
 });
 
-export const Tags = ({ tags }: { tags: readonly string[] }) =>
+export const Tags = ({ lang, tags }: { lang: Lang; tags: readonly string[] }) =>
   tags.length === 0 ? null : (
-    <ul className={`${list} ${muted}`} aria-label="Temas">
+    <ul className={`${list} ${muted}`} aria-label={STRINGS[lang].topics}>
       {tags.map((tag) => (
         <li key={tag}>
-          <Link href={`/etiqueta/${tag}`}>{tagLabel(tag)}</Link>
+          <Link href={paths.tag(lang, tag)}>{tagLabel(lang, tag)}</Link>
         </li>
       ))}
     </ul>

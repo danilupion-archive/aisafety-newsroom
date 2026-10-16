@@ -25,11 +25,14 @@ securityContext:
   capabilities:
     drop: [ALL]
 
-# The site (SPEC §13; names and addresses from configuration, SPEC Q1).
+# The site (SPEC §13; names and addresses from configuration, R-WEB-9). One host for both languages (D10).
 site:
-  # Its public address, e.g. https://newsroom.danilupion.com: canonical links, the feed and the sitemap.
+  # Its public address, e.g. https://newsroom.danilupion.com: canonical links, the feeds and the sitemap.
   url: ''
-  name: ''
+  # Its name in each language, in the header, page titles and feeds.
+  name:
+    es: ''
+    en: ''
   # Who writes it, on every page (R-WEB-3).
   author: ''
 

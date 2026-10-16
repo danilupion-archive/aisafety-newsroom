@@ -31,3 +31,11 @@ export const prose = css({
   },
   '& code': { fontFamily: 'mono', fontSize: '0.9em' },
 });
+/** The site's name and the link to the other language, on one line that wraps on a phone. */
+export const headerRow = css({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: '2',
+});

@@ -1,4 +1,7 @@
 import type { PostSummary } from './api';
+import type { Lang } from './i18n';
+
+import { paths } from './i18n';
 
 /** Text as XML can carry it: the five characters XML gives meaning, escaped. */
 export const xml = (text: string): string =>
@@ -15,14 +18,18 @@ export interface FeedSite {
   author: string;
 }
 
-/** The Atom feed of the latest posts (SPEC §13 pages: an RSS/Atom feed), their summaries as the entries' text. */
-export const atomFeed = (site: FeedSite, posts: readonly PostSummary[]): string => {
+/**
+ * One language's Atom feed of its latest posts (SPEC §13 pages), their summaries as the entries' text. Each language
+ * has its own: a reader subscribes to the one they read.
+ */
+export const atomFeed = (lang: Lang, site: FeedSite, posts: readonly PostSummary[]): string => {
   const updated = posts.reduce(
     (latest, post) => (post.updated_at > latest ? post.updated_at : latest),
     '',
   );
+  const home = `${site.url}${paths.home(lang)}`;
   const entries = posts.map((post) => {
-    const link = `${site.url}/${post.slug}`;
+    const link = `${site.url}${paths.post(lang, post.slug)}`;
     return [
       '  <entry>',
       `    <id>${xml(link)}</id>`,
@@ -39,11 +46,11 @@ export const atomFeed = (site: FeedSite, posts: readonly PostSummary[]): string 
   });
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
-    '<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="es">',
-    `  <id>${xml(`${site.url}/`)}</id>`,
+    `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="${lang}">`,
+    `  <id>${xml(home)}</id>`,
     `  <title>${xml(site.name)}</title>`,
-    `  <link rel="alternate" type="text/html" href="${xml(`${site.url}/`)}"/>`,
-    `  <link rel="self" type="application/atom+xml" href="${xml(`${site.url}/feed.xml`)}"/>`,
+    `  <link rel="alternate" type="text/html" href="${xml(home)}"/>`,
+    `  <link rel="self" type="application/atom+xml" href="${xml(`${site.url}${paths.feed(lang)}`)}"/>`,
     `  <author><name>${xml(site.author)}</name></author>`,
     `  <updated>${xml(new Date(updated === '' ? 0 : updated).toISOString())}</updated>`,
     ...entries,

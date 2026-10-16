@@ -34,8 +34,11 @@ spec:
               value: {{ .Values.service.port | quote }}
             - name: SITE_URL
               value: {{ required "site.url is required" .Values.site.url | quote }}
-            - name: SITE_NAME
-              value: {{ required "site.name is required" .Values.site.name | quote }}
+            # Its name in each language (R-WEB-4): both, so neither header is ever blank.
+            - name: SITE_NAME_ES
+              value: {{ required "site.name.es is required" .Values.site.name.es | quote }}
+            - name: SITE_NAME_EN
+              value: {{ required "site.name.en is required" .Values.site.name.en | quote }}
             - name: AUTHOR_NAME
               value: {{ required "site.author is required" .Values.site.author | quote }}
             - name: API_URL

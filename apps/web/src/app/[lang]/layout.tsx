@@ -5,19 +5,27 @@ import { css } from '@styled-system/css';
 import Link from 'next/link';
 import { connection } from 'next/server';
 
+import { otherLang, paths } from '@/i18n';
+import { pageLang } from '@/params';
 import { site } from '@/site';
-import { column, muted } from '@/styles';
+import { STRINGS } from '@/strings';
+import { column, headerRow, muted } from '@/styles';
 
-import './globals.css';
+import '../globals.css';
+
+type Props = Readonly<PropsWithChildren<{ params: Promise<{ lang: string }> }>>;
 
 // Read when a page renders: without connection(), Next would prerender this at build time with the build's settings.
-export const generateMetadata = async (): Promise<Metadata> => {
+export const generateMetadata = async ({ params }: Props): Promise<Metadata> => {
   await connection();
+  const lang = await pageLang(params);
   const { name, url } = site();
   return {
     metadataBase: new URL(url),
-    title: { default: name, template: `%s · ${name}` },
-    alternates: { types: { 'application/atom+xml': [{ url: '/feed.xml', title: name }] } },
+    title: { default: name[lang], template: `%s · ${name[lang]}` },
+    alternates: {
+      types: { 'application/atom+xml': [{ url: paths.feed(lang), title: name[lang] }] },
+    },
   };
 };
 
@@ -54,50 +62,61 @@ const footer = css({
   marginTop: '12',
 });
 
-/** Every page says who writes it and links to the about page (R-WEB-3). Spanish throughout (R-WEB-4). */
-const RootLayout = async ({ children }: Readonly<PropsWithChildren>) => {
+/**
+ * Every page in one language (R-WEB-4): who writes it and a link to the about page (R-WEB-3), and a link to the other
+ * language, labelled in that language.
+ */
+const RootLayout = async ({ children, params }: Props) => {
   await connection();
+  const lang = await pageLang(params);
+  const other = otherLang(lang);
   const { name, author, analytics } = site();
+  const t = STRINGS[lang];
   return (
-    <html lang="es">
+    <html lang={lang}>
       <head>
         {analytics ? (
           <script defer data-domain={analytics.domain} src={analytics.scriptUrl} />
         ) : null}
       </head>
       <body>
-        <a href="#contenido" className={skipLink}>
-          Ir al contenido
+        <a href="#main" className={skipLink}>
+          {t.skip}
         </a>
         <header className={header}>
           <div className={column}>
-            <Link href="/" className={brand}>
-              {name}
-            </Link>
-            <nav aria-label="Principal">
+            <div className={headerRow}>
+              <Link href={paths.home(lang)} className={brand}>
+                {name[lang]}
+              </Link>
+              <Link href={paths.home(other)} hrefLang={other} lang={other}>
+                {STRINGS[other].name}
+              </Link>
+            </div>
+            <nav aria-label={t.nav}>
               <ul className={nav}>
                 <li>
-                  <Link href="/">Inicio</Link>
+                  <Link href={paths.home(lang)}>{t.home}</Link>
                 </li>
                 <li>
-                  <Link href="/temas">Temas</Link>
+                  <Link href={paths.topics(lang)}>{t.topics}</Link>
                 </li>
                 <li>
-                  <Link href="/sobre">Sobre este sitio</Link>
+                  <Link href={paths.about(lang)}>{t.about}</Link>
                 </li>
               </ul>
             </nav>
           </div>
         </header>
-        <main id="contenido" className={column}>
+        <main id="main" className={column}>
           {children}
         </main>
         <footer className={footer}>
           <p className={`${column} ${muted}`}>
-            Lo escribe {author} · <Link href="/sobre">Quién escribe y por qué</Link> ·{' '}
+            {t.writtenBy(author)} · <Link href={paths.about(lang)}>{t.whoAndWhy}</Link> ·{' '}
             {/* The feed is an XML route, not a page: a plain link, never client-side navigation. */}
             {/* oxlint-disable-next-line next/no-html-link-for-pages */}
-            <a href="/feed.xml">Feed (Atom)</a>
+            <a href={paths.feed(lang)}>{t.feed}</a>
           </p>
         </footer>
       </body>

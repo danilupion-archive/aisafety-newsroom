@@ -1,6 +1,6 @@
 apiVersion: v2
 name: aisafety-newsroom-web
-description: The public Spanish site (SPEC §13), reading published posts from the API inside the cluster
+description: The public site in Spanish and English (SPEC §13), reading published posts from the API inside the cluster
 type: application
 version: 0.1.0
 appVersion: '0.0.0'

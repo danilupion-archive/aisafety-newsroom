@@ -1,29 +1,59 @@
+import type { Lang } from './i18n';
+
 /**
- * Spanish names for the watchlist's tags (aisafety-media news/watchlist.md), which are English slugs: the interface is in
- * Spanish (R-WEB-4). A tag without a name here shows as it is. Interface wording, for Dani to review.
+ * Each language's names for the watchlist's tags (aisafety-media news/watchlist.md), which are English slugs. A tag
+ * without a name here shows as it is. Interface wording, for Dani to review.
  */
-const TAG_LABELS: Record<string, string> = {
-  'loss-of-control': 'pérdida de control',
-  misuse: 'uso malicioso',
-  'open-weights': 'pesos abiertos',
-  'power-concentration': 'concentración de poder',
-  disempowerment: 'pérdida de influencia humana',
-  jobs: 'empleo',
-  race: 'carrera de la IA',
-  capabilities: 'capacidades',
-  evals: 'evaluaciones',
-  incidents: 'incidentes',
-  labs: 'laboratorios',
-  'eu-regulation': 'regulación europea',
-  spain: 'España',
-  latam: 'Latinoamérica',
-  us: 'Estados Unidos',
-  international: 'internacional',
-  'public-opinion': 'opinión pública',
-  pauseai: 'PauseAI',
+const TAG_LABELS: Record<Lang, Record<string, string>> = {
+  es: {
+    'loss-of-control': 'pérdida de control',
+    misuse: 'uso malicioso',
+    'open-weights': 'pesos abiertos',
+    'power-concentration': 'concentración de poder',
+    disempowerment: 'pérdida de influencia humana',
+    jobs: 'empleo',
+    race: 'carrera de la IA',
+    capabilities: 'capacidades',
+    evals: 'evaluaciones',
+    incidents: 'incidentes',
+    labs: 'empresas de IA',
+    'eu-regulation': 'regulación europea',
+    spain: 'España',
+    latam: 'Latinoamérica',
+    us: 'Estados Unidos',
+    international: 'internacional',
+    'public-opinion': 'opinión pública',
+    pauseai: 'PauseAI',
+  },
+  en: {
+    'loss-of-control': 'loss of control',
+    misuse: 'misuse',
+    'open-weights': 'open weights',
+    'power-concentration': 'concentration of power',
+    disempowerment: 'human disempowerment',
+    jobs: 'jobs',
+    race: 'the AI race',
+    capabilities: 'capabilities',
+    evals: 'evaluations',
+    incidents: 'incidents',
+    labs: 'AI companies',
+    'eu-regulation': 'EU regulation',
+    spain: 'Spain',
+    latam: 'Latin America',
+    us: 'United States',
+    international: 'international',
+    'public-opinion': 'public opinion',
+    pauseai: 'PauseAI',
+  },
 };
 
-export const tagLabel = (tag: string): string => TAG_LABELS[tag] ?? tag;
+export const tagLabel = (lang: Lang, tag: string): string => TAG_LABELS[lang][tag] ?? tag;
 
-/** A tag's address: the same shape the API takes. */
+/** Every tag with a name in both languages: the test keeps the two lists equal. */
+export const namedTags = (lang: Lang): string[] => Object.keys(TAG_LABELS[lang]);
+
+/** A tag's or a slug's shape: the same the API takes. */
 export const TAG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** A post's slug as the API takes it: that shape, at most 120 characters. Anything else is no post. */
+export const isSlug = (value: string): boolean => TAG.test(value) && value.length <= 120;
