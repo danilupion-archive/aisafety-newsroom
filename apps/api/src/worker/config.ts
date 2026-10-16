@@ -22,7 +22,7 @@ type Env = Record<string, string | undefined>;
 const HOST = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 
 const readHosts = (value: string | undefined): string[] => {
-  const hosts = (value ?? 'x.com')
+  const hosts = (value ?? 'x.com,axios.com')
     .split(',')
     .map((host) => host.trim().toLowerCase())
     .filter((host) => host !== '');

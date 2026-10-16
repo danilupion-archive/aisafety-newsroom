@@ -5,11 +5,11 @@ import { DEFAULT_USER_AGENT, loadWorkerConfig } from './config.js';
 const DATABASE = 'postgres://newsroom_app:pw@localhost:5433/newsroom';
 
 describe('loadWorkerConfig', () => {
-  it('reads the defaults: x.com skipped, a browser’s User-Agent, a round every 30 s', () => {
+  it('reads the defaults: x.com and axios.com skipped, a browser’s User-Agent, a round every 30 s', () => {
     expect(loadWorkerConfig({ APP_DATABASE_URL: DATABASE })).toEqual({
       appDatabaseUrl: DATABASE,
       botToken: undefined,
-      skipHosts: ['x.com'],
+      skipHosts: ['x.com', 'axios.com'],
       userAgent: DEFAULT_USER_AGENT,
       intervalMs: 30_000,
       pageTextRetentionDays: 90,

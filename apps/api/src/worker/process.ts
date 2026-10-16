@@ -27,7 +27,7 @@ export interface WorkerDeps {
   db: Database;
   /** Fetches a link under R-FET-4's rules (fetch-url.ts); a test gives its own. */
   fetch: (url: string) => Promise<Fetched>;
-  /** Hosts never fetched, starting with x.com (R-FET-3); their subdomains too. */
+  /** Hosts never fetched, starting with x.com and axios.com (R-FET-3); their subdomains too. */
   skipHosts: readonly string[];
   /** To edit the "Saved #n" reply once the item is fetched (R-CAP-7); without it, nothing is edited. */
   telegram?: TelegramApi;

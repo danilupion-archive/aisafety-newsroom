@@ -57,8 +57,9 @@ telegram:
 worker:
   enabled: false
   port: 3002
-  # Hosts never fetched, separated by commas (R-FET-3).
-  skipHosts: x.com
+  # Hosts never fetched, separated by commas (R-FET-3): they refuse every automated read (axios.com: Cloudflare's bot
+  # protection, even with a browser's headers).
+  skipHosts: x.com,axios.com
   # Between rounds (R-FET-1: at least once a minute).
   intervalSeconds: 30
   # Days a logged or discarded item keeps its page's text (SPEC Q9); its title and links stay.
