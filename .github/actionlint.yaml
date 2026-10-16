@@ -1,4 +1,0 @@
-# The self-hosted runner's label: it builds releases, started by hand (release.yml).
-self-hosted-runner:
-  labels:
-    - newsroom-release

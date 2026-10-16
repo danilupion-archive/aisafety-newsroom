@@ -53,7 +53,7 @@ jobs:
   version:
     name: Version
     needs: tested
-    runs-on: [self-hosted, newsroom-release]
+    runs-on: self-hosted
     timeout-minutes: 15
     outputs:
       sha: ${{ steps.commit.outputs.sha }}
@@ -102,7 +102,7 @@ jobs:
     name: Build and deploy
     needs: version
     if: needs.version.outputs.sha != ''
-    runs-on: [self-hosted, newsroom-release]
+    runs-on: self-hosted
     timeout-minutes: 60
     steps:
       - name: Checkout
