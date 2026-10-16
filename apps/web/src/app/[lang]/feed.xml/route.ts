@@ -14,9 +14,9 @@ export async function GET(
   if (!isLang(lang)) {
     return new Response('Not found', { status: 404 });
   }
-  const { url, name, author } = site();
+  const { url, name, author, authorUrl } = site();
   const posts = await latestPosts(lang, { limit: 50 });
-  return new Response(atomFeed(lang, { url, name: name[lang], author }, posts), {
+  return new Response(atomFeed(lang, { url, name: name[lang], author, authorUrl }, posts), {
     headers: {
       'content-type': 'application/atom+xml; charset=utf-8',
       'cache-control': 'public, max-age=60',

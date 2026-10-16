@@ -148,7 +148,7 @@ const RootLayout = async ({ children, params }: Props) => {
   await connection();
   const lang = await pageLang(params);
   const other = otherLang(lang);
-  const { name, author, analytics } = site();
+  const { name, author, authorUrl, analytics } = site();
   const t = STRINGS[lang];
   const pathname = (await headers()).get(PATHNAME_HEADER) ?? undefined;
   const otherHref = otherLanguageHref(lang, pathname, await translationOf(lang, pathname));
@@ -217,9 +217,22 @@ const RootLayout = async ({ children, params }: Props) => {
           <p className={`${container} ${footerRow}`}>
             <span>{name[lang]}</span>
             <span aria-hidden="true">·</span>
-            <span>{t.writtenBy(author)}</span>
+            <span>
+              {t.credit}{' '}
+              {authorUrl === undefined ? (
+                author
+              ) : (
+                <a href={authorUrl} rel="author">
+                  {author}
+                </a>
+              )}
+            </span>
             <span aria-hidden="true">·</span>
-            <Link href={paths.about(lang)}>{t.whoAndWhy}</Link>
+            <a href={t.licence.url} rel="license">
+              {t.licence.name}
+            </a>
+            <span aria-hidden="true">·</span>
+            <Link href={paths.about(lang)}>{t.howItsMade}</Link>
             <span aria-hidden="true">·</span>
             {/* oxlint-disable-next-line next/no-html-link-for-pages */}
             <a href={paths.feed(lang)}>{t.feed}</a>

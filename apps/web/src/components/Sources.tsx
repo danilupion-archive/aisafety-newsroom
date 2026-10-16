@@ -33,8 +33,12 @@ const list = css({
   },
 });
 const accessed = css({ color: 'muted' });
+const note = css({ color: 'muted', marginTop: '-1', marginBottom: '3.5' });
 
-/** A post's sources with the day each was consulted (R-WEB-1): no source, no claim. */
+/**
+ * A post's sources with the day each was consulted (R-WEB-1): no source, no claim. Above them, that the text is
+ * AI-written from them (R-WEB-3).
+ */
 export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Source[] }) => {
   const t = STRINGS[lang];
   return sources.length === 0 ? null : (
@@ -42,6 +46,7 @@ export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Sourc
       <h2 id="sources" className={sectionTitle}>
         {t.sources}
       </h2>
+      <p className={note}>{t.aiNote}</p>
       <ol className={list}>
         {sources.map((source) => (
           <li key={source.url}>

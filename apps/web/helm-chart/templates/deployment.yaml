@@ -41,6 +41,10 @@ spec:
               value: {{ required "site.name.en is required" .Values.site.name.en | quote }}
             - name: AUTHOR_NAME
               value: {{ required "site.author is required" .Values.site.author | quote }}
+            {{- with .Values.site.authorUrl }}
+            - name: AUTHOR_URL
+              value: {{ . | quote }}
+            {{- end }}
             - name: API_URL
               value: {{ printf "http://%s:%v" (.Values.api.serviceName | default (printf "%s-api" .Release.Name)) .Values.api.port | quote }}
             {{- with .Values.analytics.scriptUrl }}

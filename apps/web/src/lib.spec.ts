@@ -33,6 +33,7 @@ describe('readSite', () => {
         SITE_NAME_ES: 'Noticias de ejemplo',
         SITE_NAME_EN: 'Example news',
         AUTHOR_NAME: 'Autora de ejemplo',
+        AUTHOR_URL: 'https://autora.example/',
         API_URL: 'http://api:3001/',
         PLAUSIBLE_SCRIPT_URL: 'https://plausible.example/js/pa-example.js',
       }),
@@ -40,9 +41,15 @@ describe('readSite', () => {
       url: 'https://newsroom.example',
       name: { es: 'Noticias de ejemplo', en: 'Example news' },
       author: 'Autora de ejemplo',
+      authorUrl: 'https://autora.example/',
       apiUrl: 'http://api:3001',
       analytics: { scriptUrl: 'https://plausible.example/js/pa-example.js' },
     });
+  });
+
+  it('links the editor’s name only when configuration gives a page for it', () => {
+    expect(readSite({}).authorUrl).toBeUndefined();
+    expect(readSite({ AUTHOR_URL: '' }).authorUrl).toBeUndefined();
   });
 
   it('turns analytics on with the site’s script alone, and off without it', () => {
@@ -181,7 +188,12 @@ describe('dates (R-WEB-4)', () => {
 describe('atomFeed', () => {
   const feed = atomFeed(
     'es',
-    { url: 'https://newsroom.example', name: 'Noticias & más', author: 'Autora' },
+    {
+      url: 'https://newsroom.example',
+      name: 'Noticias & más',
+      author: 'Autora',
+      authorUrl: 'https://autora.example/',
+    },
     [POST],
   );
 
@@ -195,7 +207,9 @@ describe('atomFeed', () => {
     );
     expect(feed).toContain('<published>2026-10-15T08:00:00.000Z</published>');
     expect(feed).toContain('<category term="evals"/>');
-    expect(feed).toContain('<summary>Resumen de ejemplo.</summary>');
+    expect(feed).toContain(
+      '<summary>Resumen de ejemplo.\n\nTexto escrito por IA, elegido y revisado por Autora.</summary>',
+    );
     expect(feed).toContain('<updated>2026-10-15T09:30:00.000Z</updated>');
   });
 
@@ -203,6 +217,27 @@ describe('atomFeed', () => {
     expect(feed).toContain('<title>Un informe &quot;de ejemplo&quot; &amp; &lt;otro&gt;</title>');
     expect(feed).toContain('<title>Noticias &amp; más</title>');
     expect(xml(`<a href='x'>`)).toBe('&lt;a href=&apos;x&apos;&gt;');
+  });
+
+  it('says in every entry that its text is AI-written, and who picked and checked it (R-WEB-3)', () => {
+    const bare = atomFeed('en', { url: 'https://n.example', name: 'N', author: 'A' }, [
+      { ...POST, summary: '' },
+    ]);
+    expect(bare).toContain('<summary>Written by AI, picked and checked by A.</summary>');
+  });
+
+  it('states the texts’ licence (D14)', () => {
+    expect(feed).toContain(
+      '<rights>CC BY 4.0 · https://creativecommons.org/licenses/by/4.0/deed.es</rights>',
+    );
+  });
+
+  it('names the editor, with their page when there is one', () => {
+    expect(feed).toContain(
+      '<author><name>Autora</name><uri>https://autora.example/</uri></author>',
+    );
+    const plain = atomFeed('en', { url: 'https://n.example', name: 'N', author: 'A' }, []);
+    expect(plain).toContain('<author><name>A</name></author>');
   });
 
   it('is still a valid feed with nothing in it', () => {

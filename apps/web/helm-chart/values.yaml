@@ -33,8 +33,10 @@ site:
   name:
     es: ''
     en: ''
-  # Who writes it, on every page (R-WEB-3).
+  # Who picks and checks the AI-written texts and answers for them, on every page and in the feeds (R-WEB-3).
   author: ''
+  # A page that says who they are, which their name links to; unset, the name is plain text.
+  authorUrl: ''
 
 # The API's public read routes inside the cluster (R-WEB-6): its Service, `<release>-api` unless named here.
 api:

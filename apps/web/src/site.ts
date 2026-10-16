@@ -9,8 +9,10 @@ export interface Site {
   url: string;
   /** Its name in each language: the header, page titles and feeds. */
   name: Record<Lang, string>;
-  /** Who writes it (R-WEB-3). */
+  /** Who picks and checks the AI-written texts, and answers for them (R-WEB-3). */
   author: string;
+  /** Where the editor's name links to, if anywhere: a page that says who they are (R-WEB-3). */
+  authorUrl: string | undefined;
   /** The API's public read routes, inside the cluster (R-WEB-6). */
   apiUrl: string;
   /** Plausible's script for this site, its own `pa-….js` (R-WEB-7). */
@@ -30,6 +32,7 @@ export const readSite = (env: Env): Site => {
       en: env.SITE_NAME_EN ?? 'Example site',
     },
     author: env.AUTHOR_NAME ?? 'Autor de ejemplo',
+    authorUrl: env.AUTHOR_URL || undefined,
     apiUrl: trimSlash(env.API_URL ?? 'http://127.0.0.1:3001'),
     analytics: scriptUrl ? { scriptUrl } : undefined,
   };

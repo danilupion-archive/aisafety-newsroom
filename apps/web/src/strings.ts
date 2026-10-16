@@ -39,8 +39,15 @@ export interface Strings {
   /** From a post back to the timeline. */
   allEntries: string;
   accessed: (date: string) => string;
-  writtenBy: (author: string) => string;
-  whoAndWhy: string;
+  /** Who writes the texts and who answers for them (R-WEB-3), before the editor's name, in the footer. */
+  credit: string;
+  /** Above a post's sources: the text is AI-written from them (R-WEB-3). */
+  aiNote: string;
+  /** At the end of each feed entry, which readers show without the site's footer (R-WEB-3). */
+  feedCredit: (editor: string) => string;
+  howItsMade: string;
+  /** The texts' licence (D14), linked to its deed in this language. */
+  licence: { name: string; url: string };
   feed: string;
   /** The feed's box at the end of the timeline. */
   followFeed: string;
@@ -69,8 +76,8 @@ export const STRINGS: Record<Lang, Strings> = {
     topics: 'Temas',
     about: 'Sobre este sitio',
     navAbout: 'Sobre',
-    tagline: 'Los riesgos de la IA, día a día',
-    intro: 'Lo que ya ha salido de la caja: los riesgos de la IA, cada día y con sus fuentes.',
+    tagline: 'La caja ya está abierta',
+    intro: 'Noticias sobre los riesgos de la IA, en pocas líneas y con las fuentes enlazadas.',
     latest: 'Lo último',
     older: 'Entradas anteriores',
     nothingYet: 'Todavía no hay publicaciones.',
@@ -82,10 +89,13 @@ export const STRINGS: Record<Lang, Strings> = {
     read: 'Leer',
     allEntries: 'Todas las entradas',
     accessed: (date) => `consultado el ${date}`,
-    writtenBy: (author) => `Lo escribe ${author}`,
-    whoAndWhy: 'Quién escribe y por qué',
+    credit: 'Textos escritos por IA, elegidos y revisados por',
+    aiNote: 'Texto escrito por IA a partir de estas fuentes.',
+    feedCredit: (editor) => `Texto escrito por IA, elegido y revisado por ${editor}.`,
+    howItsMade: 'Cómo se hace',
+    licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.es' },
     feed: 'Feed (Atom)',
-    followFeed: 'Síguela desde tu lector de RSS.',
+    followFeed: 'Síguelo en tu lector de RSS.',
     feedButton: 'Feed RSS',
     navFeed: 'RSS',
     aboutPending: 'Esta página está en preparación.',
@@ -111,8 +121,8 @@ export const STRINGS: Record<Lang, Strings> = {
     topics: 'Topics',
     about: 'About this site',
     navAbout: 'About',
-    tagline: 'AI risk, day by day',
-    intro: 'What’s already out of the box: AI risk, every day, with its sources.',
+    tagline: 'The box is already open',
+    intro: 'News about AI risk, in a few lines, with the sources linked.',
     latest: 'Latest',
     older: 'Older entries',
     nothingYet: 'Nothing published yet.',
@@ -124,10 +134,13 @@ export const STRINGS: Record<Lang, Strings> = {
     read: 'Read',
     allEntries: 'All entries',
     accessed: (date) => `accessed ${date}`,
-    writtenBy: (author) => `Written by ${author}`,
-    whoAndWhy: 'Who writes this and why',
+    credit: 'Texts written by AI, picked and checked by',
+    aiNote: 'Written by AI from these sources.',
+    feedCredit: (editor) => `Written by AI, picked and checked by ${editor}.`,
+    howItsMade: 'How it’s made',
+    licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.en' },
     feed: 'Feed (Atom)',
-    followFeed: 'Follow it from your RSS reader.',
+    followFeed: 'Follow it in your RSS reader.',
     feedButton: 'RSS feed',
     navFeed: 'RSS',
     aboutPending: 'This page is being written.',
