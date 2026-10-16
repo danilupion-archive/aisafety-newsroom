@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type { PostSummary } from './api';
 
+import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { atomFeed, xml } from './feed';
 import { calendarDate, dateParts, longDate } from './format';
-import { otherLanguageHref, paths, preferredLang } from './i18n';
+import { otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
 import { nextPage, readCursor } from './paging';
-import { contentSecurityPolicy, gonePage, notFoundPage } from './security';
+import { contentSecurityPolicy, gonePage } from './security';
 import { readSite } from './site';
 import { STRINGS } from './strings';
 import { namedTags, tagLabel } from './tags';
@@ -55,30 +56,28 @@ describe('readSite', () => {
 });
 
 describe('languages (D10)', () => {
-  it('sends the reader to the first of the site’s languages their browser asks for', () => {
-    expect(preferredLang('en-US,en;q=0.9,es;q=0.8')).toBe('en');
-    expect(preferredLang('es-ES,es;q=0.9,en;q=0.8')).toBe('es');
-    expect(preferredLang('fr-FR,fr;q=0.9,en;q=0.5')).toBe('en');
-    // By weight, not by order; `q=0` means "not this one".
-    expect(preferredLang('es;q=0.5, en;q=0.9')).toBe('en');
-    expect(preferredLang('en;q=0, es;q=0.1')).toBe('es');
-    expect(preferredLang('EN-gb')).toBe('en');
-  });
-
-  it('picks Spanish when the browser asks for neither, or for nothing', () => {
-    expect(preferredLang('fr-FR,de;q=0.8')).toBe('es');
-    expect(preferredLang('*')).toBe('es');
-    expect(preferredLang('')).toBe('es');
-    expect(preferredLang(null)).toBe('es');
-    expect(preferredLang('en;q=nonsense')).toBe('es');
-  });
-
-  it('builds each language’s addresses in its own words', () => {
-    expect(paths.tag('es', 'evals')).toBe('/es/etiqueta/evals');
+  it('builds Spanish addresses at the root and English ones under /en, each in its own words', () => {
+    expect([paths.home('es'), paths.home('en')]).toEqual(['/', '/en']);
+    expect([paths.post('es', 'informe'), paths.post('en', 'report')]).toEqual([
+      '/informe',
+      '/en/report',
+    ]);
+    expect(paths.tag('es', 'evals')).toBe('/etiqueta/evals');
     expect(paths.tag('en', 'evals')).toBe('/en/tag/evals');
-    expect([paths.topics('es'), paths.topics('en')]).toEqual(['/es/temas', '/en/topics']);
-    expect([paths.about('es'), paths.about('en')]).toEqual(['/es/sobre', '/en/about']);
-    expect(paths.feed('en')).toBe('/en/feed.xml');
+    expect([paths.topics('es'), paths.topics('en')]).toEqual(['/temas', '/en/topics']);
+    expect([paths.about('es'), paths.about('en')]).toEqual(['/sobre', '/en/about']);
+    expect([paths.feed('es'), paths.feed('en')]).toEqual(['/feed.xml', '/en/feed.xml']);
+  });
+
+  it('reads a public address’s language and the rest of its path', () => {
+    expect(readPath('/')).toEqual({ lang: 'es', segments: [] });
+    expect(readPath('/etiqueta/evals')).toEqual({ lang: 'es', segments: ['etiqueta', 'evals'] });
+    expect(readPath('/en')).toEqual({ lang: 'en', segments: [] });
+    expect(readPath('/en/')).toEqual({ lang: 'en', segments: [] });
+    expect(readPath('/en/report')).toEqual({ lang: 'en', segments: ['report'] });
+    // /es… is no Spanish page: the proxy sends it to the address without the prefix.
+    expect(readPath('/es/informe')).toBeUndefined();
+    expect(readPath(undefined)).toEqual({ lang: 'es', segments: [] });
   });
 
   it('names every tag in both languages', () => {
@@ -91,6 +90,70 @@ describe('languages (D10)', () => {
   it('labels the link to each language in that language', () => {
     expect([STRINGS.es.name, STRINGS.en.name]).toEqual(['Español', 'English']);
     expect(STRINGS.en.readIn).toBe('Read it in English');
+  });
+});
+
+describe('the proxy’s routes (D10, AC-11)', () => {
+  it('serves Spanish at the root, from the Spanish pages inside', () => {
+    expect(route('/')).toEqual({ kind: 'page', internal: '/es', post: undefined });
+    expect(route('/temas')).toMatchObject({ kind: 'page', internal: '/es/temas' });
+    expect(route('/feed.xml')).toEqual({ kind: 'page', internal: '/es/feed.xml', post: undefined });
+    expect(route('/etiqueta/evals')).toEqual({
+      kind: 'page',
+      internal: '/es/etiqueta/evals',
+      post: undefined,
+    });
+  });
+
+  it('serves English as it is', () => {
+    expect(route('/en')).toEqual({ kind: 'page', internal: '/en', post: undefined });
+    expect(route('/en/topics')).toMatchObject({ kind: 'page', internal: '/en/topics' });
+  });
+
+  it('knows a post’s address in either language, for the 410 of an unpublished one', () => {
+    expect(route('/informe-de-ejemplo')).toEqual({
+      kind: 'page',
+      internal: '/es/informe-de-ejemplo',
+      post: { lang: 'es', slug: 'informe-de-ejemplo' },
+    });
+    expect(route('/en/example-report')).toMatchObject({
+      post: { lang: 'en', slug: 'example-report' },
+    });
+    // The about page is a post too; anything that is no slug, or deeper, is none.
+    expect(route('/sobre')).toMatchObject({ post: { lang: 'es', slug: 'sobre' } });
+    expect(route('/Not-A-Slug')).toMatchObject({ post: undefined });
+    expect(route('/etiqueta/evals')).toMatchObject({ post: undefined });
+    expect(route('/en')).toMatchObject({ post: undefined });
+  });
+
+  it('serves /es… as it is: only its own rewrite brings the proxy there', () => {
+    // Next may run the proxy again on the address it rewrote to; a reader's request for one never gets here (next.config).
+    expect(route('/es')).toEqual({ kind: 'internal' });
+    expect(route('/es/temas')).toEqual({ kind: 'internal' });
+    // /escuela is a Spanish address, not /es's.
+    expect(route('/escuela')).toMatchObject({ kind: 'page', internal: '/es/escuela' });
+  });
+
+  it('sends /es and everything under it to the same address without the prefix, before the proxy', async () => {
+    const rules = (await nextConfig.redirects?.()) ?? [];
+    // Not the proxy's own rewrite, which Next may fetch as a request of its own: it carries the public path.
+    const missing = [{ type: 'header', key: PATHNAME_HEADER }];
+    expect(rules).toEqual([
+      { source: '/es', destination: '/', statusCode: 301, missing },
+      { source: '/es/:path*', destination: '/:path*', statusCode: 301, missing },
+    ]);
+  });
+
+  it('leaves the site’s own files alone', () => {
+    for (const file of [
+      '/healthz',
+      '/sitemap.xml',
+      '/robots.txt',
+      '/icon.svg',
+      '/_next/data/x.json',
+    ]) {
+      expect(route(file)).toEqual({ kind: 'file' });
+    }
   });
 });
 
@@ -116,10 +179,10 @@ describe('atomFeed', () => {
   it('lists each post with its link in its language, dates, tags and summary', () => {
     expect(feed).toContain('xml:lang="es"');
     expect(feed).toContain(
-      '<link rel="alternate" type="text/html" href="https://newsroom.example/es/informe-de-ejemplo"/>',
+      '<link rel="alternate" type="text/html" href="https://newsroom.example/informe-de-ejemplo"/>',
     );
     expect(feed).toContain(
-      '<link rel="self" type="application/atom+xml" href="https://newsroom.example/es/feed.xml"/>',
+      '<link rel="self" type="application/atom+xml" href="https://newsroom.example/feed.xml"/>',
     );
     expect(feed).toContain('<published>2026-10-15T08:00:00.000Z</published>');
     expect(feed).toContain('<category term="evals"/>');
@@ -163,18 +226,10 @@ describe('the proxy’s own pages', () => {
     expect(page).toContain('Esta publicación se ha retirado');
     expect(page).toContain('name="robots" content="noindex"');
     expect(page).toContain('Noticias &lt;de ejemplo&gt;');
-    expect(page).toContain('<a href="/es">');
+    expect(page).toContain('<a href="/">');
     const english = gonePage('en', 'Example news');
     expect(english).toContain('This post has been withdrawn');
     expect(english).toContain('<a href="/en">Back to Example news</a>');
-  });
-
-  it('answers an address outside both languages in both', () => {
-    const page = notFoundPage({ es: 'Noticias', en: 'News' });
-    expect(page).toContain('<h1 lang="es">No encontramos esta página</h1>');
-    expect(page).toContain('<h1 lang="en">We couldn’t find this page</h1>');
-    expect(page).toContain('<a href="/en">Back to News</a>');
-    expect(page).toContain('name="robots" content="noindex"');
   });
 });
 
@@ -212,8 +267,11 @@ describe('paging', () => {
   });
 
   it('links the next page from the last post shown', () => {
-    expect(nextPage('es', '/es/etiqueta/evals', POST)).toBe(
-      '/es/etiqueta/evals?antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo',
+    expect(nextPage('es', '/etiqueta/evals', POST)).toBe(
+      '/etiqueta/evals?antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo',
+    );
+    expect(nextPage('es', '/', POST)).toBe(
+      '/?antes=2026-10-15T08%3A00%3A00.000Z&tras=informe-de-ejemplo',
     );
     expect(nextPage('en', '/en', { ...POST, slug: 'example' })).toBe(
       '/en?before=2026-10-15T08%3A00%3A00.000Z&after=example',
@@ -254,26 +312,27 @@ describe('the timeline’s dates', () => {
 
 describe('the link to the other language', () => {
   it('goes to the same page in the other language, in its words', () => {
-    expect(otherLanguageHref('es', '/es')).toBe('/en');
-    expect(otherLanguageHref('en', '/en/topics')).toBe('/es/temas');
-    expect(otherLanguageHref('es', '/es/sobre')).toBe('/en/about');
-    expect(otherLanguageHref('es', '/es/etiqueta/evals')).toBe('/en/tag/evals');
-    expect(otherLanguageHref('en', '/en/tag/evals')).toBe('/es/etiqueta/evals');
+    expect(otherLanguageHref('es', '/')).toBe('/en');
+    expect(otherLanguageHref('en', '/en')).toBe('/');
+    expect(otherLanguageHref('en', '/en/topics')).toBe('/temas');
+    expect(otherLanguageHref('es', '/sobre')).toBe('/en/about');
+    expect(otherLanguageHref('es', '/etiqueta/evals')).toBe('/en/tag/evals');
+    expect(otherLanguageHref('en', '/en/tag/evals')).toBe('/etiqueta/evals');
   });
 
   it('goes to a post’s translation when it has one, and to the other home when it doesn’t', () => {
-    expect(otherLanguageHref('es', '/es/informe', { lang: 'en', slug: 'report' })).toBe(
-      '/en/report',
-    );
-    expect(otherLanguageHref('es', '/es/informe')).toBe('/en');
+    expect(otherLanguageHref('es', '/informe', { lang: 'en', slug: 'report' })).toBe('/en/report');
+    expect(otherLanguageHref('en', '/en/report', { lang: 'es', slug: 'informe' })).toBe('/informe');
+    expect(otherLanguageHref('es', '/informe')).toBe('/en');
   });
 
   it('goes to the other home from anything else', () => {
     expect(otherLanguageHref('es', undefined)).toBe('/en');
-    expect(otherLanguageHref('es', '/es/etiqueta/Not a tag')).toBe('/en');
-    expect(otherLanguageHref('es', '/es/a/b/c')).toBe('/en');
+    expect(otherLanguageHref('es', '/etiqueta/Not a tag')).toBe('/en');
+    expect(otherLanguageHref('es', '/a/b/c')).toBe('/en');
     // Another language's path is no page of this one.
     expect(otherLanguageHref('es', '/en/topics')).toBe('/en');
+    expect(otherLanguageHref('en', '/temas')).toBe('/');
   });
 });
 

@@ -40,8 +40,9 @@ aisafety-media is the newsroom's only client (SPEC §10): `tools/newsroom.py` fo
 the items wait in the inbox.
 
 Every post goes up in both languages (SPEC D11): `/post` pushes the story's two versions, and the site shows it once
-both are up; `/post unpublish` takes both down. Posts' addresses are on the site's host, not the API's (SPEC D12):
-`https://pandoria.es/es/<slug>`, which `tools/newsroom.py` prints; `NEWSROOM_SITE_URL` changes it.
+both are up; `/post unpublish` takes both down. Posts' addresses are on the site's host, not the API's (SPEC D12),
+Spanish at the root and English under `/en` (D10): `https://pandoria.es/<slug>` and `https://pandoria.es/en/<slug>`,
+which `tools/newsroom.py` prints; `NEWSROOM_SITE_URL` changes the host.
 
 ## Testing a change locally
 

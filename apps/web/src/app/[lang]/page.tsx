@@ -6,7 +6,7 @@ import { connection } from 'next/server';
 import { latestPosts } from '@/api';
 import { FeedBox } from '@/components/FeedBox';
 import { Timeline } from '@/components/Timeline';
-import { paths } from '@/i18n';
+import { DEFAULT_LANG, paths } from '@/i18n';
 import { nextPage, readCursor } from '@/paging';
 import { alternates, pageLang, type Query } from '@/params';
 import { STRINGS } from '@/strings';
@@ -31,8 +31,8 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
     alternates: alternates(lang, paths.home(lang), {
       es: paths.home('es'),
       en: paths.home('en'),
-      // `/` picks the reader's language.
-      'x-default': '/',
+      // Spanish, at the root, for every other reader.
+      'x-default': paths.home(DEFAULT_LANG),
     }),
   };
 };

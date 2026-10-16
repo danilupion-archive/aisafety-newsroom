@@ -1,6 +1,9 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.4** · 2026-10-16 · Owner: Dani
+Status: **draft v0.5** · 2026-10-16 · Owner: Dani
+
+v0.5 changes: Spanish is at the site's root and English under `/en/`; `/es/…` redirects to
+the same address without the prefix (D10, AC-11).
 
 v0.4 changes: the site is PandorIA, at `pandoria.es`, with a look of its own (D12,
 R-WEB-11); the API and the bot stay on `newsroom.danilupion.com` (D8). Images on posts
@@ -121,7 +124,7 @@ Phone ─▶ Telegram ─▶ [public] <host>/telegram/webhook ─▶ api ──�
                      worker: fetch + extract ──────────────────────┼─▶ Postgres
                         └─▶ the web (public addresses only)        │   newsroom
                                                                    │
-Readers ─▶ [public] <site>/es, /en ─▶ web ─▶ api public read routes ─┘
+Readers ─▶ [public] <site>/, /en ───▶ web ─▶ api public read routes ─┘
                                           (in-cluster only, read-only role)
 
 Mac ─▶ [public] <host>/api/v1 ─▶ api   inbox (/news), posts (/post), bearer token
@@ -144,9 +147,9 @@ Everything except Telegram, Miniflux, the readers and the Mac runs on the cluste
 
 **Hosts.** Two, on the public gateway, and configuration, never code (D8, D12): the
 API's `<host>` is `newsroom.danilupion.com`, where only `/telegram/webhook` and
-`/api/v1/*` are routed; the site's `<site>` is `pandoria.es`, whose addresses all start
-with a language, `/es/` or `/en/` (`www.pandoria.es` redirects there). The site reads the
-API inside the cluster, so it never calls the API's host.
+`/api/v1/*` are routed; the site's `<site>` is `pandoria.es`, Spanish at its root and
+English under `/en/` (D10; `www.pandoria.es` redirects there). The site reads the API
+inside the cluster, so it never calls the API's host.
 
 The API's public read routes are on no gateway: only the web pods reach them, through
 the Service, and a NetworkPolicy enforces it.
@@ -407,7 +410,7 @@ These are requirements on the content repo, implemented there.
 | D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                       | —            |
 | D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                               | Q1 (in part) |
 | D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                              | —            |
-| D10 | The site is in Spanish and English from v1, both on one host under `/es/` and `/en/`                                               | Q1 (in part) |
+| D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                 | Q1 (in part) |
 | D11 | Every post is published in both languages; the site shows a story only when both versions are                                      | Q11          |
 | D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11) | Q1           |
 
@@ -451,23 +454,26 @@ These are requirements on the content repo, implemented there.
   between the two pushes; taking either version down takes both down (`410`). Each
   version links to the other, visibly and for search engines (`hreflang`).
 
-**Pages,** in each language under its prefix (D10), with its own words:
+**Pages,** Spanish at the root and English under `/en` (D10), each in its own words:
 
-| Page                       | Spanish              | English         |
-| -------------------------- | -------------------- | --------------- |
-| Latest items, page by page | `/es`                | `/en`           |
-| One item                   | `/es/<slug>`         | `/en/<slug>`    |
-| A tag's items (named tags) | `/es/etiqueta/<tag>` | `/en/tag/<tag>` |
-| Topics index               | `/es/temas`          | `/en/topics`    |
-| About                      | `/es/sobre`          | `/en/about`     |
-| Atom feed                  | `/es/feed.xml`       | `/en/feed.xml`  |
+| Page                       | Spanish           | English         |
+| -------------------------- | ----------------- | --------------- |
+| Latest items, page by page | `/`               | `/en`           |
+| One item                   | `/<slug>`         | `/en/<slug>`    |
+| A tag's items (named tags) | `/etiqueta/<tag>` | `/en/tag/<tag>` |
+| Topics index               | `/temas`          | `/en/topics`    |
+| About                      | `/sobre`          | `/en/about`     |
+| Atom feed                  | `/feed.xml`       | `/en/feed.xml`  |
 
-`/` sends readers to the language their browser asks for, Spanish if neither; the sitemap
-lists both. An address outside both languages answers 404 in both. The about page's text
-is a post of type `page` whose slug is its language's word (`sobre`, `about`), pushed from
-aisafety-media like the rest (R-WEB-2): pages are never listed, need no sources, and
-nothing on the site is written in its code. The six path words are refused as slugs in
-both languages, so no post hides behind a page.
+`/` is the Spanish home for every reader, whatever their browser asks for: the main
+readers are in Spain, and each page links to the same page in English. `/es` and every
+address under it answer `301` to the same address without the prefix, so a link written
+with it still works. The sitemap lists both languages. An address that is no page answers
+404 in its language. The about page's text is a post of type `page` whose slug is its
+language's word (`sobre`, `about`), pushed from aisafety-media like the rest (R-WEB-2):
+pages are never listed, need no sources, and nothing on the site is written in its code.
+The six path words, the two languages' prefixes and `healthz`, which share the root with
+Spanish posts, are refused as slugs in both languages, so no post hides behind a page.
 
 - **R-WEB-4** Must: a Spanish and an English interface, each language's own labels,
   dates and tag names, and a link to the other language labelled in that language; Open
@@ -647,7 +653,8 @@ API token, re-pushing every post, restoring the database.
   next `/news` adds the note to the original's item file ("Added (Dani):").
 - **AC-10** `/discard` of the wrong id shows that item's title, and `/restore` brings it
   back to where it was.
-- **AC-11** `/` sends a browser that asks for English to `/en` and any other to `/es`. A
+- **AC-11** `/` is the Spanish home whatever the browser asks for, `/es/<slug>` answers
+  `301` to `/<slug>`, and `/en` is the English home. A
   Spanish breve shows on neither side until its English translation is pushed too; then
   each links to the other, and unpublishing one takes both down (`410`).
 

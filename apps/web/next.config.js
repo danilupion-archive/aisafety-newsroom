@@ -37,6 +37,17 @@ const nextConfig = {
   // The release that error reports are tagged with: a build fact, so it is inlined.
   env: { APP_RELEASE: `web@${version}` },
   headers: async () => [{ source: '/:path*', headers: SECURITY_HEADERS }],
+  // Spanish is at the root (D10, AC-11): a reader's address with its prefix goes to the same one without it, query and
+  // all. Not the proxy's own rewrite to a Spanish page's `/es…` address (proxy.ts), which Next fetches as a request of
+  // its own when the server's host is an IP address; it carries the public path in the proxy's header
+  // (PATHNAME_HEADER, src/i18n.ts).
+  redirects: async () => {
+    const missing = [{ type: 'header', key: 'x-site-pathname' }];
+    return [
+      { source: '/es', destination: '/', statusCode: 301, missing },
+      { source: '/es/:path*', destination: '/:path*', statusCode: 301, missing },
+    ];
+  },
 };
 
 export default nextConfig;

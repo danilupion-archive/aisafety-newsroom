@@ -8,7 +8,7 @@ import { STRINGS } from '@/strings';
 
 export type TopicsProps = { params: Promise<{ lang: string }> };
 
-/** The page's language, if the path's word is that language's (`/es/temas`, `/en/topics`). */
+/** The page's language, if the path's word is that language's (`/temas`, `/en/topics`). */
 export const readTopics = async (word: string, params: TopicsProps['params']): Promise<Lang> => {
   const lang = await pageLang(params);
   if (PATH_WORDS[lang].topics !== word) {

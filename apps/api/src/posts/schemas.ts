@@ -16,8 +16,8 @@ export const slug = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'a slug is lowercase words joined by hyphens');
 
 /**
- * Why a slug can't take this post in this language, or undefined if it can. The site's own path words are taken in
- * both languages (RESERVED_SLUGS); the about page is pushed as a page under its language's word (R-WEB-3).
+ * Why a slug can't take this post in this language, or undefined if it can. The site's own path words and the root's
+ * are taken in both languages (RESERVED_SLUGS); the about page is pushed as a page under its language's word (R-WEB-3).
  */
 export const reservedSlug = (language: Lang, name: string, type: string): string | undefined =>
   RESERVED_SLUGS.has(name) && !(name === PATH_WORDS[language].about && type === 'page')

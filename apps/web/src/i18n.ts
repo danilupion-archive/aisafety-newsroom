@@ -1,26 +1,89 @@
 import { isLang, type Lang, PATH_WORDS } from '@aisafety-newsroom/domain/languages';
 
-import { TAG } from './tags';
+import { isSlug, TAG } from './tags';
 
 /**
- * The site's languages (R-WEB-4, D10), shared with the API: Spanish and English on one host, each under its own
- * prefix, with its own words for the site's paths. Spanish is the default: the main readers are in Spain.
+ * The site's languages (R-WEB-4, D10), shared with the API: Spanish and English on one host, each with its own words
+ * for the site's paths. Spanish is at the root, since the main readers are in Spain; English is under `/en`.
  */
 export { isLang, LANGS, PATH_WORDS } from '@aisafety-newsroom/domain/languages';
 export type { Lang };
 
+/** The language at the root. Its pages are `app/[lang]`'s like English's: the proxy serves them from `/es/…`. */
 export const DEFAULT_LANG: Lang = 'es';
 
 export const otherLang = (lang: Lang): Lang => (lang === 'es' ? 'en' : 'es');
 
+/** What a language's addresses start with: nothing for Spanish, `/en` for English. */
+const prefix = (lang: Lang): string => (lang === DEFAULT_LANG ? '' : `/${lang}`);
+
 /** Every address the site links to, built in one place. */
 export const paths = {
-  home: (lang: Lang) => `/${lang}`,
-  post: (lang: Lang, slug: string) => `/${lang}/${slug}`,
-  tag: (lang: Lang, tag: string) => `/${lang}/${PATH_WORDS[lang].tag}/${tag}`,
-  topics: (lang: Lang) => `/${lang}/${PATH_WORDS[lang].topics}`,
-  about: (lang: Lang) => `/${lang}/${PATH_WORDS[lang].about}`,
-  feed: (lang: Lang) => `/${lang}/feed.xml`,
+  home: (lang: Lang) => prefix(lang) || '/',
+  post: (lang: Lang, slug: string) => `${prefix(lang)}/${slug}`,
+  tag: (lang: Lang, tag: string) => `${prefix(lang)}/${PATH_WORDS[lang].tag}/${tag}`,
+  topics: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].topics}`,
+  about: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].about}`,
+  feed: (lang: Lang) => `${prefix(lang)}/feed.xml`,
+};
+
+/**
+ * A public address's language and the rest of its path: English under `/en`, Spanish anything else. Undefined for
+ * `/es…`, which is no public address: a reader's request for one goes to the same address without the prefix.
+ */
+export const readPath = (
+  pathname: string | undefined,
+): { lang: Lang; segments: string[] } | undefined => {
+  const path = (pathname ?? '').split('/').slice(1);
+  // A trailing slash adds no segment: `/en/` is `/en`.
+  const [first = '', ...rest] = path.at(-1) === '' ? path.slice(0, -1) : path;
+  if (first === DEFAULT_LANG) {
+    return undefined;
+  }
+  if (isLang(first)) {
+    return { lang: first, segments: rest };
+  }
+  return { lang: DEFAULT_LANG, segments: first === '' ? [] : [first, ...rest] };
+};
+
+/** The site's own files outside the languages, served as they are. */
+const ROOT_FILES = new Set([
+  '/healthz',
+  '/sitemap.xml',
+  '/robots.txt',
+  '/favicon.ico',
+  '/icon.svg',
+]);
+
+/**
+ * How the proxy serves an address (D10, AC-11): the site's own files as they are; a page in its language, the Spanish
+ * ones from `app/[lang]` under `/es`. A page's `post` is the post its address would be (the about page is one too), for
+ * the 410 of an unpublished one. `/es…` is internal: Next may run the proxy again on the address it rewrote a Spanish
+ * page to, and a reader's request for one never reaches it (next.config.js redirects it to the address without the
+ * prefix).
+ */
+export type Route =
+  | { kind: 'file' }
+  | { kind: 'internal' }
+  | { kind: 'page'; internal: string; post: { lang: Lang; slug: string } | undefined };
+
+export const route = (pathname: string): Route => {
+  if (ROOT_FILES.has(pathname) || pathname.startsWith('/_next/')) {
+    return { kind: 'file' };
+  }
+  const path = readPath(pathname);
+  if (!path) {
+    return { kind: 'internal' };
+  }
+  const [slug, ...rest] = path.segments;
+  const post =
+    slug !== undefined && rest.length === 0 && isSlug(slug) ? { lang: path.lang, slug } : undefined;
+  return {
+    kind: 'page',
+    internal:
+      path.lang === DEFAULT_LANG ? `/${DEFAULT_LANG}${pathname === '/' ? '' : pathname}` : pathname,
+    post,
+  };
 };
 
 /** The request header the proxy passes a page's path in: a layout isn't told it, and the header's switch needs it. */
@@ -37,45 +100,20 @@ export const otherLanguageHref = (
   translation?: { lang: Lang; slug: string },
 ): string => {
   const other = otherLang(lang);
-  const [, first, second, third, ...rest] = (pathname ?? '').split('/');
-  const words = PATH_WORDS[lang];
-  if (first !== lang || rest.length > 0 || !second) {
+  const path = readPath(pathname);
+  if (!path || path.lang !== lang || path.segments.length === 0 || path.segments.length > 2) {
     return paths.home(other);
   }
-  if (third !== undefined) {
-    return second === words.tag && TAG.test(third) ? paths.tag(other, third) : paths.home(other);
+  const [first = '', second] = path.segments;
+  const words = PATH_WORDS[lang];
+  if (second !== undefined) {
+    return first === words.tag && TAG.test(second) ? paths.tag(other, second) : paths.home(other);
   }
-  if (second === words.topics) {
+  if (first === words.topics) {
     return paths.topics(other);
   }
-  if (second === words.about) {
+  if (first === words.about) {
     return paths.about(other);
   }
   return translation?.lang === other ? paths.post(other, translation.slug) : paths.home(other);
-};
-
-/** A language tag's weight in an Accept-Language entry: `q=0.8`, 1 without one, 0 if it isn't a number. */
-const weight = (params: readonly string[]): number => {
-  const q = params.find((param) => param.trim().startsWith('q='));
-  if (q === undefined) {
-    return 1;
-  }
-  const value = Number(q.trim().slice(2));
-  return Number.isFinite(value) ? value : 0;
-};
-
-/**
- * The reader's language for `/`: the first of the site's languages their browser asks for, by weight (`es-ES`
- * counts as `es`); Spanish when it asks for neither, or sends nothing.
- */
-export const preferredLang = (header: string | null | undefined): Lang => {
-  const wanted = (header ?? '')
-    .split(',')
-    .map((entry, index) => {
-      const [tag = '', ...params] = entry.split(';');
-      return { lang: tag.trim().toLowerCase().split('-')[0], q: weight(params), index };
-    })
-    .filter((entry) => entry.q > 0)
-    .sort((a, b) => b.q - a.q || a.index - b.index);
-  return wanted.map((entry) => entry.lang).find(isLang) ?? DEFAULT_LANG;
 };

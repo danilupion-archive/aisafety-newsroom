@@ -194,7 +194,7 @@ describe('reserved slugs', () => {
       error: "temas is one of the site's own paths",
     });
     expect((await put('en/topics', EN_BREVE)).statusCode).toBe(400);
-    // The other language's words too: /es/topics is the topics page's route, refusing it.
+    // The other language's words too: /topics reaches the topics page's route in Spanish, refusing it.
     expect((await put('es/topics', BREVE)).statusCode).toBe(400);
     expect((await put('en/sobre', EN_BREVE)).statusCode).toBe(400);
     expect((await put('es/sobre', BREVE)).statusCode).toBe(400);
@@ -202,6 +202,14 @@ describe('reserved slugs', () => {
     expect((await put('es/sobre', { ...BREVE, ...page })).statusCode).toBe(201);
     expect((await put('en/about', { ...EN_BREVE, ...page })).statusCode).toBe(201);
     expect((await put('es/about', { ...BREVE, ...page })).statusCode).toBe(400);
+  });
+
+  it('refuses what shares the root with Spanish posts: the language prefixes and the health check', async () => {
+    expect((await put('es/en', BREVE)).json()).toEqual({
+      error: "en is one of the site's own paths",
+    });
+    expect((await put('es/es', BREVE)).statusCode).toBe(400);
+    expect((await put('es/healthz', BREVE)).statusCode).toBe(400);
   });
 });
 

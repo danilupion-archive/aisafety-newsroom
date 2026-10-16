@@ -1,7 +1,7 @@
 import type { Lang } from './i18n';
 
 import { xml } from './feed';
-import { LANGS, paths } from './i18n';
+import { paths } from './i18n';
 import { STRINGS } from './strings';
 
 /**
@@ -54,17 +54,3 @@ export const gonePage = (lang: Lang, siteName: string): string => {
     `<p><a href="${paths.home(lang)}">${xml(gone.back(siteName))}</a></p>`,
   ]);
 };
-
-/**
- * The page an address outside both languages answers with, status 404: in both, since nothing says which the reader
- * wanted.
- */
-export const notFoundPage = (names: Record<Lang, string>): string =>
-  plainPage(
-    'es',
-    `${STRINGS.es.notFound} · ${STRINGS.en.notFound}`,
-    LANGS.flatMap((lang) => [
-      `<h1 lang="${lang}">${xml(STRINGS[lang].notFound)}</h1>`,
-      `<p lang="${lang}"><a href="${paths.home(lang)}">${xml(STRINGS[lang].gone.back(names[lang]))}</a></p>`,
-    ]),
-  );

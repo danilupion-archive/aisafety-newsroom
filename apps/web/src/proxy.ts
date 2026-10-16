@@ -2,27 +2,18 @@ import { type NextRequest, NextResponse } from 'next/server';
 
 import type { Unpublished } from './api';
 
-import { isLang, PATHNAME_HEADER, paths, preferredLang } from './i18n';
-import { contentSecurityPolicy, gonePage, notFoundPage } from './security';
+import { PATHNAME_HEADER, route } from './i18n';
+import { contentSecurityPolicy, gonePage } from './security';
 import { site } from './site';
 
 /**
- * Every request but build assets. `/` sends the reader to their language (D10); an address outside both languages
- * answers 404; an unpublished post answers 410 (AC-7), which a Next.js page can't; everything else gets the Content
- * Security Policy. The unpublished posts come from the API, kept for at most 60 s (R-WEB-6); if the API can't be
- * reached, the last list stands and it's asked again 10 s later.
+ * Every request but build assets (D10, AC-11). Spanish is at the root, served from the Spanish pages under `/es` (a
+ * reader's `/es…` goes to the same address without the prefix: next.config.js); English is under `/en`. An unpublished
+ * post answers 410 (AC-7), which a Next.js page can't; every page gets the Content Security Policy. The unpublished
+ * posts come from the API, kept for at most 60 s (R-WEB-6); if the API can't be reached, the last list stands and it's
+ * asked again 10 s later.
  */
 
-/** A post's address: /<lang>/<slug>. */
-const POST = /^\/([a-z]{2})\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
-/** The site's own files outside the languages. */
-const ROOT_FILES = new Set([
-  '/healthz',
-  '/sitemap.xml',
-  '/robots.txt',
-  '/favicon.ico',
-  '/icon.svg',
-]);
 const TTL_MS = 60_000;
 /** After a failed read: soon enough to notice the API is back, rare enough not to wait on it every request. */
 const RETRY_MS = 10_000;
@@ -55,7 +46,7 @@ const unpublishedPosts = async (apiUrl: string): Promise<ReadonlySet<string>> =>
   return unpublished.posts;
 };
 
-/** One of the proxy's own pages, which load nothing: the site's policy, without analytics. */
+/** The proxy's own page, which loads nothing: the site's policy, without analytics. */
 const html = (body: string, status: number): NextResponse =>
   new NextResponse(body, {
     status,
@@ -65,47 +56,48 @@ const html = (body: string, status: number): NextResponse =>
     },
   });
 
+/** Every page's policy, with the analytics host when it's configured. */
+const withPolicy = (
+  response: NextResponse,
+  analyticsScriptUrl: string | undefined,
+): NextResponse => {
+  response.headers.set(
+    'Content-Security-Policy',
+    contentSecurityPolicy(analyticsScriptUrl, process.env.NODE_ENV === 'development'),
+  );
+  return response;
+};
+
 export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const { pathname } = request.nextUrl;
-  // The kubelet's probe never waits on the API: the site is up if Next is.
-  if (pathname === '/healthz') {
+  const target = route(pathname);
+  // The site's own files never wait on the API, the kubelet's probe among them: the site is up if Next is.
+  if (target.kind === 'file') {
     return NextResponse.next();
   }
   const config = site();
-  if (pathname === '/') {
-    // On the site's own address: behind the gateway the request reaches Next over plain HTTP, and an address built from
-    // it could send the reader to http://. The query goes along (a campaign's link, say).
-    const home = paths.home(preferredLang(request.headers.get('accept-language')));
-    const response = NextResponse.redirect(
-      new URL(`${home}${request.nextUrl.search}`, config.url),
-      307,
-    );
-    response.headers.set('Vary', 'Accept-Language');
-    response.headers.set('Cache-Control', 'private, no-cache');
-    return response;
+  if (target.kind === 'internal') {
+    // A second run, on the address this proxy rewrote a Spanish page to: its request already says the public path.
+    return withPolicy(NextResponse.next(), config.analytics?.scriptUrl);
   }
-  const first = pathname.split('/')[1];
-  if (!isLang(first) && !ROOT_FILES.has(pathname) && !pathname.startsWith('/_next/')) {
-    return html(notFoundPage(config.name), 404);
-  }
-  const post = POST.exec(pathname);
   if (
-    post &&
-    isLang(post[1]) &&
-    (await unpublishedPosts(config.apiUrl)).has(`${post[1]}/${post[2]}`)
+    target.post &&
+    (await unpublishedPosts(config.apiUrl)).has(`${target.post.lang}/${target.post.slug}`)
   ) {
-    return html(gonePage(post[1], config.name[post[1]]), 410);
+    return html(gonePage(target.post.lang, config.name[target.post.lang]), 410);
   }
-  // The layout's header links to the same page in the other language; a layout isn't told the path, so it's passed on.
-  // Set here for every page, whatever a client sent under the same name.
+  // The layout's header links to the same page in the other language; a layout isn't told the path, so it's passed on:
+  // the public one, which a Spanish page's internal path isn't. Set here for every page, whatever a client sent under
+  // the same name.
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, pathname);
-  const response = NextResponse.next({ request: { headers } });
-  response.headers.set(
-    'Content-Security-Policy',
-    contentSecurityPolicy(config.analytics?.scriptUrl, process.env.NODE_ENV === 'development'),
-  );
-  return response;
+  const init = { request: { headers } };
+  if (target.internal === pathname) {
+    return withPolicy(NextResponse.next(init), config.analytics?.scriptUrl);
+  }
+  const internal = request.nextUrl.clone();
+  internal.pathname = target.internal;
+  return withPolicy(NextResponse.rewrite(internal, init), config.analytics?.scriptUrl);
 };
 
 export const config = {

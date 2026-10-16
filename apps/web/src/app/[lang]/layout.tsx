@@ -11,7 +11,7 @@ import type { Lang } from '@/i18n';
 import { getPost, type Translation } from '@/api';
 import { Mark } from '@/components/Mark';
 import { Wordmark } from '@/components/Wordmark';
-import { otherLang, otherLanguageHref, PATH_WORDS, PATHNAME_HEADER, paths } from '@/i18n';
+import { otherLang, otherLanguageHref, PATH_WORDS, PATHNAME_HEADER, paths, readPath } from '@/i18n';
 import { pageLang } from '@/params';
 import { site } from '@/site';
 import { STRINGS } from '@/strings';
@@ -130,9 +130,10 @@ const translationOf = async (
   lang: Lang,
   pathname: string | undefined,
 ): Promise<Translation | undefined> => {
-  const [, first, slug, ...rest] = (pathname ?? '').split('/');
+  const path = readPath(pathname);
+  const [slug, ...rest] = path?.segments ?? [];
   const words: readonly string[] = Object.values(PATH_WORDS[lang]);
-  if (first !== lang || rest.length > 0 || !slug || !isSlug(slug) || words.includes(slug)) {
+  if (path?.lang !== lang || rest.length > 0 || !slug || !isSlug(slug) || words.includes(slug)) {
     return undefined;
   }
   const post = await getPost(lang, slug);

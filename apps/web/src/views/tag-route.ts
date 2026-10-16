@@ -12,7 +12,7 @@ export type TagProps = {
   searchParams: Promise<Query>;
 };
 
-/** The page's language and tag, if the path's word is that language's (`/es/etiqueta/…`, `/en/tag/…`). */
+/** The page's language and tag, if the path's word is that language's (`/etiqueta/…`, `/en/tag/…`). */
 export const readTag = async (
   word: string,
   params: TagProps['params'],
