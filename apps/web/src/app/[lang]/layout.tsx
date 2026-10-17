@@ -104,6 +104,17 @@ const navList = css({
   fontWeight: '500',
 });
 const navLink = css({ display: 'inline-block', paddingY: '3' });
+// The search, as a magnifier: it names itself to screen readers and on hover (R-WEB-18).
+const searchLink = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minWidth: '44px',
+  minHeight: '44px',
+  marginX: '-2',
+  color: 'text',
+  _hover: { color: 'accent' },
+});
 const languages = css({
   display: 'flex',
   padding: '3px',
@@ -125,22 +136,33 @@ const footer = css({
   borderTopStyle: 'solid',
   borderTopColor: 'card',
   marginTop: '12',
-  paddingY: '6',
+  paddingY: { base: '7', md: '8' },
   color: 'muted',
   fontSize: '0.9375rem',
 });
-/**
- * The footer's items: one per line on a phone, where separators would strand at line starts; in a row on wider
- * screens, each after the first led by a middle dot.
- */
+// Two parts: who makes it on the left; on the right on a wide screen, below on a phone, where to go next.
 const footerRow = css({
-  listStyle: 'none',
   display: 'flex',
   flexDirection: { base: 'column', md: 'row' },
+  justifyContent: 'space-between',
+  alignItems: { base: 'flex-start', md: 'flex-start' },
+  gap: { base: '5', md: '10' },
+});
+const footerAbout = css({
+  maxWidth: '38rem',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1.5',
+});
+const footerName = css({ color: 'text', fontWeight: '700' });
+const footerLinks = css({
+  listStyle: 'none',
+  display: 'flex',
   flexWrap: 'wrap',
-  columnGap: '2',
-  rowGap: '1',
-  md: { '& > li + li::before': { content: '"·"', marginRight: '2', color: 'muted' } },
+  columnGap: '5',
+  rowGap: '2',
+  flexShrink: '0',
+  '& a': { color: 'body' },
 });
 
 /**
@@ -199,6 +221,37 @@ const RootLayout = async ({ children, params }: Props) => {
               <nav aria-label={t.nav}>
                 <ul className={navList}>
                   <li>
+                    <Link
+                      href={paths.search(lang)}
+                      className={searchLink}
+                      aria-label={t.search.name}
+                      title={t.search.name}
+                    >
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          cx="10.5"
+                          cy="10.5"
+                          r="6.5"
+                          stroke="currentColor"
+                          strokeWidth="2.25"
+                        />
+                        <path
+                          d="m15.5 15.5 5 5"
+                          stroke="currentColor"
+                          strokeWidth="2.25"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <Pending />
+                    </Link>
+                  </li>
+                  <li>
                     <Link href={paths.topics(lang)} className={navLink}>
                       {t.topics}
                       <Pending />
@@ -239,32 +292,36 @@ const RootLayout = async ({ children, params }: Props) => {
         </header>
         <main id="main">{children}</main>
         <footer className={footer}>
-          <ul className={`${container} ${footerRow}`}>
-            <li>{name[lang]}</li>
-            <li>
-              {t.credit}{' '}
-              {authorUrl === undefined ? (
-                author
-              ) : (
-                <a href={authorUrl} rel="author">
-                  {author}
+          <div className={`${container} ${footerRow}`}>
+            <div className={footerAbout}>
+              <p className={footerName}>{name[lang]}</p>
+              <p>
+                {t.credit}{' '}
+                {authorUrl === undefined ? (
+                  author
+                ) : (
+                  <a href={authorUrl} rel="author">
+                    {author}
+                  </a>
+                )}
+                {t.creditTail}.
+              </p>
+            </div>
+            <ul className={footerLinks}>
+              <li>
+                <Link href={paths.about(lang)}>{t.aboutSite(name[lang])}</Link>
+              </li>
+              <li>
+                {/* oxlint-disable-next-line next/no-html-link-for-pages */}
+                <a href={paths.feed(lang)}>{t.feed}</a>
+              </li>
+              <li>
+                <a href={t.licence.url} rel="license">
+                  {t.licence.name}
                 </a>
-              )}
-              {t.creditTail}
-            </li>
-            <li>
-              <a href={t.licence.url} rel="license">
-                {t.licence.name}
-              </a>
-            </li>
-            <li>
-              <Link href={paths.about(lang)}>{t.aboutSite(name[lang])}</Link>
-            </li>
-            <li>
-              {/* oxlint-disable-next-line next/no-html-link-for-pages */}
-              <a href={paths.feed(lang)}>{t.feed}</a>
-            </li>
-          </ul>
+              </li>
+            </ul>
+          </div>
         </footer>
       </body>
     </html>

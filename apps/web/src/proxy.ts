@@ -153,11 +153,14 @@ export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, pathname);
   const init = { request: { headers } };
-  // A post's address, unless it's one of the language's own pages: the topics, and the about page (a page of its own,
-  // whatever the API has).
+  // A post's address, unless it's one of the language's own pages: the topics, the search (R-WEB-18), and the about page
+  // (a page of its own, whatever the API has).
   const words = PATH_WORDS[target.lang];
   const post =
-    target.post && target.post.slug !== words.topics && target.post.slug !== words.about
+    target.post &&
+    target.post.slug !== words.topics &&
+    target.post.slug !== words.about &&
+    target.post.slug !== words.search
       ? target.post
       : undefined;
   const exists = !target.known

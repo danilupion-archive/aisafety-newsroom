@@ -2,9 +2,10 @@ import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
 import { latestPosts } from '@/api';
+import { ContinuousTimeline } from '@/components/ContinuousTimeline';
 import { FeedBox } from '@/components/FeedBox';
 import { OrderSwitch } from '@/components/OrderSwitch';
-import { Timeline } from '@/components/Timeline';
+import { readShown } from '@/continuous';
 import { paths } from '@/i18n';
 import { nextPage, readCursor, readOrder } from '@/paging';
 import { STRINGS } from '@/strings';
@@ -26,7 +27,9 @@ export const TagView = async ({ word, params, searchParams }: TagProps & { word:
   const query = await searchParams;
   const order = readOrder(lang, query);
   const after = readCursor(lang, query, order);
-  const posts = await latestPosts(lang, { tag, after, limit: PAGE, order });
+  // Back to a continuous timeline (R-WEB-19): as many posts as the reader had, bounded; a page's worth otherwise.
+  const limit = after ? PAGE : (readShown(lang, query) ?? PAGE);
+  const posts = await latestPosts(lang, { tag, after, limit, order });
   if (posts.length === 0 && !after) {
     notFound();
   }
@@ -39,11 +42,19 @@ export const TagView = async ({ word, params, searchParams }: TagProps & { word:
       {posts.length === 0 ? (
         <p>{t.noOlder}</p>
       ) : (
-        <Timeline lang={lang} posts={posts} order={order} featureFirst={false} />
+        <ContinuousTimeline
+          lang={lang}
+          path={path}
+          order={order}
+          tag={tag}
+          initial={posts}
+          more={posts.length === limit}
+          featureFirst={false}
+        />
       )}
       <FeedBox
         lang={lang}
-        older={posts.length === PAGE && last ? nextPage(lang, path, last, order) : undefined}
+        older={posts.length === limit && last ? nextPage(lang, path, last, order) : undefined}
       />
     </div>
   );

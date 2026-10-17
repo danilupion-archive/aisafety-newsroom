@@ -102,3 +102,34 @@ export const nextPage = (
   });
   return `${path}?${query.toString()}`;
 };
+
+/**
+ * A cursor handed back by the page itself (R-WEB-19): taken only in the shapes the API gives out, like readCursor's;
+ * in news order with its day. Anything else is no cursor.
+ */
+export const cursorOf = (raw: unknown, order: Order): Cursor | undefined => {
+  if (typeof raw !== 'object' || raw === null) {
+    return undefined;
+  }
+  const { before, beforeSlug, beforeDate } = raw as Record<string, unknown>;
+  if (typeof before !== 'string' || !isInstant(before)) {
+    return undefined;
+  }
+  const cursor = {
+    before,
+    beforeSlug: typeof beforeSlug === 'string' && isSlug(beforeSlug) ? beforeSlug : undefined,
+  };
+  if (order === 'posted') {
+    return cursor;
+  }
+  return typeof beforeDate === 'string' && isDay(beforeDate)
+    ? { ...cursor, beforeDate }
+    : undefined;
+};
+
+/** The cursor after a page that ends with `last`, as nextPage puts it in an address. */
+export const cursorAfter = (last: PostSummary, order: Order): Cursor => ({
+  before: last.published_at,
+  beforeSlug: last.slug,
+  ...(order === 'news' && last.news_date ? { beforeDate: last.news_date } : {}),
+});

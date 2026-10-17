@@ -95,6 +95,25 @@ export interface Strings {
   gone: { title: string; heading: string; back: (site: string) => string };
   /** The query parameters of a list's next page: the last post's instant and slug, and in news order its news date. */
   cursor: { before: string; slug: string; day: string };
+  /** The query parameter that says how many posts a continuous timeline showed (R-WEB-19). */
+  shown: string;
+  /** The search page (R-WEB-18): its name, its form, its states, and its query parameters' names. */
+  search: {
+    name: string;
+    label: string;
+    placeholder: string;
+    button: string;
+    hint: string;
+    results: (query: string) => string;
+    none: (query: string) => string;
+    more: string;
+    params: { query: string; from: string };
+  };
+  /** The continuous timeline (R-WEB-19): the button after each pause, and what a screen reader hears. */
+  loadMore: string;
+  loading: string;
+  loadedMore: (count: number) => string;
+  loadFailed: string;
   /** The query parameter of the timeline's order, and its value for news order (R-WEB-13). */
   order: { key: string; news: string };
 }
@@ -163,6 +182,22 @@ export const STRINGS: Record<Lang, Strings> = {
       back: (site) => `Volver a ${site}`,
     },
     cursor: { before: 'antes', slug: 'tras', day: 'dia' },
+    shown: 'mostrar',
+    search: {
+      name: 'Buscar',
+      label: 'Buscar en las publicaciones',
+      placeholder: 'Palabras, o "una frase exacta"',
+      button: 'Buscar',
+      hint: 'Busca en los títulos, los resúmenes y los textos. Entre comillas, una frase exacta; con un guion delante, una palabra que no debe aparecer.',
+      results: (query) => `Resultados para «${query}»`,
+      none: (query) => `No hemos encontrado nada para «${query}».`,
+      more: 'Más resultados',
+      params: { query: 'q', from: 'desde' },
+    },
+    loadMore: 'Cargar más',
+    loading: 'Cargando…',
+    loadedMore: (count) => (count === 1 ? '1 publicación más' : `${count} publicaciones más`),
+    loadFailed: 'No se han podido cargar más publicaciones.',
     order: { key: 'orden', news: 'noticia' },
   },
   en: {
@@ -227,6 +262,22 @@ export const STRINGS: Record<Lang, Strings> = {
       back: (site) => `Back to ${site}`,
     },
     cursor: { before: 'before', slug: 'after', day: 'day' },
+    shown: 'show',
+    search: {
+      name: 'Search',
+      label: 'Search the posts',
+      placeholder: 'Words, or "an exact phrase"',
+      button: 'Search',
+      hint: 'Searches titles, summaries and texts. In quotes, an exact phrase; with a minus before it, a word that must not appear.',
+      results: (query) => `Results for “${query}”`,
+      none: (query) => `Nothing found for “${query}”.`,
+      more: 'More results',
+      params: { query: 'q', from: 'from' },
+    },
+    loadMore: 'Load more',
+    loading: 'Loading…',
+    loadedMore: (count) => (count === 1 ? '1 more post' : `${count} more posts`),
+    loadFailed: 'More posts couldn’t be loaded.',
     order: { key: 'order', news: 'news' },
   },
 };

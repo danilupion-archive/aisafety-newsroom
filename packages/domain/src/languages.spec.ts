@@ -6,18 +6,22 @@ describe('languages (D10)', () => {
   it('reserves every page word of both languages, so no post hides behind a page in either', () => {
     expect([...RESERVED_SLUGS].sort()).toEqual([
       'about',
+      'buscar',
       'en',
       'es',
       'etiqueta',
       'healthz',
       'img',
       'og',
+      'search',
       'sobre',
       'tag',
       'temas',
       'topics',
     ]);
     expect(PATH_WORDS.es.about).toBe('sobre');
+    // The search page's words (R-WEB-18): `/buscar`, `/en/search`.
+    expect([PATH_WORDS.es.search, PATH_WORDS.en.search]).toEqual(['buscar', 'search']);
   });
 
   it('reserves what shares the root with Spanish posts: the language prefixes, the health check, the files', () => {

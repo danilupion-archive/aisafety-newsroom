@@ -1,17 +1,31 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyPluginAsync } from 'fastify';
 
-import { sql } from 'kysely';
+import { type RawBuilder, sql } from 'kysely';
 import { z } from 'zod';
 
 import { SHA256 } from '../images/routes.js';
 import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
-import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.js';
+import {
+  postAddress,
+  publicListQuery,
+  publicSearchQuery,
+  publicTagsQuery,
+} from '../posts/schemas.js';
+import { MARK_END, MARK_START, segments } from './excerpt.js';
 
 /** A YouTube video's address, in any of its forms (the domain's youtubeVideoId reads them for the site). */
 const YOUTUBE_ADDRESS =
   '^https?://([a-z0-9-]+\\.)?(youtube\\.com|youtu\\.be|youtube-nocookie\\.com)/';
+
+/** Each language's full-text search rules (R-WEB-18). */
+const SEARCH_CONFIG = { es: 'spanish', en: 'english' } as const;
+/** The accented vowels a reader often types without their accents, and what they become. */
+const FOLD_FROM = 'ÁÉÍÓÚÜáéíóúü';
+const FOLD_TO = 'AEIOUUaeiouu';
+/** A short excerpt around the best match, its words between the two marks (src/public/excerpt.ts). */
+const HEADLINE = `StartSel=${MARK_START}, StopSel=${MARK_END}, MaxWords=32, MinWords=14, ShortWord=0, MaxFragments=2, FragmentDelimiter=" … "`;
 
 /**
  * The site's reads (R-WEB-6): published posts only, as newsroom_public, which reaches nothing else (SPEC §7). Outside
@@ -40,16 +54,11 @@ export const publicRoutes =
     }
 
     /**
-     * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
-     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves. In news order, by
-     * the day each story happened, newest first, then as posted (R-WEB-13).
+     * A published post as the lists show it, without its body: for a timeline's card, a feed's entry, a search result.
+     * Callers add the language, leave pages out, and choose the order.
      */
-    app.get('/public/posts', async (request, reply) => {
-      const query = parse(publicListQuery, request.query, reply);
-      if (!query) {
-        return reply;
-      }
-      let select = db
+    const summaries = () =>
+      db
         .selectFrom('app.published_posts')
         .select([
           'lang',
@@ -78,7 +87,19 @@ export const publicRoutes =
             order by (source.value ->> 'url') ~* ${YOUTUBE_ADDRESS} desc, source.position
             limit 1
           )`.as('preview'),
-        )
+        );
+
+    /**
+     * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
+     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves. In news order, by
+     * the day each story happened, newest first, then as posted (R-WEB-13).
+     */
+    app.get('/public/posts', async (request, reply) => {
+      const query = parse(publicListQuery, request.query, reply);
+      if (!query) {
+        return reply;
+      }
+      let select = summaries()
         .where('lang', '=', query.lang)
         .where('type', '<>', 'page')
         .limit(query.limit);
@@ -109,6 +130,47 @@ export const publicRoutes =
         );
       }
       return select.execute();
+    });
+
+    /**
+     * A reader's search in one language (R-WEB-18): Postgres's full-text search in that language's rules, over what the
+     * site shows (published breves and articles, never pages), the title weighing most, then the summary, then the
+     * text. Each field is indexed twice, as written and with its accents taken off, so a word typed without them still
+     * finds it. Searched on the fly, with no index: a few hundred posts take milliseconds. Each result carries an
+     * excerpt of its summary and text with the matched words marked, as plain-text segments (src/public/excerpt.ts).
+     */
+    app.get('/public/search', async (request, reply) => {
+      const query = parse(publicSearchQuery, request.query, reply);
+      if (!query) {
+        return reply;
+      }
+      const config = sql`${SEARCH_CONFIG[query.lang]}::regconfig`;
+      // The text as a reader reads it: no link targets, tags or Markdown marks.
+      const plain = sql`regexp_replace(regexp_replace(regexp_replace(body_md, ${'\\]\\([^)]*\\)'}, ']', 'g'), ${'<[^>]*>'}, ' ', 'g'), ${'[\\[\\]*_#>`~]+'}, '', 'g')`;
+      const indexed = (text: RawBuilder<unknown>, weight: 'A' | 'B' | 'C') =>
+        sql`setweight(to_tsvector(${config}, ${text}) || to_tsvector(${config}, translate(${text}, ${FOLD_FROM}, ${FOLD_TO})), ${sql.lit(weight)})`;
+      const document = sql`(${indexed(sql`title`, 'A')} || ${indexed(sql`summary`, 'B')} || ${indexed(plain, 'C')})`;
+      const words = sql`websearch_to_tsquery(${config}, ${query.q})`;
+      const rows = await summaries()
+        .select(
+          sql<string>`ts_headline(${config}, summary || ' … ' || ${plain}, ${words}, ${HEADLINE})`.as(
+            'excerpt',
+          ),
+        )
+        .where('lang', '=', query.lang)
+        .where('type', '<>', 'page')
+        .where(sql<boolean>`${document} @@ ${words}`)
+        .orderBy(sql`ts_rank(${document}, ${words})`, 'desc')
+        .orderBy('published_at', 'desc')
+        .orderBy('slug')
+        .offset(query.cursor)
+        .limit(query.limit + 1)
+        .execute();
+      const page = rows.slice(0, query.limit);
+      return {
+        results: page.map((row) => ({ ...row, excerpt: segments(row.excerpt) })),
+        next: rows.length > query.limit ? query.cursor + query.limit : null,
+      };
     });
 
     /**

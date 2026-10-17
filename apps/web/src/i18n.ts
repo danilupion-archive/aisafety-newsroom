@@ -24,6 +24,7 @@ export const paths = {
   tag: (lang: Lang, tag: string) => `${prefix(lang)}/${PATH_WORDS[lang].tag}/${tag}`,
   topics: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].topics}`,
   about: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].about}`,
+  search: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].search}`,
   feed: (lang: Lang) => `${prefix(lang)}/feed.xml`,
   /** A page's share card (R-WEB-14): its language's home's, or a post's own. */
   shareCard: (lang: Lang, slug?: string) =>
@@ -131,8 +132,8 @@ export const route = (pathname: string): Route => {
 export const PATHNAME_HEADER = 'x-site-pathname';
 
 /**
- * The same page in the other language, for the header's switch: the home, the topics, the about page and a tag's page
- * in that language's words; a post's translation when it has one. That language's home for anything else, a post with
+ * The same page in the other language, for the header's switch: the home, the topics, the about page, the search and a
+ * tag's page in that language's words; a post's translation when it has one. That language's home for anything else, a post with
  * no translation included.
  */
 export const otherLanguageHref = (
@@ -155,6 +156,9 @@ export const otherLanguageHref = (
   }
   if (first === words.about) {
     return paths.about(other);
+  }
+  if (first === words.search) {
+    return paths.search(other);
   }
   return translation?.lang === other ? paths.post(other, translation.slug) : paths.home(other);
 };

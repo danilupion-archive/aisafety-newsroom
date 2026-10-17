@@ -49,6 +49,17 @@ export interface PostSummary {
   original_author?: string | null;
 }
 
+/** A piece of a search result's excerpt (R-WEB-18): plain text, matched or not; the site escapes and marks it. */
+export interface Segment {
+  text: string;
+  match: boolean;
+}
+
+/** A search result: a post as the lists show it, with the excerpt where it matched. */
+export interface SearchResult extends PostSummary {
+  excerpt: Segment[];
+}
+
 /** Another published version of a post's story, in the other language (R-WEB-10). */
 export interface Translation {
   lang: Lang;
@@ -168,3 +179,12 @@ export const getPost = cache(
 );
 
 export const tagCounts = (lang: Lang) => json<TagCount[]>(`/public/tags?lang=${lang}`);
+
+/**
+ * A reader's search in one language (R-WEB-18): a page of results from `from` on, and where the next starts (null at
+ * the end). Remembered like any read, keyed by the whole query.
+ */
+export const searchPosts = (lang: Lang, q: string, from = 0, limit = 20) =>
+  json<{ results: SearchResult[]; next: number | null }>(
+    `/public/search?${new URLSearchParams({ lang, q, limit: String(limit), cursor: String(from) }).toString()}`,
+  );

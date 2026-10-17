@@ -220,3 +220,19 @@ export const publicListQuery = z
   );
 
 export const publicTagsQuery = z.object({ lang });
+
+/**
+ * A reader's search (R-WEB-18): words in the search engines' own syntax (quoted phrases, `OR`, a minus), up to 100
+ * characters, a page of at most 50 results and where it starts. The two control characters the excerpts are marked
+ * with can't come from a reader.
+ */
+export const publicSearchQuery = z.object({
+  lang,
+  q: z
+    .string()
+    // oxlint-disable-next-line no-control-regex -- control characters are what it takes out
+    .transform((value) => value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim())
+    .pipe(z.string().min(1, 'q is the words to search for').max(100)),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  cursor: z.coerce.number().int().min(0).max(500).default(0),
+});

@@ -1,5 +1,4 @@
 import { css } from '@styled-system/css';
-import Link from 'next/link';
 
 import type { Lang } from '@/i18n';
 
@@ -25,7 +24,10 @@ const box = css({
 });
 const actions = css({ display: 'flex', flexWrap: 'wrap', gap: '3' });
 
-/** The end of a timeline: the feed, and the older entries when there are more. */
+/**
+ * The end of a timeline: the feed, and the older entries when there are more, for a reader without JavaScript only:
+ * with it, the timeline goes on by itself (R-WEB-19).
+ */
 export const FeedBox = ({ lang, older }: { lang: Lang; older: string | undefined }) => {
   const t = STRINGS[lang];
   return (
@@ -38,9 +40,12 @@ export const FeedBox = ({ lang, older }: { lang: Lang; older: string | undefined
           {t.feedButton}
         </a>
         {older ? (
-          <Link href={older} className={button}>
-            {t.older}
-          </Link>
+          <noscript>
+            {/* oxlint-disable-next-line next/no-html-link-for-pages -- a plain link, for readers without scripts */}
+            <a href={older} className={button}>
+              {t.older}
+            </a>
+          </noscript>
         ) : null}
       </p>
     </aside>

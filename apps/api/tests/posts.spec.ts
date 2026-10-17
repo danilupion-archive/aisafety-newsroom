@@ -228,6 +228,14 @@ describe('reserved slugs', () => {
     expect((await put('es/img', BREVE)).statusCode).toBe(400);
     expect((await put('es/og', BREVE)).statusCode).toBe(400);
   });
+
+  it('refuses the search page’s words in either language (R-WEB-18)', async () => {
+    expect((await put('es/buscar', BREVE)).json()).toEqual({
+      error: "buscar is one of the site's own paths",
+    });
+    expect((await put('en/search', EN_BREVE)).statusCode).toBe(400);
+    expect((await put('es/search', BREVE)).statusCode).toBe(400);
+  });
 });
 
 describe('translations (R-WEB-10)', () => {

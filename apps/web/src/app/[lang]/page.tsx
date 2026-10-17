@@ -4,9 +4,10 @@ import { css } from '@styled-system/css';
 import { connection } from 'next/server';
 
 import { latestPosts } from '@/api';
+import { ContinuousTimeline } from '@/components/ContinuousTimeline';
 import { FeedBox } from '@/components/FeedBox';
 import { OrderSwitch } from '@/components/OrderSwitch';
-import { Timeline } from '@/components/Timeline';
+import { readShown } from '@/continuous';
 import { DEFAULT_LANG, paths } from '@/i18n';
 import { nextPage, readCursor, readOrder } from '@/paging';
 import { alternates, pageLang, type Query } from '@/params';
@@ -49,7 +50,9 @@ const Home = async ({ params, searchParams }: Props) => {
   const query = await searchParams;
   const order = readOrder(lang, query);
   const after = readCursor(lang, query, order);
-  const posts = await latestPosts(lang, { after, limit: PAGE, order });
+  // Back to a continuous timeline (R-WEB-19): as many posts as the reader had, bounded; a page's worth otherwise.
+  const limit = after ? PAGE : (readShown(lang, query) ?? PAGE);
+  const posts = await latestPosts(lang, { after, limit, order });
   const last = posts.at(-1);
   const home = paths.home(lang);
   return (
@@ -66,11 +69,18 @@ const Home = async ({ params, searchParams }: Props) => {
       {posts.length === 0 ? (
         <p>{after ? t.noOlder : t.nothingYet}</p>
       ) : (
-        <Timeline lang={lang} posts={posts} order={order} featureFirst={!after} />
+        <ContinuousTimeline
+          lang={lang}
+          path={home}
+          order={order}
+          initial={posts}
+          more={posts.length === limit}
+          featureFirst={!after}
+        />
       )}
       <FeedBox
         lang={lang}
-        older={posts.length === PAGE && last ? nextPage(lang, home, last, order) : undefined}
+        older={posts.length === limit && last ? nextPage(lang, home, last, order) : undefined}
       />
     </div>
   );

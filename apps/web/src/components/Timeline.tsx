@@ -1,7 +1,7 @@
 import { css } from '@styled-system/css';
 import Link from 'next/link';
 
-import type { PostSummary } from '@/api';
+import type { PostSummary, Segment } from '@/api';
 import type { Lang } from '@/i18n';
 import type { Order } from '@/paging';
 
@@ -132,6 +132,11 @@ const summary = css({
   '&[data-featured]': { fontSize: { base: '1.0625rem', md: '1.1875rem' } },
 });
 const meta = css({ color: 'muted', fontSize: '0.9375rem' });
+// A search result's matched words (R-WEB-18).
+const hit = css({ bg: 'accentSoft', color: 'text', borderRadius: 'sm', paddingX: '0.5' });
+
+/** A post as a timeline shows it; a search result also carries the excerpt where it matched (R-WEB-18). */
+type Listed = PostSummary & { excerpt?: readonly Segment[] };
 const read = css({ color: 'accent', fontWeight: '600' });
 
 /** One timeline entry: its date, its dot on the rail, and its card. */
@@ -143,7 +148,7 @@ const Entry = ({
   last,
 }: {
   lang: Lang;
-  post: PostSummary;
+  post: Listed;
   order: Order;
   featured: boolean;
   last: boolean;
@@ -193,7 +198,20 @@ const Entry = ({
                 <Pending />
               </Link>
             </h2>
-            {post.summary === '' ? null : (
+            {post.excerpt !== undefined && post.excerpt.length > 0 ? (
+              // Where it matched, the matched words marked: plain text, escaped like any other.
+              <p className={summary}>
+                {post.excerpt.map((segment, index) =>
+                  segment.match ? (
+                    <mark key={index} className={hit}>
+                      {segment.text}
+                    </mark>
+                  ) : (
+                    segment.text
+                  ),
+                )}
+              </p>
+            ) : post.summary === '' ? null : (
               <p className={summary} data-featured={featured ? '' : undefined}>
                 {post.summary}
               </p>
@@ -263,7 +281,7 @@ export const Timeline = ({
   featureFirst,
 }: {
   lang: Lang;
-  posts: readonly PostSummary[];
+  posts: readonly Listed[];
   order?: Order;
   featureFirst: boolean;
 }) => (
