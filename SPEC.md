@@ -1,6 +1,9 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.11** · 2026-10-17 · Owner: Dani
+Status: **draft v0.12** · 2026-10-17 · Owner: Dani
+
+v0.12 changes: aisafety-media can message Dani through the bot (`POST /notify`, at most 30
+an hour; D20, R-MED-8); its image side (R-MED-7) is built.
 
 v0.11 changes: every AI-written post says so on its card and its page, and the site no
 longer claims every text was checked; a post a person writes carries their name, and an
@@ -306,7 +309,8 @@ published post shows.
 | `discard_reason`, `last_error`                      | text                        |                                                                     |
 | `reply_chat_id`, `reply_message_id`                 | bigint                      | the "Saved #n" reply, so it can be edited                           |
 
-`telegram_updates` keeps each processed `update_id` (R-CAP-2).
+`telegram_updates` keeps each processed `update_id` (R-CAP-2). `notifications` keeps when each
+message through `POST /notify` went out (`sent_at`, never its text), for its hourly limit (D20).
 
 ### State machine
 
@@ -421,16 +425,18 @@ validated with zod schemas that the tests share.
   ones last, so a story sent today about something weeks old stands out (D16). The day is
   read from `page_published_at` when it starts with an ISO date; nothing else is guessed.
 
-| Method and path             | Body or query                                                                                       | Returns                                                                                                                                                   |
-| --------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50), `sort=found` (default) or `source` (R-API-4) | items without `page_text`, with `page_excerpt` (first 4,000 chars) and `intent`; a follow-up also carries its original's id, URL, status and `logged_ref` |
-| `GET /items/:id`            |                                                                                                     | the full item, including `page_text` and `intent`                                                                                                         |
-| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`                                                          | `200` with the item                                                                                                                                       |
-| `POST /items/:id/discarded` | `{reason}`                                                                                          | `200` with the item                                                                                                                                       |
-| `POST /items/:id/restored`  |                                                                                                     | `200` with the item                                                                                                                                       |
-| `POST /items/:id/note`      | `{text}`                                                                                            | `200` with the item                                                                                                                                       |
+| Method and path             | Body or query                                                                                       | Returns                                                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50), `sort=found` (default) or `source` (R-API-4) | items without `page_text`, with `page_excerpt` (first 4,000 chars) and `intent`; a follow-up also carries its original's id, URL, status and `logged_ref`                                     |
+| `GET /items/:id`            |                                                                                                     | the full item, including `page_text` and `intent`                                                                                                                                             |
+| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`                                                          | `200` with the item                                                                                                                                                                           |
+| `POST /items/:id/discarded` | `{reason}`                                                                                          | `200` with the item                                                                                                                                                                           |
+| `POST /items/:id/restored`  |                                                                                                     | `200` with the item                                                                                                                                                                           |
+| `POST /items/:id/note`      | `{text}`                                                                                            | `200` with the item                                                                                                                                                                           |
+| `POST /notify`              | `{text}`, 1–4,000 characters after trimming                                                         | `200 {sent: true}`: the bot sends it to Dani's chat as plain text, link previews off; `429` above 30 an hour, counted across replicas; `503` without the bot; `502` if Telegram refuses (D20) |
 
-Errors are `{ "error": "message" }` with `400`, `401`, `404` or `409`.
+Errors are `{ "error": "message" }` with `400`, `401`, `404` or `409` (and `429`, `502`
+or `503` from `/notify`).
 
 ## 10. Consumers in aisafety-media
 
@@ -484,7 +490,7 @@ These are requirements on the content repo, implemented there.
   from the newsroom. When writing about what is said in it, the transcript is fetched on
   the Mac, at that moment, never by the worker: YouTube is hardest on data centres'
   addresses, and transcripts are what it guards most.
-- **R-MED-7** Must (not built yet): images and takedowns in aisafety-media (D17).
+- **R-MED-7** Must: images and takedowns in aisafety-media (D17).
   - A post's front matter may name a lead image: `image: {file, alt, credit, licence,
 source_url}`, the file under `images/` in aisafety-media, an image under a clear
     licence (never a publisher's photo, never AI-generated), alt text in the post's
@@ -496,6 +502,10 @@ credit}`, the file under `sources/previews/`, saved when the source is fetched. 
   - `newsroom.py posts` shows a story the bot took down (`taken_down_at`) and an image it
     removed (`GET /images/<sha256>`'s `removed_at`). `/post` then stops and asks: record
     the takedown (`unpublish`), or bring the story back with the bot's `/restore`.
+- **R-MED-8** Must: `tools/newsroom.py notify` tells Dani what an unattended run did (the
+  launchd job that runs `/news auto` every two hours) through the bot (`POST /notify`,
+  D20). While the route answers 404 (an older API), it keeps the messages in a local
+  outbox and sends them once it answers.
 
 ## 11. Open questions
 
@@ -529,6 +539,7 @@ credit}`, the file under `sources/previews/`, saved when the source is fetched. 
 | D17 | Images (R-WEB-14–16): every page has the site's own share card (title and mark on navy, generated by the site); a post may have a lead image under a clear licence, credited; a source may show its outlet's preview, small and credited, a copy whose risk the bot's switches (R-CAP-10) and per-image removal (R-CAP-11) manage. Always copies the site serves from its own host, never hotlinks; never AI-generated (R-WEB-3)                                  | Q13          |
 | D18 | Almost every link Dani sends becomes a post as well as a log entry: an item's `intent` is `post` unless Dani says `log` (`/log <link>`, `/log <id>`; `/post <id>` switches back). The bot is the only place it changes; aisafety-media reads it (R-MED-2)                                                                                                                                                                                                         | —            |
 | D19 | Every AI-written post carries its own label, "Escrito con IA", on its card and on its page, beside its type and date; a post a person wrote names them (`author`) as a badge instead. Dani doesn't always read every text in full, so the AI Act's exemption for text under human review (Art. 50(4)) isn't relied on, and the site never says texts are checked: it says AI writes them from the linked sources and Dani picks the stories, which is always true | —            |
+| D20 | aisafety-media tells Dani what its unattended runs did through the bot: `POST /api/v1/notify` sends plain text, link previews off, to Dani's private chat with the bot, whose id is the first allowed user id (R-CAP-1). At most 30 messages an hour, counted in `app.notifications` under a lock so two replicas can't both take the last place; the text is never logged or stored                                                                              | —            |
 | D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13)                                                                                                                                               | —            |
 
 ## 12. Miniflux for `/sweep`
