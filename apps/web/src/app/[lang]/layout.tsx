@@ -10,6 +10,7 @@ import type { Lang } from '@/i18n';
 
 import { getPost, type Translation } from '@/api';
 import { Mark } from '@/components/Mark';
+import { Pending } from '@/components/Pending';
 import { Wordmark } from '@/components/Wordmark';
 import { otherLang, otherLanguageHref, PATH_WORDS, PATHNAME_HEADER, paths, readPath } from '@/i18n';
 import { pageLang } from '@/params';
@@ -192,6 +193,7 @@ const RootLayout = async ({ children, params }: Props) => {
               <Mark size={46} />
               <Wordmark name={name[lang]} className={brandName} />
               <span className={tagline}>{t.tagline}</span>
+              <Pending />
             </Link>
             <div className={headerEnd}>
               <nav aria-label={t.nav}>
@@ -199,11 +201,13 @@ const RootLayout = async ({ children, params }: Props) => {
                   <li>
                     <Link href={paths.topics(lang)} className={navLink}>
                       {t.topics}
+                      <Pending />
                     </Link>
                   </li>
                   <li>
                     <Link href={paths.about(lang)} className={navLink}>
                       {t.navAbout}
+                      <Pending />
                     </Link>
                   </li>
                   <li>
@@ -227,6 +231,7 @@ const RootLayout = async ({ children, params }: Props) => {
                   className={languageItem}
                 >
                   {other.toUpperCase()}
+                  <Pending />
                 </Link>
               </div>
             </div>

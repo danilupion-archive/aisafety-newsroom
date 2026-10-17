@@ -6,9 +6,10 @@ import type { PostSummary } from '@/api';
 import type { Lang } from '@/i18n';
 import type { Order } from '@/paging';
 
+import { Pending } from '@/components/Pending';
 import { calendarParts, dateParts, newsNote } from '@/format';
 import { paths } from '@/i18n';
-import { imagePath } from '@/images';
+import { cardImage } from '@/images';
 import { STRINGS } from '@/strings';
 import { label, typePill } from '@/styles';
 
@@ -83,7 +84,7 @@ const card = css({
   '&[data-type=article]': { borderColor: 'muted' },
 });
 const pills = css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2' });
-// With a lead image: its thumbnail beside the pills and the title, which wrap next to it.
+// With a picture (its lead image, or else its first source's preview): beside the pills and the title, which wrap.
 const head = css({ display: 'flex', alignItems: 'flex-start', gap: { base: '3', md: '5' } });
 const headText = css({
   display: 'flex',
@@ -138,6 +139,7 @@ const Entry = ({
     : dateParts(lang, post.published_at);
   // As posted, a story that happened on another day says which.
   const note = byNews ? undefined : newsNote(lang, post);
+  const picture = cardImage(post);
   const href = paths.post(lang, post.slug);
   return (
     <li className={entry}>
@@ -164,19 +166,15 @@ const Entry = ({
               </span>
             </div>
             <h2 className={title} data-featured={featured ? '' : undefined}>
-              <Link href={href}>{post.title}</Link>
+              <Link href={href}>
+                {post.title}
+                <Pending />
+              </Link>
             </h2>
           </div>
-          {post.image ? (
-            // The title beside it is the link; the thumbnail only illustrates it (R-WEB-15).
-            <Image
-              src={imagePath('lead', post.image.sha256, 'thumb')}
-              alt=""
-              width={120}
-              height={90}
-              unoptimized
-              className={thumb}
-            />
+          {picture ? (
+            // The title beside it is the link; the thumbnail only illustrates it (R-WEB-15, R-WEB-16).
+            <Image src={picture.src} alt="" width={120} height={90} unoptimized className={thumb} />
           ) : null}
         </div>
         {post.summary === '' ? null : (
@@ -189,8 +187,10 @@ const Entry = ({
           {typeof post.source_count === 'number' ? (
             <>{t.sourceCount(post.source_count)} · </>
           ) : null}
+          {picture?.credit === undefined ? null : <>{t.previewCredit(picture.credit)} · </>}
           <Link href={href} className={read} aria-label={`${t.read}: ${post.title}`}>
             {t.read}
+            <Pending />
           </Link>
         </p>
       </article>

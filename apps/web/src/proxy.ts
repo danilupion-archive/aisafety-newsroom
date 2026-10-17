@@ -51,8 +51,28 @@ const unpublishedPosts = async (apiUrl: string): Promise<ReadonlySet<string>> =>
   return unpublished.posts;
 };
 
-/** Whether the API has a post (true), had it (`gone`), never had it (false), or can't say (undefined). */
-const postExists = async (
+/** Checks under way: readers asking about the same post at once share one request, never an older answer. */
+const checking = new Map<string, Promise<boolean | 'gone' | undefined>>();
+
+/**
+ * Whether the API has a post (true), had it (`gone`), never had it (false), or can't say (undefined). Asked on every
+ * post page, never remembered, so a takedown or an unpublished post answers 410 at once (R-CAP-11, AC-7).
+ */
+const postExists = (
+  apiUrl: string,
+  post: { lang: Lang; slug: string },
+): Promise<boolean | 'gone' | undefined> => {
+  const key = `${post.lang}/${post.slug}`;
+  const pending = checking.get(key);
+  if (pending) {
+    return pending;
+  }
+  const check = askPostExists(apiUrl, post).finally(() => checking.delete(key));
+  checking.set(key, check);
+  return check;
+};
+
+const askPostExists = async (
   apiUrl: string,
   { lang, slug }: { lang: Lang; slug: string },
 ): Promise<boolean | 'gone' | undefined> => {

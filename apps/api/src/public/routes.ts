@@ -61,6 +61,16 @@ export const publicRoutes =
         ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
+        // The first source preview the view still shows, for a card without a lead image (R-WEB-16, R-CAP-10).
+        .select(
+          sql<{ sha256: string; credit: string } | null>`(
+            select source.value -> 'preview'
+            from jsonb_array_elements(sources) with ordinality as source(value, position)
+            where source.value ? 'preview'
+            order by source.position
+            limit 1
+          )`.as('preview'),
+        )
         .where('lang', '=', query.lang)
         .where('type', '<>', 'page')
         .limit(query.limit);

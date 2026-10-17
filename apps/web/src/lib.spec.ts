@@ -8,7 +8,7 @@ import { splitWordmark } from './brand';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
-import { IMAGE_CACHE, imagePath, readImagePath } from './images';
+import { cardImage, IMAGE_CACHE, imagePath, readImagePath } from './images';
 import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { contentSecurityPolicy, gonePage } from './security';
@@ -222,6 +222,26 @@ describe('the proxy’s routes (D10, AC-11)', () => {
 const SHA = 'f'.repeat(64);
 
 describe('images (D17)', () => {
+  it('illustrates a card with its lead image, else its first source preview with the outlet’s credit', () => {
+    const lead = {
+      sha256: SHA,
+      alt: 'Un gráfico',
+      credit: 'Autora',
+      licence: 'CC BY 4.0',
+      source_url: 'https://example.org',
+      width: 1600,
+      height: 900,
+    };
+    const preview = { sha256: 'e'.repeat(64), credit: 'example.org' };
+    expect(cardImage({ image: lead, preview })).toEqual({ src: imagePath('lead', SHA, 'thumb') });
+    expect(cardImage({ image: null, preview })).toEqual({
+      src: imagePath('preview', preview.sha256, 'thumb'),
+      credit: 'example.org',
+    });
+    expect(cardImage({ image: null, preview: null })).toBeUndefined();
+    expect(cardImage({})).toBeUndefined();
+  });
+
   it('names each image by kind and SHA-256, full or thumbnail, and reads nothing else', () => {
     expect(imagePath('lead', SHA)).toBe(`/img/lead/${SHA}.webp`);
     expect(imagePath('preview', SHA, 'thumb')).toBe(`/img/preview/${SHA}.thumb.webp`);

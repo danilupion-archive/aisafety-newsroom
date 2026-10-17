@@ -1,3 +1,5 @@
+import type { PostSummary } from './api';
+
 /**
  * The site's own copies of images (D17): a post's lead image (R-WEB-15) and its sources' previews (R-WEB-16), served
  * from the site's host under `/img/`, so a reader's browser loads nothing from another (R-WEB-7). The API decides on
@@ -31,3 +33,19 @@ export const readImagePath = (
  * and its address answers 404; a browser that already has it keeps its copy.
  */
 export const IMAGE_CACHE = 'public, max-age=604800, immutable';
+
+/**
+ * A card's picture: its post's lead image (R-WEB-15), or else its first source's preview (R-WEB-16), which names its
+ * outlet as every preview does. Undefined when the post has neither or the switches hide them.
+ */
+export const cardImage = (
+  post: Pick<PostSummary, 'image' | 'preview'>,
+): { src: string; credit?: string } | undefined => {
+  if (post.image) {
+    return { src: imagePath('lead', post.image.sha256, 'thumb') };
+  }
+  if (post.preview) {
+    return { src: imagePath('preview', post.preview.sha256, 'thumb'), credit: post.preview.credit };
+  }
+  return undefined;
+};

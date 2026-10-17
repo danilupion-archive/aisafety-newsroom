@@ -226,6 +226,19 @@ describe('a post’s images (R-WEB-15, R-WEB-16)', () => {
     expect((await read(`/public/images/lead/${sha256Of(unused)}`)).statusCode).toBe(404);
   });
 
+  it('lists each post with its first source preview, for a card without a lead image (R-WEB-16)', async () => {
+    await storyWithImages();
+    type Listed = { slug: string; preview: unknown };
+    const listed = (await read('/public/posts?lang=es')).json<Listed[]>();
+    expect(listed.find((row) => row.slug === 'con-imagen')?.preview).toEqual({
+      sha256: sha256Of(preview),
+      credit: 'example.org',
+    });
+    await setImages('licensed');
+    const hidden = (await read('/public/posts?lang=es')).json<Listed[]>();
+    expect(hidden.find((row) => row.slug === 'con-imagen')?.preview).toBeNull();
+  });
+
   it('follows the switch on the next request: `licensed` hides previews, `none` every image (R-CAP-10)', async () => {
     await storyWithImages();
     await setImages('licensed');

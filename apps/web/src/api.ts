@@ -3,6 +3,7 @@ import { cache } from 'react';
 import type { Lang } from './i18n';
 import type { Cursor, Order } from './paging';
 
+import { type Answer, createReadCache } from './read-cache';
 import { site } from './site';
 
 /** A source as the site lists it (R-WEB-1), with its outlet's preview image when the switches show it (R-WEB-16). */
@@ -39,6 +40,8 @@ export interface PostSummary {
   news_date?: string | null;
   /** Its lead image, for the card's thumbnail; absent from an API older than images. */
   image?: PostImage | null;
+  /** Its first source preview the switches show, for a card without a lead image (R-WEB-16); absent from older APIs. */
+  preview?: { sha256: string; credit: string } | null;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */
@@ -69,22 +72,28 @@ export interface Unpublished {
 const READ_TIMEOUT_MS = 8000;
 
 /**
- * Never cached here: reads stay inside the cluster and are cheap, and a cache that revalidates in the background would
- * serve an answer past its 60 s to the first visitor after it (R-WEB-6, AC-7). The feeds' own `max-age=60` is the
- * only wait.
+ * The site's memory of the API's answers (R-WEB-6): 30 s each, never served older, and identical reads at once share
+ * one request. Not Next's fetch cache, which revalidates in the background and so serves an answer past its time to
+ * the first visitor after a quiet spell. A takedown or an unpublished post still shows at once: the proxy asks the API
+ * about each post page itself (src/proxy.ts).
  */
-const read = async (path: string): Promise<Response> =>
-  fetch(`${site().apiUrl}${path}`, {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+const remembered = createReadCache({ ttlMs: 30_000, maxEntries: 500 });
+
+const read = (path: string): Promise<Answer> =>
+  remembered(path, async () => {
+    const response = await fetch(`${site().apiUrl}${path}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+    });
+    return { status: response.status, body: await response.text() };
   });
 
 const json = async <T>(path: string): Promise<T> => {
-  const response = await read(path);
-  if (!response.ok) {
-    throw new Error(`The API answered ${response.status} for ${path.split('?')[0]}`);
+  const answer = await read(path);
+  if (answer.status < 200 || answer.status >= 300) {
+    throw new Error(`The API answered ${answer.status} for ${path.split('?')[0]}`);
   }
-  return (await response.json()) as T;
+  return JSON.parse(answer.body) as T;
 };
 
 export const latestPosts = (
@@ -136,18 +145,18 @@ export const allPosts = async (lang: Lang): Promise<PostSummary[]> => {
  */
 export const getPost = cache(
   async (lang: Lang, slug: string): Promise<Post | 'gone' | undefined> => {
-    const response = await read(`/public/posts/${lang}/${encodeURIComponent(slug)}`);
+    const answer = await read(`/public/posts/${lang}/${encodeURIComponent(slug)}`);
     // An address the API refuses (400) is no post either: a reader's typo is a 404, never a 500.
-    if (response.status === 404 || response.status === 400) {
+    if (answer.status === 404 || answer.status === 400) {
       return undefined;
     }
-    if (response.status === 410) {
+    if (answer.status === 410) {
       return 'gone';
     }
-    if (!response.ok) {
-      throw new Error(`The API answered ${response.status} for a post`);
+    if (answer.status < 200 || answer.status >= 300) {
+      throw new Error(`The API answered ${answer.status} for a post`);
     }
-    return (await response.json()) as Post;
+    return JSON.parse(answer.body) as Post;
   },
 );
 
