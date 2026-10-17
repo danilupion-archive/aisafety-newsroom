@@ -1,6 +1,10 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.12** · 2026-10-17 · Owner: Dani
+Status: **draft v0.13** · 2026-10-17 · Owner: Dani
+
+v0.13 changes: the site's look (R-WEB-11): the box mark with tentacles rising out of it in
+a pink glow, aquamarine for links and controls, pink for highlights, a gradient "IA"; no
+PauseAI colours left.
 
 v0.12 changes: aisafety-media can message Dani through the bot (`POST /notify`, at most 30
 an hour; D20, R-MED-8); its image side (R-MED-7) is built.
@@ -622,12 +626,17 @@ languages, so no post hides behind a page.
   dates and tag names, and a link to the other language labelled in that language; Open
   Graph and canonical metadata; usable at phone width; accessible (semantic HTML,
   `lang` on every page, contrast, alt text; WCAG 2.2 AA as the target).
-- **R-WEB-11** Should: the look of D12. One dark theme: navy `#0F172A`, cards `#1E293B`,
-  the accent `#FF9416` on navy only. One typeface, Hanken Grotesk, served by the site
-  itself. The mark, a box with its lid ajar and light escaping, in the header, as the
-  site's icon and as the bot's avatar; the name with its trailing "IA" in the accent;
-  taglines "La caja ya está abierta" and "The box is already open". From PauseAI only
-  the two colours, never its typeface or its marks: the site is Dani's own (D4).
+- **R-WEB-11** Should: the look of D12. One dark theme: navy `#0F172A`, cards `#1E293B`.
+  Two accents with set roles: aquamarine `#7FFFD4` is the workhorse (links, tags, dates,
+  buttons, the order and language switches, focus); hot pink `#FF4FD8` is for highlights
+  only (the mark's glow, a breve's timeline dot, the video play button, a followed link's
+  bar) and never carries small text. Text on either fill is navy, and every text colour
+  passes AA on the ground it sits on. One typeface, Hanken Grotesk, served by the site
+  itself. The mark: Pandora's box with its lid ajar, aquamarine tentacles coming out of it
+  and hot pink light pouring from the gap, in the header, as the site's icon (the rising
+  tentacle alone, at icon sizes) and as the bot's avatar; the name with its trailing "IA"
+  in a gradient from aquamarine to pink. Taglines "La caja ya está abierta" and "The box
+  is already open". No PauseAI colours, typeface or marks: the site is Dani's own (D4).
 - **R-WEB-5** Must: Markdown is rendered to sanitised HTML. No raw HTML from posts.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
