@@ -1,14 +1,14 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyInstance } from 'fastify';
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
-import { backfillImages, imageInfo } from '../src/images/data.js';
+import { imageInfo } from '../src/images/data.js';
 import { sha256Of } from '../src/images/process.js';
 import { createImageStore, type ImageStore } from '../src/images/store.js';
 import { appDatabase, asSuperuser, emptyTables, publicDatabase } from './db.js';
@@ -37,11 +37,19 @@ let publicDb: Database;
 let app: FastifyInstance;
 let lead: Buffer;
 let preview: Buffer;
+/** The images' volume (D22): a scratch folder, emptied before each test like the tables. */
+let dir: string;
+let store: ImageStore;
+/** Every line the app logs, for checking what a missing file reports. */
+const logs: string[] = [];
 
 beforeAll(async () => {
   db = appDatabase();
   publicDb = publicDatabase();
-  app = buildApp({ apiToken: TOKEN, db, publicDb });
+  dir = await mkdtemp(join(tmpdir(), 'newsroom-images-'));
+  store = createImageStore(dir);
+  const logger = { level: 'info', stream: { write: (line: string) => logs.push(line) } };
+  app = buildApp({ apiToken: TOKEN, db, publicDb, imageStore: store, logger });
   lead = await photo('#336699');
   preview = await photo('#996633', 800, 600);
 });
@@ -50,10 +58,14 @@ afterAll(async () => {
   await app.close();
   await db.destroy();
   await publicDb.destroy();
+  await rm(dir, { recursive: true, force: true });
 });
 
 beforeEach(async () => {
   await emptyTables();
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  logs.length = 0;
 });
 
 const upload = (bytes: Buffer, sha256 = sha256Of(bytes), contentType = 'image/jpeg') =>
@@ -302,92 +314,89 @@ describe('takedowns (R-CAP-11)', () => {
   });
 });
 
-describe('images’ files on a volume (D22)', () => {
-  let dir: string;
-  let store: ImageStore;
-  let onVolume: FastifyInstance;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'newsroom-images-'));
-    store = createImageStore(dir);
-    onVolume = buildApp({ apiToken: TOKEN, db, publicDb, imageStore: store });
-  });
-  afterEach(async () => {
-    await onVolume.close();
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  it('writes an upload’s two files and still its row with the bytes, until step 2', async () => {
-    const response = await onVolume.inject({
-      method: 'PUT',
-      url: `/api/v1/images/${sha256Of(lead)}`,
-      headers: { ...auth, 'content-type': 'image/jpeg' },
-      payload: lead,
-    });
-    expect(response.statusCode).toBe(201);
+describe('images’ files on a volume, and only there (D22)', () => {
+  it('writes an upload’s two files and a row that keeps what the image is, never its bytes', async () => {
+    expect((await upload(lead)).statusCode).toBe(201);
     const full = await store.read(sha256Of(lead), 'full');
     expect((await sharp(full).metadata()).width).toBe(1600);
     expect(await store.has(sha256Of(lead), 'thumb')).toBe(true);
+    const [row] = await asSuperuser<{ bytes: boolean; full_bytes: number }>(
+      'SELECT full_webp IS NOT NULL OR thumb_webp IS NOT NULL AS bytes, full_bytes FROM app.images WHERE sha256 = $1',
+      [sha256Of(lead)],
+    );
+    expect(row).toEqual({ bytes: false, full_bytes: full?.length });
     expect((await imageInfo(db, sha256Of(lead)))?.full_bytes).toBe(full?.length);
   });
 
-  it('serves the volume’s bytes once the database allows the image, and heals a missing file from the database', async () => {
+  it('serves the volume’s bytes once the database allows the image; a missing file is a 404 and an error naming it', async () => {
     await storyWithImages();
     const sha = sha256Of(preview);
-    const healed = await onVolume.inject({
-      method: 'GET',
-      url: `/public/images/preview/${sha}?size=thumb`,
-    });
-    expect(healed.statusCode).toBe(200);
-    expect(await store.has(sha, 'thumb')).toBe(true);
-    // From now on the file is what's served: a marker written over it comes back.
     await writeFile(join(dir, `${sha}.thumb.webp`), 'from the volume');
-    const served = await onVolume.inject({
-      method: 'GET',
-      url: `/public/images/preview/${sha}?size=thumb`,
-    });
+    const served = await read(`/public/images/preview/${sha}?size=thumb`);
+    expect(served.statusCode).toBe(200);
     expect(served.body).toBe('from the volume');
     // The database still decides: a switched-off preview isn't served, whatever the volume holds.
     await setImages('licensed');
-    const hidden = await onVolume.inject({
-      method: 'GET',
-      url: `/public/images/preview/${sha}?size=thumb`,
-    });
-    expect(hidden.statusCode).toBe(404);
+    expect((await read(`/public/images/preview/${sha}?size=thumb`)).statusCode).toBe(404);
+    await setImages('all');
+    // No database to fall back on: a file the volume lost is a 404, and the log names the image, nothing else.
+    await unlink(join(dir, `${sha}.thumb.webp`));
+    logs.length = 0;
+    expect((await read(`/public/images/preview/${sha}?size=thumb`)).statusCode).toBe(404);
+    const reported = logs.map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(reported).toContainEqual(
+      expect.objectContaining({
+        level: 50,
+        sha256: sha,
+        size: 'thumb',
+        msg: 'an image file is missing',
+      }),
+    );
+    expect(await store.has(sha, 'thumb')).toBe(false);
   });
 
-  it('backfills every image the database holds and the volume lacks, once', async () => {
-    await storyWithImages();
-    expect(await backfillImages(db, store)).toEqual({ checked: 2, copied: 4 });
-    expect(await backfillImages(db, store)).toEqual({ checked: 2, copied: 0 });
+  it('writes an image’s files again when the same upload comes back after they were lost', async () => {
+    expect((await upload(lead)).statusCode).toBe(201);
+    await unlink(join(dir, `${sha256Of(lead)}.webp`));
+    const again = await upload(lead);
+    expect(again.statusCode).toBe(200);
     expect(await store.has(sha256Of(lead), 'full')).toBe(true);
   });
 
-  it('counts the images and the files the volume has, for checking before step 2', async () => {
+  it('counts the images and the ones whose files the volume lacks', async () => {
     await storyWithImages();
-    const before = (
-      await onVolume.inject({ method: 'GET', url: '/api/v1/images', headers: auth })
-    ).json();
-    expect(before).toEqual({
+    const census = () => app.inject({ method: 'GET', url: '/api/v1/images', headers: auth });
+    expect((await census()).json()).toEqual({ store: 'files', count: 2, on_disk: 2, missing: [] });
+    await unlink(join(dir, `${sha256Of(lead)}.thumb.webp`));
+    expect((await census()).json()).toEqual({
       store: 'files',
       count: 2,
-      on_disk: 0,
-      missing: [sha256Of(lead), sha256Of(preview)].sort(),
+      on_disk: 1,
+      missing: [sha256Of(lead)],
     });
-    await backfillImages(db, store);
-    const after = (
-      await onVolume.inject({ method: 'GET', url: '/api/v1/images', headers: auth })
-    ).json();
-    expect(after).toEqual({ store: 'files', count: 2, on_disk: 2, missing: [] });
-    const inDatabase = (await read('/api/v1/images')).statusCode;
-    expect(inDatabase).toBe(401);
-    expect(
-      (await app.inject({ method: 'GET', url: '/api/v1/images', headers: auth })).json(),
-    ).toEqual({
-      store: 'database',
-      count: 2,
-      on_disk: null,
-      missing: [],
-    });
+    expect((await read('/api/v1/images')).statusCode).toBe(401);
+  });
+
+  it('without a volume, stores and serves no image: the image routes answer 503', async () => {
+    const bare = buildApp({ apiToken: TOKEN, db, publicDb });
+    try {
+      const uploaded = await bare.inject({
+        method: 'PUT',
+        url: `/api/v1/images/${sha256Of(lead)}`,
+        headers: { ...auth, 'content-type': 'image/jpeg' },
+        payload: lead,
+      });
+      expect(uploaded.statusCode).toBe(503);
+      expect(uploaded.json().error).toContain('IMAGES_DIR');
+      const census = await bare.inject({ method: 'GET', url: '/api/v1/images', headers: auth });
+      expect(census.statusCode).toBe(503);
+      const served = await bare.inject({
+        method: 'GET',
+        url: `/public/images/lead/${sha256Of(lead)}`,
+      });
+      expect(served.statusCode).toBe(503);
+    } finally {
+      await bare.close();
+    }
   });
 });

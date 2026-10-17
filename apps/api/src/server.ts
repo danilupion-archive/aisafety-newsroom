@@ -5,7 +5,6 @@ import { captureException, flush } from '@sentry/node';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { initErrorTracking } from './error-tracking.js';
-import { backfillImages } from './images/data.js';
 import { createImageStore } from './images/store.js';
 import { createTelegramApi } from './telegram/api.js';
 
@@ -65,18 +64,6 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 }
 
 await app.listen({ host: config.host, port: config.port });
-
-// Every image the database holds and the volume doesn't yet, copied in the background (D22): idempotent, so both
-// replicas can do it on every start. Until it's done, a missing file is served from the database and written back.
-if (imageStore) {
-  backfillImages(db, imageStore).then(
-    ({ checked, copied }) => app.log.info({ checked, copied }, 'image files backfilled'),
-    (error: unknown) => {
-      app.log.warn({ err: error }, 'image files could not be backfilled');
-      captureException(error);
-    },
-  );
-}
 
 // Point Telegram at the webhook on every start: idempotent, so both replicas can do it. A failure leaves the webhook as
 // it was, and the next start tries again.

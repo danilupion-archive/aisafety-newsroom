@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { type RawBuilder, sql } from 'kysely';
 import { z } from 'zod';
 
+import { NO_STORE } from '../images/routes.js';
 import { type ImageStore, SHA256 } from '../images/store.js';
 import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
@@ -251,37 +252,28 @@ export const publicRoutes =
         if (!address || !query) {
           return reply;
         }
-        const shown = db
+        if (!store) {
+          return reply.code(503).send(NO_STORE);
+        }
+        // The database decides whether the image may be shown (R-CAP-10, R-CAP-11); the bytes are only on the volume
+        // (D22).
+        const shown = await db
           .selectFrom('app.public_images')
+          .select('sha256')
           .where('sha256', '=', address.sha256)
           .where('kind', '=', address.kind)
-          .limit(1);
-        const fromDatabase = async () => {
-          const row = await shown
-            .select(query.size === 'thumb' ? 'thumb_webp as bytes' : 'full_webp as bytes')
-            .executeTakeFirst();
-          return row?.bytes ? Buffer.from(row.bytes) : undefined;
-        };
-        // The database decides whether the image may be shown, as before (R-CAP-10, R-CAP-11); the bytes come from the
-        // volume (D22). A file the volume lacks comes from the database once and is written back.
-        let bytes: Buffer | undefined;
-        if (store) {
-          if (!(await shown.select('sha256').executeTakeFirst())) {
-            return reply.code(404).send({ error: 'No such image' });
-          }
-          bytes = await store.read(address.sha256, query.size);
-          if (!bytes) {
-            bytes = await fromDatabase();
-            if (bytes) {
-              await store.write(address.sha256, query.size, bytes).catch((error: unknown) => {
-                request.log.warn({ err: error }, 'an image file could not be written back');
-              });
-            }
-          }
-        } else {
-          bytes = await fromDatabase();
+          .limit(1)
+          .executeTakeFirst();
+        if (!shown) {
+          return reply.code(404).send({ error: 'No such image' });
         }
+        const bytes = await store.read(address.sha256, query.size);
         if (!bytes) {
+          // Shown by the database, gone from the volume: the census lists it, and the same upload writes it back.
+          request.log.error(
+            { sha256: address.sha256, size: query.size },
+            'an image file is missing',
+          );
           return reply.code(404).send({ error: 'No such image' });
         }
         return reply.type('image/webp').send(bytes);

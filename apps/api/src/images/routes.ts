@@ -15,6 +15,11 @@ const address = z.strictObject({
     .regex(SHA256, 'an image is named by the SHA-256 of its bytes, in lowercase hex'),
 });
 
+/** Without a volume the API keeps no image's bytes anywhere (D22): it can't take or serve one. */
+export const NO_STORE = {
+  error: 'IMAGES_DIR isn’t set: this API has no volume to keep images on',
+} as const;
+
 const REFUSED = {
   unsupported: { status: 415, error: 'Not an image the site takes: JPEG, PNG, WebP or GIF' },
   unreadable: { status: 400, error: 'The image can’t be read' },
@@ -40,6 +45,9 @@ export const imagesRoutes =
       '/api/v1/images/:sha256',
       { bodyLimit: UPLOAD_MAX_BYTES },
       async (request, reply) => {
+        if (!store) {
+          return reply.code(503).send(NO_STORE);
+        }
         const params = parse(address, request.params, reply);
         if (!params) {
           return reply;
@@ -56,18 +64,22 @@ export const imagesRoutes =
             .send({ error: `The image’s SHA-256 is ${actual}, not the one in its address` });
         }
         const existing = await imageInfo(db, params.sha256);
-        if (existing) {
+        const whole =
+          (await store.has(params.sha256, 'full')) && (await store.has(params.sha256, 'thumb'));
+        if (existing && whole) {
           return reply.code(200).send(existing);
         }
+        // New, or recorded but its files lost: the same upload writes them (again).
         const processed = await processImage(request.body);
         if (typeof processed === 'string') {
           const refusal = REFUSED[processed];
           return reply.code(refusal.status).send({ error: refusal.error });
         }
-        // The files first (D22): once the row exists, its files do too. Bytes in the database as well, until step 2.
-        if (store) {
-          await store.write(params.sha256, 'full', processed.full);
-          await store.write(params.sha256, 'thumb', processed.thumb);
+        // The files first (D22): once the row exists, its files do too.
+        await store.write(params.sha256, 'full', processed.full);
+        await store.write(params.sha256, 'thumb', processed.thumb);
+        if (existing) {
+          return reply.code(200).send(existing);
         }
         const { created, image } = await storeImage(db, params.sha256, processed);
         return reply.code(created ? 201 : 200).send(image);
@@ -75,10 +87,12 @@ export const imagesRoutes =
     );
 
     /**
-     * The images and the store (D22): how many the database holds, how many the volume has both files of, and the
-     * first few it lacks, to check before the database stops keeping their bytes.
+     * The images and the volume (D22): how many the database records, how many the volume has both files of, and the
+     * first few it lacks, which the site can't show.
      */
-    app.get('/api/v1/images', async () => imageCensus(db, store));
+    app.get('/api/v1/images', async (_request, reply) =>
+      store ? imageCensus(db, store) : reply.code(503).send(NO_STORE),
+    );
 
     app.get<{ Params: { sha256: string } }>('/api/v1/images/:sha256', async (request, reply) => {
       const params = parse(address, request.params, reply);

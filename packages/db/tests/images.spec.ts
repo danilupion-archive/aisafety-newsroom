@@ -91,6 +91,32 @@ describe('app.images', () => {
     });
   });
 
+  it('keeps what an image is without its bytes, which live on the volume (D22): sizes over zero', async () => {
+    await inRolledBackTransaction(async (client) => {
+      await client.query(
+        `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes) VALUES ($1, 10, 10, 100, 20)`,
+        [LEAD],
+      );
+      const { rows } = await client.query<{ full_bytes: number; bytes: boolean }>(
+        `SELECT full_bytes, full_webp IS NOT NULL AS bytes FROM app.images WHERE sha256 = $1`,
+        [LEAD],
+      );
+      expect(rows).toEqual([{ full_bytes: 100, bytes: false }]);
+      expect(
+        await failure(
+          client,
+          `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes) VALUES ($1, 1, 1, 0, 1)`,
+          [PREVIEW],
+        ),
+      ).toEqual({ code: '23514', constraint: 'images_full_bytes_positive' });
+      // The public view no longer carries any image's bytes.
+      const { rows: seen } = await client.query<{ full: boolean }>(
+        `SELECT bool_or(full_webp IS NOT NULL OR thumb_webp IS NOT NULL) AS full FROM app.public_images`,
+      );
+      expect(seen[0]?.full ?? false).toBe(false);
+    });
+  });
+
   it('gives a page no image', async () => {
     await inRolledBackTransaction(async (client) => {
       expect(
