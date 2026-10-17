@@ -1,5 +1,12 @@
 # @aisafety-newsroom/web
 
+## 0.13.4
+
+### Patch Changes
+
+- 4669fc6: The footer's links look like links, as in posts: brighter than the text around them, underlined in the accent, the accent
+  on hover.
+
 ## 0.13.3
 
 ### Patch Changes
