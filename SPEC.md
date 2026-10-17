@@ -1,6 +1,10 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.9** · 2026-10-17 · Owner: Dani
+Status: **draft v0.10** · 2026-10-17 · Owner: Dani
+
+v0.10 changes: every inbox item has an intent, `post` (the default: /news drafts a post
+for it) or `log` (the news log only), set with `/log` and `/post` in the bot (D18, R-CAP-8,
+R-MED-2); the API returns it.
 
 v0.9 changes: YouTube videos play on the card and the post, loaded only when the reader
 presses play (R-WEB-12). A card without a lead image shows its first source's preview.
@@ -215,7 +219,14 @@ the Service, and a NetworkPolicy enforces it.
   the worker is done: "#42 · <page title>" from the page's metadata, or "#42 · couldn't
   fetch it" when the item moves to `needs_review`.
 - **R-CAP-8** Must: bot commands:
-  - `/pending`: up to 20 unlogged items, with id, status, and title or host;
+  - `/pending`: up to 20 unlogged items, with id, status, and title or host, those to
+    log only marked "· log only";
+  - `/log <link> [note]`: saves the link like a plain message, but to log only (D18); a
+    link already in the inbox gets the note as usual (R-CAP-6) and becomes log only. A
+    plain link, a caption or a forward is to be posted;
+  - `/log <id>` and `/post <id>`: switch an item between log only and posted, replying
+    with its title or host like `/discard`. A discarded item is refused; a logged one is
+    switched, with a warning that its post may already be on the site (`/takedown`);
   - `/discard <id> [reason]`, which replies with the item's title or host, so a wrong
     id is noticed at once;
   - `/restore <id>`: brings a discarded item back (R-DB-1);
@@ -277,6 +288,7 @@ published post shows.
 | `note`                                              | text                        | notes appended with timestamps                                      |
 | `follows_up`                                        | bigint, FK to `inbox_items` | for a note sent about an item already logged or discarded (R-CAP-6) |
 | `status`                                            | enum                        | `queued`, `ready`, `needs_review`, `logged`, `discarded`            |
+| `intent`                                            | enum                        | `post` (default) or `log`: a post too, or the log entry only (D18)  |
 | `fetch_status`                                      | enum                        | `pending`, `ok`, `failed`, `skipped`                                |
 | `fetch_attempts`, `next_fetch_at`                   | int, timestamptz            | retries with backoff                                                |
 | `http_status`, `final_url`, `content_type`          | int, text, text             |                                                                     |
@@ -404,14 +416,14 @@ validated with zod schemas that the tests share.
   ones last, so a story sent today about something weeks old stands out (D16). The day is
   read from `page_published_at` when it starts with an ISO date; nothing else is guessed.
 
-| Method and path             | Body or query                                                                                       | Returns                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50), `sort=found` (default) or `source` (R-API-4) | items without `page_text`, with `page_excerpt` (first 4,000 chars); a follow-up also carries its original's id, URL, status and `logged_ref` |
-| `GET /items/:id`            |                                                                                                     | the full item, including `page_text`                                                                                                         |
-| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`                                                          | `200` with the item                                                                                                                          |
-| `POST /items/:id/discarded` | `{reason}`                                                                                          | `200` with the item                                                                                                                          |
-| `POST /items/:id/restored`  |                                                                                                     | `200` with the item                                                                                                                          |
-| `POST /items/:id/note`      | `{text}`                                                                                            | `200` with the item                                                                                                                          |
+| Method and path             | Body or query                                                                                       | Returns                                                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /items`                | `status=ready,needs_review` (default), `limit` (≤ 50), `sort=found` (default) or `source` (R-API-4) | items without `page_text`, with `page_excerpt` (first 4,000 chars) and `intent`; a follow-up also carries its original's id, URL, status and `logged_ref` |
+| `GET /items/:id`            |                                                                                                     | the full item, including `page_text` and `intent`                                                                                                         |
+| `POST /items/:id/logged`    | `{news_file, entry_date, tags, relevance}`                                                          | `200` with the item                                                                                                                                       |
+| `POST /items/:id/discarded` | `{reason}`                                                                                          | `200` with the item                                                                                                                                       |
+| `POST /items/:id/restored`  |                                                                                                     | `200` with the item                                                                                                                                       |
+| `POST /items/:id/note`      | `{text}`                                                                                            | `200` with the item                                                                                                                                       |
 
 Errors are `{ "error": "message" }` with `400`, `401`, `404` or `409`.
 
@@ -444,7 +456,9 @@ These are requirements on the content repo, implemented there.
   4. run the alert check;
   5. mark the item `logged`, or `discarded` with a reason.
 
-  It uses no agents. The reply is one line per item.
+  It drafts a post for each item whose `intent` is `post` and only logs those marked
+  `log` (D18); a missing `intent`, from an older API, counts as `post`. It uses no agents.
+  The reply is one line per item.
 
 - **R-MED-3** Must: `/news <url>` (direct mode) keeps working without the newsroom.
 - **R-MED-4** Must: `/sweep` reads Miniflux first (§12), then has the `researcher` agent
@@ -508,6 +522,7 @@ credit}`, the file under `sources/previews/`, saved when the source is fetched. 
 | D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it                                                                                                                                                                                                                                                                                                   | Q10          |
 | D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                                                                                                                                                                                                                                                                                                                  | Q12          |
 | D17 | Images (R-WEB-14–16): every page has the site's own share card (title and mark on navy, generated by the site); a post may have a lead image under a clear licence, credited; a source may show its outlet's preview, small and credited, a copy whose risk the bot's switches (R-CAP-10) and per-image removal (R-CAP-11) manage. Always copies the site serves from its own host, never hotlinks; never AI-generated (R-WEB-3) | Q13          |
+| D18 | Almost every link Dani sends becomes a post as well as a log entry: an item's `intent` is `post` unless Dani says `log` (`/log <link>`, `/log <id>`; `/post <id>` switches back). The bot is the only place it changes; aisafety-media reads it (R-MED-2)                                                                                                                                                                        | —            |
 | D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13)                                                                                                              | —            |
 
 ## 12. Miniflux for `/sweep`
