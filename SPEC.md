@@ -1,6 +1,13 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.7** · 2026-10-17 · Owner: Dani
+Status: **draft v0.8** · 2026-10-17 · Owner: Dani
+
+v0.8 changes: images (D17, Q13 closed): a share card the site makes for every page
+(R-WEB-14), a post's lead image with a clear licence (R-WEB-15) and its sources' preview
+images (R-WEB-16), all copies the site serves, uploaded through the API (R-API-5). The bot
+turns images off or on and takes a post or one image down at once (R-CAP-10, R-CAP-11).
+aisafety-media's side is specified, not built (R-MED-7). The footer's about link reads
+"Sobre PandorIA".
 
 v0.7 changes: three dates kept apart (D16): when Dani found a link, the page's own day,
 and for a post its posted day and its news date. The timeline stays in posted order and
@@ -213,6 +220,25 @@ the Service, and a NetworkPolicy enforces it.
   - `/help`.
 - **R-CAP-9** Should: record `submitted_by` (the Telegram user id) on each item, ready
   for more contributors later `[Q6]`.
+- **R-CAP-10** Must: `/images [on|licensed|off]` turns the site's images down from a
+  phone, in seconds: `on` shows lead images and the sources' previews, `licensed` only the
+  lead images (the previews, the outlets' photos, are the riskier copies), `off` none.
+  Never the share cards (R-WEB-14), the site's own. One switch in the database
+  (`app.site_settings`), read by the public views on every request, so the next page and
+  the next image request follow it; with no settings row, no image (fails closed).
+  `/images` alone says how it stands.
+- **R-CAP-11** Must: `/takedown <post>` hides a story at once, both versions (`410`,
+  like an unpublished one, D11); the post is named as `es/<slug>`, `en/<slug>`, a bare slug
+  (Spanish first, since Spanish is at the root) or its address copied from the site. It
+  sets `taken_down_at`, which only the bot sets and clears: a push, a rebuild's included,
+  never brings a taken-down story back, and aisafety-media's `/post` sees it to record the
+  decision (R-MED-7). `/takedown image <post> [lead|<n>]` hides a post's images (both
+  versions' with no choice), its lead image, or source n's preview: the image itself is
+  marked removed, so it stays hidden wherever it's used, whatever a later push names.
+  `/restore <post>` and `/restore image <post> [lead|<n>]` undo either; `/restore <id>`
+  still restores an inbox item. Each reply names the post's title or the image's credit,
+  so a wrong target is noticed at once. Taking down shows at once; a restore can take up
+  to a minute, the site's own list of gone posts (R-WEB-6).
 
 ## 7. Inbox store (DB)
 
@@ -225,7 +251,15 @@ and is reviewed in every PR.
 - `newsroom_owner` owns the tables and is used only by the migration Job;
 - `newsroom_app` is used by the API and the worker;
 - `newsroom_public` is used by the API's public read routes, and may only read published
-  posts.
+  posts and the images they show (`app.public_images`), through views; never a table.
+
+**Images and switches.** `app.images` keeps each uploaded image (R-API-5) as the API
+re-encoded it, keyed by the SHA-256 of what was sent; `removed_at` marks one the bot took
+down (R-CAP-11), and nothing is ever deleted. `app.site_settings` is one row, the image
+switch (R-CAP-10). The views decide what's public on every read: `published_posts` gives
+a lead image (with its size) or a source's preview only while the switch and removals
+allow it, and leaves out a taken-down story; `public_images` lists only the files a
+published post shows.
 
 ### `inbox_items`
 
@@ -428,38 +462,50 @@ These are requirements on the content repo, implemented there.
   from the newsroom. When writing about what is said in it, the transcript is fetched on
   the Mac, at that moment, never by the worker: YouTube is hardest on data centres'
   addresses, and transcripts are what it guards most.
+- **R-MED-7** Must (not built yet): images and takedowns in aisafety-media (D17).
+  - A post's front matter may name a lead image: `image: {file, alt, credit, licence,
+source_url}`, the file under `images/` in aisafety-media, an image under a clear
+    licence (never a publisher's photo, never AI-generated), alt text in the post's
+    language. A source file in `sources/` may name its outlet's preview: `preview: {file,
+credit}`, the file under `sources/previews/`, saved when the source is fetched. The
+    files stay in the repo, so a rebuild (R-WEB-8) sends the same bytes.
+  - `/post` uploads each image first (`PUT /images/<sha256>`, skipped when `GET` finds it),
+    then pushes the post naming them; `check` validates the fields and that the files exist.
+  - `newsroom.py posts` shows a story the bot took down (`taken_down_at`) and an image it
+    removed (`GET /images/<sha256>`'s `removed_at`). `/post` then stops and asks: record
+    the takedown (`unpublish`), or bring the story back with the bot's `/restore`.
 
 ## 11. Open questions
 
-| #   | Question                                                                     | Leaning                                                                                                |
-| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Q4  | Is drafting with a local model worth building? (§8.2)                        | Decide after using M1                                                                                  |
-| Q6  | Will others send items later?                                                | Designed for, not built                                                                                |
-| Q7  | Articles in v1, or breves first?                                             | Breves first                                                                                           |
-| Q8  | Which "Where to look" sources have usable feeds?                             | Checked: the watchlist's Feeds (2026-10-15)                                                            |
-| Q9  | How long to keep `page_text` (size, copyright)?                              | Clear it 90 days after `logged` or `discarded`                                                         |
-| Q13 | Images from the news on posts: which may be used, how credited, stored where | Optional per post, with source and credit; a copy the site serves, never a hotlink; none until decided |
+| #   | Question                                              | Leaning                                        |
+| --- | ----------------------------------------------------- | ---------------------------------------------- |
+| Q4  | Is drafting with a local model worth building? (§8.2) | Decide after using M1                          |
+| Q6  | Will others send items later?                         | Designed for, not built                        |
+| Q7  | Articles in v1, or breves first?                      | Breves first                                   |
+| Q8  | Which "Where to look" sources have usable feeds?      | Checked: the watchlist's Feeds (2026-10-15)    |
+| Q9  | How long to keep `page_text` (size, copyright)?       | Clear it 90 days after `logged` or `discarded` |
 
 ### Decided (v0.2–v0.4)
 
-| #   | Decision                                                                                                                                                                                                                                                                                                            | Was          |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system                                                                                                                                                                                                                    | Q2, Q3       |
-| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                                                                                                                                                                                                                                     | Q2           |
-| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                                                                                                                                                                                                                                       | Q5           |
-| D4  | The site is Dani's own; the about page says Dani collaborates with Pausemos la IA; no review by the organisation                                                                                                                                                                                                    | Q1 (in part) |
-| D5  | Drafting with a local model waits until M1 has been used                                                                                                                                                                                                                                                            | Q4           |
-| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                                                                                                                                                                                                                                    | —            |
-| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                                                                                                                                                                                                        | —            |
-| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                                                                                                                                                                                                                | Q1 (in part) |
-| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                                                                                                                                                                                                               | —            |
-| D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                                                                                                                                                                                                  | Q1 (in part) |
-| D11 | Every post is published in both languages; the site shows a story only when both versions are                                                                                                                                                                                                                       | Q11          |
-| D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11)                                                                                                                                                                                  | Q1           |
-| D13 | Miniflux waits: Dani checks the sources by hand for now, and R-RSS-1–3 apply once it's set up                                                                                                                                                                                                                       | —            |
-| D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it                                                                                                                                                                                      | Q10          |
-| D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                                                                                                                                                                                                     | Q12          |
-| D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13) | —            |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                         | Was          |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| D1  | The bot, API, worker and database run on Dani's Kubernetes cluster; n8n isn't part of the system                                                                                                                                                                                                                                                                                                                                 | Q2, Q3       |
+| D2  | The inbox lives in a `newsroom` database on the shared Postgres                                                                                                                                                                                                                                                                                                                                                                  | Q2           |
+| D3  | The site is Next.js, rendered on the server from the API; no rebuild per post                                                                                                                                                                                                                                                                                                                                                    | Q5           |
+| D4  | The site is Dani's own; the about page says Dani collaborates with Pausemos la IA; no review by the organisation                                                                                                                                                                                                                                                                                                                 | Q1 (in part) |
+| D5  | Drafting with a local model waits until M1 has been used                                                                                                                                                                                                                                                                                                                                                                         | Q4           |
+| D6  | The repo is `github.com/danilupion/aisafety-newsroom`, public, AGPL-3.0-or-later                                                                                                                                                                                                                                                                                                                                                 | —            |
+| D7  | The inbox and posts API are on a public host behind a bearer token, not on a private network                                                                                                                                                                                                                                                                                                                                     | —            |
+| D8  | The API's host is `newsroom.danilupion.com`, under `/api/v1` and `/telegram/webhook`                                                                                                                                                                                                                                                                                                                                             | Q1 (in part) |
+| D9  | The news log is one file per item; `news_file` is `news/YYYY/MM/YYYY-MM-DD-slug.md`, not a month file                                                                                                                                                                                                                                                                                                                            | —            |
+| D10 | The site is in Spanish and English from v1, on one host: Spanish at the root, English under `/en/`                                                                                                                                                                                                                                                                                                                               | Q1 (in part) |
+| D11 | Every post is published in both languages; the site shows a story only when both versions are                                                                                                                                                                                                                                                                                                                                    | Q11          |
+| D12 | The site is PandorIA, at `pandoria.es`, the same name in both languages; its look is the night design with the box mark (R-WEB-11)                                                                                                                                                                                                                                                                                               | Q1           |
+| D13 | Miniflux waits: Dani checks the sources by hand for now, and R-RSS-1–3 apply once it's set up                                                                                                                                                                                                                                                                                                                                    | —            |
+| D14 | The texts (breves, articles) are CC BY 4.0, like aiontheballot's content: the footer links the licence, and the feeds state it                                                                                                                                                                                                                                                                                                   | Q10          |
+| D15 | A breve's 80–150 words apply to the language it's written in; its translation says the same, at whatever length                                                                                                                                                                                                                                                                                                                  | Q12          |
+| D17 | Images (R-WEB-14–16): every page has the site's own share card (title and mark on navy, generated by the site); a post may have a lead image under a clear licence, credited; a source may show its outlet's preview, small and credited, a copy whose risk the bot's switches (R-CAP-10) and per-image removal (R-CAP-11) manage. Always copies the site serves from its own host, never hotlinks; never AI-generated (R-WEB-3) | Q13          |
+| D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13)                                                                                                              | —            |
 
 ## 12. Miniflux for `/sweep`
 
@@ -493,7 +539,7 @@ These are requirements on the content repo, implemented there.
 - **R-WEB-3** Must: no AI-generated images; non-partisan; honest about uncertainty.
   Open about how it's made: the texts are written by AI, and Dani picks the stories and
   checks every text. Every page says so in its footer, with Dani's name (linked to a page
-  about Dani when gitops gives one) and a link to the about page ("Cómo se hace"), which
+  about Dani when gitops gives one) and a link to the about page ("Sobre PandorIA"), which
   explains the process; each post says it above its sources, and each feed entry at its
   end. The site doesn't speak for Pausemos la IA.
 - **R-WEB-10** Must: every post is published in Spanish and English (D11): written in
@@ -525,8 +571,9 @@ serves that page with the status, since a page's own not-found is drawn by scrip
 about page's text is a post of type `page` whose slug is its language's word (`sobre`,
 `about`), pushed from aisafety-media like the rest (R-WEB-2): pages are never listed,
 need no sources, and nothing on the site is written in its code. The six path words, the
-two languages' prefixes and `healthz`, which share the root with Spanish posts, are
-refused as slugs in both languages, so no post hides behind a page.
+two languages' prefixes, `healthz`, and `img` and `og` (the images' and the share cards'
+folders, D17), which share the root with Spanish posts, are refused as slugs in both
+languages, so no post hides behind a page.
 
 - **R-WEB-4** Must: a Spanish and an English interface, each language's own labels,
   dates and tag names, and a link to the other language labelled in that language; Open
@@ -558,6 +605,31 @@ refused as slugs in both languages, so no post hides behind a page.
   ("noticia del 12 oct"), and so does the post's page. The feeds and the sitemap stay as
   posted. A push without a news date (a client older than them) is dated by its posted
   day on the site's clock, and so is a post pushed before them.
+- **R-WEB-14** Must: every page has a share card, what a link to it shows on X, WhatsApp
+  or Telegram (`og:image`, `twitter:card` `summary_large_image`): the site's own drawing,
+  1200 × 630, the mark and the name, the title in large Hanken Grotesk on navy, the type
+  or the tagline, and the host. A post's card is its own (`/og/<lang>/<slug>.png`); every
+  other page has its language's home card (`/og/<lang>.png`). Never a lead image or a
+  publisher's photo, never AI-generated (R-WEB-3); the switches don't touch it.
+- **R-WEB-15** Should: a breve or an article may have a lead image under a clear licence
+  (a Commons file, a press kit, a public-domain image; never a publisher's or an agency's
+  photo, never AI-generated): shown on its page below the summary with its alt text in
+  the post's language and a caption, "Imagen: <credit> · <licence>", the credit linked to
+  where it came from; and small on its timeline card. A page has none.
+- **R-WEB-16** Should: a source may show its outlet's preview image (the page's own
+  `og:image`), small, beside its link in the post's sources, credited to the outlet
+  ("Imagen: <outlet>"). Decorative there (empty alt): the link says what it is.
+
+  Images (R-WEB-15, R-WEB-16) are always the site's own copies, served from its host
+  under `/img/<kind>/<sha256>.webp` (`.thumb.webp` for the small one), never hotlinks: a
+  reader's browser loads nothing from another host (R-WEB-7). The API re-encodes each
+  upload: raster formats only (JPEG, PNG, WebP, GIF; never SVG), refused past 50
+  megapixels before it's decoded, the first frame of an animation, turned upright, as
+  WebP without any metadata (no EXIF, no location, no colour profile), at most 1600 px
+  on its longer side and a 480 px thumbnail. A file is served only while a published post
+  shows it as that kind and the switches allow it (R-CAP-10, R-CAP-11), so a page that
+  stops naming an image and its address both follow a switch at once; browsers keep a
+  served file for a week, since its name changes whenever its bytes would.
 
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9. A post's address is its language and its slug.
@@ -566,13 +638,23 @@ same rules as §9. A post's address is its language and its slug.
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, news_date, translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused; `news_date` is refused on a page |
 | `DELETE /posts/:lang/:slug` |                                                                                                                                         | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)                                                 |
-| `GET /posts`                |                                                                                                                                         | list, so aisafety-media can reconcile                                                                                                         |
+| `GET /posts`                |                                                                                                                                         | list, so aisafety-media can reconcile, with each post's `taken_down_at` (R-CAP-11)                                                            |
+| `PUT /images/:sha256`       | the image's bytes (`image/jpeg`, `image/png`, `image/webp`, `image/gif`), up to 10 MB                                                   | store it (`201`) or find it stored (`200`); `400` if the bytes' SHA-256 isn't the address, `415` if it's no image the site takes (R-API-5)    |
+| `GET /images/:sha256`       |                                                                                                                                         | its size, its stored sizes and `removed_at` (R-CAP-11), or `404`                                                                              |
 
 `lang` is `es` or `en`; `translation_of` is `{lang, slug}` or `null`. A translation whose
 original has never been pushed, a second translation in one language and a translation of
 a translation are refused with `409`. `unpublished: true` (default `false`) stores the post
 already unpublished, for a rebuild; any other push publishes it. Each push is one version;
-the public routes show a story once both are published (D11).
+the public routes show a story once both are published (D11). A push never clears a
+takedown (R-CAP-11). `image` is `{sha256, alt, credit, licence, source_url}` or `null`
+(refused on a page); a source may carry `preview: {sha256, credit}`. A post may name only
+uploaded images: one that isn't is refused with `400`, naming it.
+
+- **R-API-5** Must: images go up before the post that names them, each at the address of
+  the SHA-256 of its own bytes, which the API checks: the same upload twice is one image
+  (R-API-3), aisafety-media knows every name before it pushes, and an image the bot
+  removed stays removed whoever uploads it again.
 
 **Public read routes** (no token, on no gateway, as `newsroom_public`), each for one
 language: `GET /public/posts?lang=` (latest first, no pages, each with its
@@ -582,7 +664,10 @@ share an instant; `order=news` lists by news date, its next page led by the last
 as `before_date`), `GET /public/posts/:lang/:slug` (with the story's other
 version as `translations`; `404` until both are published, `410` once either is
 unpublished), `GET /public/tags?lang=`,
-and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. A
+`GET /public/images/:kind/:sha256?size=full|thumb` (`lead` or `preview`; the WebP
+while a published post shows it so and the switches allow it, `404` otherwise),
+and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. Lists and
+posts carry a post's `image` and its sources' previews only while the switches show them. A
 `published_at` with no time is midnight in Madrid, the site's clock.
 
 - **R-WEB-8** Must: the site can be rebuilt from aisafety-media (P1) by re-pushing every
@@ -606,7 +691,10 @@ and `GET /public/unpublished`, the addresses the site's proxy answers `410` for.
   text and rendered nowhere public. The worker reaches only the public internet
   (R-FET-4).
 - **Least privilege:** runtime roles own nothing, and `newsroom_public` reads only
-  published posts. Every pod sets resource requests and limits and a restrictive
+  published posts and the images they show, through views.
+- **Images** (D17): uploads come only through the token; each is checked against its
+  SHA-256, re-encoded to WebP without metadata, raster only (never SVG), with a pixel
+  limit before decoding (R-WEB-15). Every pod sets resource requests and limits and a restrictive
   securityContext.
 - **CI** never holds cluster credentials (Argo CD pulls), and pull requests from forks
   never run on the self-hosted runner (§15).
