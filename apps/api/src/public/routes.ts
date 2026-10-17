@@ -9,6 +9,10 @@ import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
 import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.js';
 
+/** A YouTube video's address, in any of its forms (the domain's youtubeVideoId reads them for the site). */
+const YOUTUBE_ADDRESS =
+  '^https?://([a-z0-9-]+\\.)?(youtube\\.com|youtu\\.be|youtube-nocookie\\.com)/';
+
 /**
  * The site's reads (R-WEB-6): published posts only, as newsroom_public, which reaches nothing else (SPEC §7). Outside
  * /api, so no token: no gateway routes them, and only the web pods reach them inside the cluster. Without the role's
@@ -61,14 +65,14 @@ export const publicRoutes =
         ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
-        // The first source preview the view still shows, for a card without a lead image (R-WEB-16, R-CAP-10), with
-        // its source's address: a video's still becomes its player (R-WEB-12).
+        // A source preview the view still shows, for a card without a lead image (R-WEB-16, R-CAP-10), with its
+        // source's address: a YouTube video's first, whose still becomes the card's player (R-WEB-12), else the first.
         .select(
           sql<{ sha256: string; credit: string; source_url: string } | null>`(
             select (source.value -> 'preview') || jsonb_build_object('source_url', source.value -> 'url')
             from jsonb_array_elements(sources) with ordinality as source(value, position)
             where source.value ? 'preview'
-            order by source.position
+            order by (source.value ->> 'url') ~* ${YOUTUBE_ADDRESS} desc, source.position
             limit 1
           )`.as('preview'),
         )

@@ -240,6 +240,29 @@ describe('a post’s images (R-WEB-15, R-WEB-16)', () => {
     expect(hidden.find((row) => row.slug === 'con-imagen')?.preview).toBeNull();
   });
 
+  it('lists a video source’s still before an earlier source’s image, so the card can play it (R-WEB-12)', async () => {
+    const still = await photo('#223344', 640, 360);
+    expect((await upload(preview)).statusCode).toBe(201);
+    expect((await upload(still)).statusCode).toBe(201);
+    const video = {
+      title: 'Una charla de ejemplo',
+      url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+      accessed: '2026-10-15',
+      preview: { sha256: sha256Of(still), credit: 'Canal de ejemplo' },
+    };
+    const sources = [sourcesWith(preview)[1], video];
+    expect((await put('es/con-video', { ...BREVE, sources })).statusCode).toBe(201);
+    const en = { ...EN_BREVE, sources, translation_of: { lang: 'es', slug: 'con-video' } };
+    expect((await put('en/with-video', en)).statusCode).toBe(201);
+    type Listed = { slug: string; preview: { source_url?: string } | null };
+    const listed = (await read('/public/posts?lang=es')).json<Listed[]>();
+    expect(listed.find((row) => row.slug === 'con-video')?.preview).toEqual({
+      sha256: sha256Of(still),
+      credit: 'Canal de ejemplo',
+      source_url: video.url,
+    });
+  });
+
   it('follows the switch on the next request: `licensed` hides previews, `none` every image (R-CAP-10)', async () => {
     await storyWithImages();
     await setImages('licensed');

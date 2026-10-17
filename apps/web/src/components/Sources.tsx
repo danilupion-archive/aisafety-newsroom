@@ -19,14 +19,17 @@ const box = css({
   borderColor: 'rule',
   bg: 'deep',
 });
+// One row per source, no numbers (the text names its sources, never "source 2"), a thin rule between rows.
 const list = css({
-  listStyle: 'decimal',
-  paddingLeft: '5',
+  listStyle: 'none',
   display: 'flex',
   flexDirection: 'column',
-  gap: '2.5',
   fontSize: '1.0625rem',
   lineHeight: '1.5',
+  '& > li': { paddingY: '3' },
+  '& > li + li': { borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: 'rule' },
+  '& > li:first-child': { paddingTop: '0' },
+  '& > li:last-child': { paddingBottom: '0' },
   '& a': {
     textDecoration: 'underline',
     textDecorationColor: 'accent',
@@ -34,7 +37,7 @@ const list = css({
     textUnderlineOffset: '0.2em',
   },
 });
-const accessed = css({ color: 'muted' });
+const details = css({ display: 'block', color: 'muted', fontSize: '0.875rem', marginTop: '1' });
 // A source with its outlet's preview: its text, then the image small on its right.
 const withPreview = css({ display: 'flex', alignItems: 'flex-start', gap: '3.5' });
 const grow = css({ flex: '1', minWidth: '0' });
@@ -48,7 +51,6 @@ const thumb = css({
   borderRadius: 'md',
   bg: 'card',
 });
-const credit = css({ display: 'block', color: 'muted', fontSize: '0.875rem', marginTop: '0.5' });
 const note = css({ color: 'muted', marginTop: '-1', marginBottom: '3.5' });
 
 /**
@@ -68,17 +70,15 @@ export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Sourc
         {sources.map((source) => (
           <li key={source.url}>
             <div className={source.preview ? withPreview : undefined}>
-              {/* The text first: the list's number lines up with its first line, the picture on its right. */}
+              {/* The text first, the picture on its right. */}
               <span className={source.preview ? grow : undefined}>
                 <a href={source.url} rel="noopener noreferrer">
                   {source.title}
-                </a>{' '}
-                <span className={accessed}>
-                  · {t.accessed(calendarDate(lang, source.accessed))}
+                </a>
+                <span className={details}>
+                  {t.accessed(calendarDate(lang, source.accessed))}
+                  {source.preview ? <> · {t.previewCredit(source.preview.credit)}</> : null}
                 </span>
-                {source.preview ? (
-                  <span className={credit}>{t.previewCredit(source.preview.credit)}</span>
-                ) : null}
               </span>
               {source.preview ? (
                 // The link beside it says what it is: the image only illustrates it.
