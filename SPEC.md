@@ -1,6 +1,9 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.13** · 2026-10-17 · Owner: Dani
+Status: **draft v0.14** · 2026-10-17 · Owner: Dani
+
+v0.14 changes: quote cards: a post may quote up to three public posts (X, Bluesky…), drawn
+by the site with author, date and a link, never a screenshot or an embed (R-WEB-17, D21).
 
 v0.13 changes: the site's look (R-WEB-11): the box mark with tentacles rising out of it in
 a pink glow, aquamarine for links and controls, pink for highlights, a gradient "IA"; no
@@ -544,6 +547,7 @@ credit}`, the file under `sources/previews/`, saved when the source is fetched. 
 | D18 | Almost every link Dani sends becomes a post as well as a log entry: an item's `intent` is `post` unless Dani says `log` (`/log <link>`, `/log <id>`; `/post <id>` switches back). The bot is the only place it changes; aisafety-media reads it (R-MED-2)                                                                                                                                                                                                         | —            |
 | D19 | Every AI-written post carries its own label, "Escrito con IA", on its card and on its page, beside its type and date; a post a person wrote names them (`author`) as a badge instead. Dani doesn't always read every text in full, so the AI Act's exemption for text under human review (Art. 50(4)) isn't relied on, and the site never says texts are checked: it says AI writes them from the linked sources and Dani picks the stories, which is always true | —            |
 | D20 | aisafety-media tells Dani what its unattended runs did through the bot: `POST /api/v1/notify` sends plain text, link previews off, to Dani's private chat with the bot, whose id is the first allowed user id (R-CAP-1). At most 30 messages an hour, counted in `app.notifications` under a lock so two replicas can't both take the last place; the text is never logged or stored                                                                              | —            |
+| D21 | A quotation from a social network post is drawn by the site as a quote card (R-WEB-17), never a screenshot or an embed: it keeps the site's look, stays real text (readable, searchable, translatable), is a short credited quotation linked to its original, and loads nothing that tracks readers. A screenshot is only evidence, for a post that might be deleted, kept in aisafety-media and never published                                                  | —            |
 | D16 | Three dates, each where it fits: found (the inbox's `created_at`, its default order), the page's own day (the inbox's second order, R-API-4), and for a post its posted day (`published_at`: the site's default order, the feeds and the sitemap) and its news day (`news_date`: the site's second order, R-WEB-13)                                                                                                                                               | —            |
 
 ## 12. Miniflux for `/sweep`
@@ -687,16 +691,26 @@ languages, so no post hides behind a page.
   stops naming an image and its address both follow a switch at once; browsers keep a
   served file for a week, since its name changes whenever its bytes would.
 
+- **R-WEB-17** Should: a breve or an article may quote up to three posts from social
+  networks (X, Bluesky, Mastodon, LinkedIn…), each drawn by the site as a quote card after
+  the text and before the sources (D21): the words as said, as text in a `<blockquote>`
+  citing the original; who said them (name, and handle if any); the platform, read from
+  the original's address, and the day it was posted; a link to the original ("Ver en X" /
+  "View on X"); and, when they were said in another language, our translation into the
+  post's, labelled "Traducción nuestra" / "Our translation". Nothing loads from the
+  platform: no avatar, no embed, no script (R-WEB-7). aisafety-media keeps verbatim quotes
+  short by its own rule; a page has none.
+
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9. A post's address is its language and its slug.
 
-| Method and path             | Body                                                                                                                                            | Effect                                                                                                                                                                                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, news_date, author, translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused; `news_date` is refused on a page; `author`, when a person wrote it, is their name (1–100 characters), and none means AI (D19) |
-| `DELETE /posts/:lang/:slug` |                                                                                                                                                 | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)                                                                                                                                              |
-| `GET /posts`                |                                                                                                                                                 | list, so aisafety-media can reconcile, with each post's `taken_down_at` (R-CAP-11)                                                                                                                                                         |
-| `PUT /images/:sha256`       | the image's bytes (`image/jpeg`, `image/png`, `image/webp`, `image/gif`), up to 10 MB                                                           | store it (`201`) or find it stored (`200`); `400` if the bytes' SHA-256 isn't the address, `415` if it's no image the site takes (R-API-5)                                                                                                 |
-| `GET /images/:sha256`       |                                                                                                                                                 | its size, its stored sizes and `removed_at` (R-CAP-11), or `404`                                                                                                                                                                           |
+| Method and path             | Body                                                                                                                                                      | Effect                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUT /posts/:lang/:slug`    | `{type, title, summary, body_md, sources[], tags[], published_at, news_date, author, quotes[], translation_of, unpublished, content_ref: {path, commit}}` | create (`201`) or update (`200`); `type` is `breve`, `article` or `page`; the site's path words are refused; `news_date` is refused on a page; `author`, when a person wrote it, is their name (1–100 characters), and none means AI (D19); `quotes`, at most 3, each `{text (1–280), author (1–100), handle? (≤60), url (http or https), date (YYYY-MM-DD), translation? (≤400)}`, refused on a page (R-WEB-17) |
+| `DELETE /posts/:lang/:slug` |                                                                                                                                                           | unpublish: the page returns `410` and drops out of feeds, and so does its other version (D11)                                                                                                                                                                                                                                                                                                                    |
+| `GET /posts`                |                                                                                                                                                           | list, so aisafety-media can reconcile, with each post's `taken_down_at` (R-CAP-11)                                                                                                                                                                                                                                                                                                                               |
+| `PUT /images/:sha256`       | the image's bytes (`image/jpeg`, `image/png`, `image/webp`, `image/gif`), up to 10 MB                                                                     | store it (`201`) or find it stored (`200`); `400` if the bytes' SHA-256 isn't the address, `415` if it's no image the site takes (R-API-5)                                                                                                                                                                                                                                                                       |
+| `GET /images/:sha256`       |                                                                                                                                                           | its size, its stored sizes and `removed_at` (R-CAP-11), or `404`                                                                                                                                                                                                                                                                                                                                                 |
 
 `lang` is `es` or `en`; `translation_of` is `{lang, slug}` or `null`. A translation whose
 original has never been pushed, a second translation in one language and a translation of
@@ -718,8 +732,8 @@ language: `GET /public/posts?lang=` (latest first, no pages, each with its
 `original_author` for the timeline; `tag`, `limit`, and for the next page
 the last post's `published_at` and slug as `before` and `before_slug`, since posts can
 share an instant; `order=news` lists by news date, its next page led by the last post's
-as `before_date`), `GET /public/posts/:lang/:slug` (with `author` and
-`original_author`, and the story's other version as `translations`; `404` until both are
+as `before_date`), `GET /public/posts/:lang/:slug` (with `author`, `original_author`
+and `quotes`, and the story's other version as `translations`; `404` until both are
 published, `410` once either is
 unpublished), `GET /public/tags?lang=`,
 `GET /public/images/:kind/:sha256?size=full|thumb` (`lead` or `preview`; the WebP
