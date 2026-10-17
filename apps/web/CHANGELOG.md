@@ -1,5 +1,12 @@
 # @aisafety-newsroom/web
 
+## 0.11.1
+
+### Patch Changes
+
+- 17a4b57: The timeline's order switch says what it orders by ("Ordenar por: Publicación · Fecha de la noticia" / "Sort by:
+  Posted · News date"), and hovering the chosen order no longer turns its text light on the aquamarine.
+
 ## 0.11.0
 
 ### Minor Changes
