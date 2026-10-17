@@ -9,6 +9,7 @@ import { connection } from 'next/server';
 import type { Lang } from '@/i18n';
 
 import { getPost, type Translation } from '@/api';
+import { HeaderSearch } from '@/components/HeaderSearch';
 import { Mark } from '@/components/Mark';
 import { Pending } from '@/components/Pending';
 import { Wordmark } from '@/components/Wordmark';
@@ -104,17 +105,6 @@ const navList = css({
   fontWeight: '500',
 });
 const navLink = css({ display: 'inline-block', paddingY: '3' });
-// The search, as a magnifier: it names itself to screen readers and on hover (R-WEB-18).
-const searchLink = css({
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minWidth: '44px',
-  minHeight: '44px',
-  marginX: '-2',
-  color: 'text',
-  _hover: { color: 'accent' },
-});
 const languages = css({
   display: 'flex',
   padding: '3px',
@@ -221,35 +211,13 @@ const RootLayout = async ({ children, params }: Props) => {
               <nav aria-label={t.nav}>
                 <ul className={navList}>
                   <li>
-                    <Link
+                    <HeaderSearch
                       href={paths.search(lang)}
-                      className={searchLink}
-                      aria-label={t.search.name}
-                      title={t.search.name}
-                    >
-                      <svg
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <circle
-                          cx="10.5"
-                          cy="10.5"
-                          r="6.5"
-                          stroke="currentColor"
-                          strokeWidth="2.25"
-                        />
-                        <path
-                          d="m15.5 15.5 5 5"
-                          stroke="currentColor"
-                          strokeWidth="2.25"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                      <Pending />
-                    </Link>
+                      param={t.search.params.query}
+                      name={t.search.name}
+                      label={t.search.label}
+                      placeholder={t.search.placeholder}
+                    />
                   </li>
                   <li>
                     <Link href={paths.topics(lang)} className={navLink}>

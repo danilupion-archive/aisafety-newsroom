@@ -67,6 +67,9 @@ export const SearchView = async ({
           className={field}
           autoComplete="off"
           enterKeyHint="search"
+          // Arriving to search (the header's link, mostly on a phone), the keyboard comes up at once; on results, not.
+          // oxlint-disable-next-line jsx-a11y/no-autofocus -- only on the empty search page, which exists to be typed in
+          autoFocus={q === undefined}
         />
         <button type="submit" className={button} data-primary="">
           {t.search.button}
