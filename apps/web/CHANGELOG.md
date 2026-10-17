@@ -1,5 +1,12 @@
 # @aisafety-newsroom/web
 
+## 0.13.2
+
+### Patch Changes
+
+- 21adf7b: Switching the timeline's order (or topic) without a reload starts a fresh list, instead of keeping the posts loaded in
+  the other order.
+
 ## 0.13.1
 
 ### Patch Changes
