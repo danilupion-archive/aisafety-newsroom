@@ -82,6 +82,10 @@ export interface AppInboxItems {
   url_normalized: string | null;
 }
 
+export interface AppNotifications {
+  sent_at: Generated<Timestamp>;
+}
+
 export interface AppPosts {
   author: string | null;
   body_md: string;
@@ -152,6 +156,7 @@ export interface AppUnpublishedPosts {
 export interface DB {
   'app.images': AppImages;
   'app.inbox_items': AppInboxItems;
+  'app.notifications': AppNotifications;
   'app.posts': AppPosts;
   'app.public_images': AppPublicImages;
   'app.published_posts': AppPublishedPosts;

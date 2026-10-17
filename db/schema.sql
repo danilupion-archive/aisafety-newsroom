@@ -286,6 +286,17 @@ ALTER TABLE app.inbox_items ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 
 
 --
+-- Name: notifications; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.notifications (
+    sent_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE app.notifications OWNER TO newsroom_owner;
+
+--
 -- Name: posts; Type: TABLE; Schema: app; Owner: newsroom_owner
 --
 
@@ -539,6 +550,13 @@ CREATE UNIQUE INDEX inbox_items_url_normalized_key ON app.inbox_items USING btre
 
 
 --
+-- Name: notifications_sent_at; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX notifications_sent_at ON app.notifications USING btree (sent_at);
+
+
+--
 -- Name: posts_published; Type: INDEX; Schema: app; Owner: newsroom_owner
 --
 
@@ -659,6 +677,13 @@ GRANT SELECT,INSERT,UPDATE ON TABLE app.images TO newsroom_app;
 --
 
 GRANT SELECT,INSERT,UPDATE ON TABLE app.inbox_items TO newsroom_app;
+
+
+--
+-- Name: TABLE notifications; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT ON TABLE app.notifications TO newsroom_app;
 
 
 --

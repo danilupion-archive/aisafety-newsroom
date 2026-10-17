@@ -6,6 +6,7 @@ import type { TelegramApi } from './telegram/api.js';
 
 import { imagesRoutes } from './images/routes.js';
 import { inboxRoutes } from './inbox/routes.js';
+import { notifyRoutes } from './notify/routes.js';
 import { postsRoutes } from './posts/routes.js';
 import { publicRoutes } from './public/routes.js';
 import { telegramRoutes } from './telegram/routes.js';
@@ -101,6 +102,11 @@ export const buildApp = ({
     void app.register(inboxRoutes(db));
     void app.register(postsRoutes(db));
     void app.register(imagesRoutes(db));
+    // Dani's private chat with the bot has Dani's user id: the first allowed user's (R-CAP-1, D20).
+    const chatId = bot?.allowedUserIds[0];
+    void app.register(
+      notifyRoutes(db, bot && chatId !== undefined ? { api: bot.api, chatId } : undefined),
+    );
   }
   void app.register(publicRoutes(publicDb));
   void app.register(

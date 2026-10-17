@@ -14,6 +14,8 @@ const EXPECTED_GRANTS: Record<(typeof RUNTIME_ROLES)[number], string[]> = {
     'app.inbox_items: INSERT',
     'app.inbox_items: SELECT',
     'app.inbox_items: UPDATE',
+    'app.notifications: INSERT',
+    'app.notifications: SELECT',
     'app.posts: INSERT',
     'app.posts: SELECT',
     'app.posts: UPDATE',
