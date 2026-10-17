@@ -3,11 +3,11 @@
 aisafety-newsroom-migrations:
   nameOverride: migrations
   image:
-    tag: '0.10.0.5d03a46'
+    tag: '0.11.0.91a0c91'
 aisafety-newsroom-api:
   nameOverride: api
   image:
-    tag: '0.14.0.5d03a46'
+    tag: '0.14.1.91a0c91'
 aisafety-newsroom-web:
   enabled: false
   nameOverride: web
