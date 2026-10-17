@@ -74,6 +74,55 @@ describe('app.posts', () => {
     ]);
   });
 
+  it('keeps a post’s quotations as a list of at most three, none on a page, and shows them (R-WEB-17)', async () => {
+    const shown = await inRolledBackTransaction(async (client) => {
+      await insertPost(client, 'con-citas');
+      await insertPost(client, 'with-quotes', { lang: 'en', translation_of: 'es/con-citas' });
+      const quote = {
+        text: 'Una frase.',
+        author: 'Persona',
+        url: 'https://example.org/p/1',
+        date: '2026-10-16',
+      };
+      await client.query(`UPDATE app.posts SET quotes = $1 WHERE slug = 'con-citas'`, [
+        JSON.stringify([quote]),
+      ]);
+      expect(
+        await failure(client, `UPDATE app.posts SET quotes = '{}' WHERE slug = 'con-citas'`),
+      ).toEqual({ code: '23514', constraint: 'posts_quotes_list' });
+      expect(
+        await failure(client, `UPDATE app.posts SET quotes = $1 WHERE slug = 'con-citas'`, [
+          JSON.stringify([quote, quote, quote, quote]),
+        ]),
+      ).toEqual({ code: '23514', constraint: 'posts_quotes_list' });
+      await insertPost(client, 'una-pagina', { type: 'page' });
+      expect(
+        await failure(client, `UPDATE app.posts SET quotes = $1 WHERE slug = 'una-pagina'`, [
+          JSON.stringify([quote]),
+        ]),
+      ).toEqual({ code: '23514', constraint: 'posts_page_has_no_quotes' });
+      await client.query('SET LOCAL ROLE newsroom_public');
+      const { rows } = await client.query<{ slug: string; quotes: unknown }>(
+        'SELECT slug, quotes FROM app.published_posts ORDER BY lang',
+      );
+      return rows;
+    });
+    expect(shown).toEqual([
+      {
+        slug: 'con-citas',
+        quotes: [
+          {
+            text: 'Una frase.',
+            author: 'Persona',
+            url: 'https://example.org/p/1',
+            date: '2026-10-16',
+          },
+        ],
+      },
+      { slug: 'with-quotes', quotes: [] },
+    ]);
+  });
+
   it('shows newsroom_public published posts only, and never where they came from', async () => {
     const visible = await inRolledBackTransaction(async (client) => {
       await insertPost(client, 'publicada');

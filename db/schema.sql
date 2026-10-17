@@ -320,12 +320,15 @@ CREATE TABLE app.posts (
     image jsonb,
     taken_down_at timestamp with time zone,
     author text,
+    quotes jsonb DEFAULT '[]'::jsonb NOT NULL,
     CONSTRAINT posts_author_format CHECK (((author IS NULL) OR (((char_length(author) >= 1) AND (char_length(author) <= 100)) AND (author = btrim(author))))),
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
     CONSTRAINT posts_image_object CHECK (((image IS NULL) OR (jsonb_typeof(image) = 'object'::text))),
     CONSTRAINT posts_page_has_no_image CHECK (((type <> 'page'::app.post_type) OR (image IS NULL))),
     CONSTRAINT posts_page_has_no_news_date CHECK (((type <> 'page'::app.post_type) OR (news_date IS NULL))),
+    CONSTRAINT posts_page_has_no_quotes CHECK (((type <> 'page'::app.post_type) OR (quotes = '[]'::jsonb))),
+    CONSTRAINT posts_quotes_list CHECK (((jsonb_typeof(quotes) = 'array'::text) AND (jsonb_array_length(quotes) <= 3))),
     CONSTRAINT posts_slug_format CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 120))),
     CONSTRAINT posts_sources_array CHECK ((jsonb_typeof(sources) = 'array'::text)),
     CONSTRAINT posts_summary_length CHECK ((char_length(summary) <= 600)),
@@ -391,7 +394,8 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
         CASE
             WHEN (post.translation_of_lang IS NOT NULL) THEN other.author
             ELSE NULL::text
-        END AS original_author
+        END AS original_author,
+    post.quotes
    FROM ((app.posts post
      LEFT JOIN app.site_settings settings ON (true))
      JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))

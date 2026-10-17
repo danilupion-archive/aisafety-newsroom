@@ -95,6 +95,7 @@ export interface AppPosts {
   lang: AppPostLang;
   news_date: Timestamp | null;
   published_at: Timestamp;
+  quotes: Generated<Json>;
   slug: string;
   sources: Generated<Json>;
   summary: Generated<string>;
@@ -125,6 +126,7 @@ export interface AppPublishedPosts {
   news_date: Timestamp | null;
   original_author: string | null;
   published_at: Timestamp | null;
+  quotes: Json | null;
   slug: string | null;
   sources: Json | null;
   summary: string | null;

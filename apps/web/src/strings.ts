@@ -73,6 +73,9 @@ export interface Strings {
   creditTail: string;
   /** The footer's link to the about page, with the site's name from configuration (R-WEB-9). */
   aboutSite: (site: string) => string;
+  /** A quote card (R-WEB-17): the link to the original post, and the label on our translation of it. */
+  viewOn: (platform: string) => string;
+  ourTranslation: string;
   /** A video player's button, before anything loads from YouTube (R-WEB-12). */
   play: (title: string) => string;
   /** Under a video: whose it is, and that playing it loads it from YouTube. */
@@ -141,6 +144,8 @@ export const STRINGS: Record<Lang, Strings> = {
     feedTranslatedFrom: (author) => `Escrito por ${author}; traducción hecha con IA.`,
     creditTail: ', salvo los firmados',
     aboutSite: (site) => `Sobre ${site}`,
+    viewOn: (platform) => `Ver en ${platform}`,
+    ourTranslation: 'Traducción nuestra',
     play: (title) => `Reproducir el vídeo: ${title}`,
     videoCaption: (channel) => `Vídeo: ${channel} · Al reproducirlo se carga desde YouTube.`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.es' },
@@ -203,6 +208,8 @@ export const STRINGS: Record<Lang, Strings> = {
     feedTranslatedFrom: (author) => `Written by ${author}; translated with AI.`,
     creditTail: ', unless signed',
     aboutSite: (site) => `About ${site}`,
+    viewOn: (platform) => `View on ${platform}`,
+    ourTranslation: 'Our translation',
     play: (title) => `Play the video: ${title}`,
     videoCaption: (channel) => `Video: ${channel} · Playing it loads it from YouTube.`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.en' },

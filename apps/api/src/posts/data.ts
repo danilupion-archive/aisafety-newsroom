@@ -27,6 +27,8 @@ export interface Post {
   image: unknown;
   /** Who wrote it when a person did (R-WEB-3, D19); null when it's written by AI. */
   author: string | null;
+  /** Its quotations (R-WEB-17), as pushed. */
+  quotes: unknown;
   translation_of: PostAddress | null;
   content_ref: unknown;
   created_at: Date;
@@ -96,6 +98,7 @@ export const upsertPost = async (
     content_ref: JSON.stringify(body.content_ref),
     image: body.image === null ? null : JSON.stringify(body.image),
     author: body.author,
+    quotes: JSON.stringify(body.quotes),
   };
   const row = await db
     .insertInto('app.posts')

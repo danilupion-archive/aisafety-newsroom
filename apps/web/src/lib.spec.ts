@@ -9,6 +9,7 @@ import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { bylineOf } from './byline';
 import { Mark } from './components/Mark';
+import { QuoteCard } from './components/QuoteCard';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
@@ -16,6 +17,7 @@ import { cardImage, IMAGE_CACHE, imagePath, readImagePath } from './images';
 import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { ACCENT_SOFT, COLORS, contrast } from './palette';
+import { platformOf } from './quotes';
 import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
@@ -244,6 +246,60 @@ describe('bylineOf (R-WEB-3, D19)', () => {
       kind: 'person',
       author: 'Traductora',
     });
+  });
+});
+
+describe('quote cards (R-WEB-17, D21)', () => {
+  it('names the platform from the address, never storing it', () => {
+    expect(platformOf('https://x.com/ejemplo/status/1')).toBe('X');
+    expect(platformOf('https://twitter.com/ejemplo/status/1')).toBe('X');
+    expect(platformOf('https://mobile.twitter.com/ejemplo/status/1')).toBe('X');
+    expect(platformOf('https://bsky.app/profile/example.org/post/3abc')).toBe('Bluesky');
+    expect(platformOf('https://www.linkedin.com/posts/ejemplo-1')).toBe('LinkedIn');
+    expect(platformOf('https://mastodon.example/@ejemplo/112233445566')).toBe('Mastodon');
+    expect(platformOf('https://www.example.org/blog/una-entrada')).toBe('example.org');
+  });
+
+  it('draws the quotation as text with its author, platform, date and a link to the original, loading nothing', () => {
+    const html = renderToStaticMarkup(
+      createElement(QuoteCard, {
+        lang: 'es',
+        quote: {
+          text: 'An example sentence.',
+          author: 'Persona de Ejemplo',
+          handle: '@ejemplo',
+          url: 'https://x.com/ejemplo/status/1',
+          date: '2026-10-16',
+          translation: 'Una frase de ejemplo.',
+        },
+      }),
+    );
+    expect(html).toContain('<blockquote cite="https://x.com/ejemplo/status/1"');
+    expect(html).toContain('An example sentence.');
+    expect(html).toContain('Persona de Ejemplo');
+    expect(html).toContain('@ejemplo');
+    expect(html).toContain('16 de octubre de 2026');
+    expect(html).toContain('Ver en X');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain('Traducción nuestra');
+    expect(html).toContain('Una frase de ejemplo.');
+    expect(html).not.toMatch(/<img|<iframe|<script/);
+  });
+
+  it('says nothing of a translation when there is none', () => {
+    const html = renderToStaticMarkup(
+      createElement(QuoteCard, {
+        lang: 'en',
+        quote: {
+          text: 'Another example.',
+          author: 'Otra Persona',
+          url: 'https://bsky.app/profile/example.org/post/3abc',
+          date: '2026-10-15',
+        },
+      }),
+    );
+    expect(html).toContain('View on Bluesky');
+    expect(html).not.toContain('Our translation');
   });
 });
 

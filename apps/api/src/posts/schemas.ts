@@ -57,6 +57,21 @@ const image = z.strictObject({
 });
 
 /**
+ * A quotation from someone's post (R-WEB-17, D21), which the site draws as a card of its own: the words as said, who
+ * said them (their name, and handle if any), where (the original post's address, from which the site reads the
+ * platform) and the day they were posted; and, when they were said in another language, our translation into the
+ * post's. aisafety-media keeps verbatim quotes short by its own rule (under ~15 words); 280 characters is only the cap.
+ */
+const quote = z.strictObject({
+  text: z.string().trim().min(1).max(280),
+  author: z.string().trim().min(1).max(100),
+  handle: z.string().trim().min(1).max(60).optional(),
+  url: z.url({ protocol: /^https?$/ }),
+  date: z.iso.date(),
+  translation: z.string().trim().min(1).max(400).optional(),
+});
+
+/**
  * R-WEB-1: a breve is 80 to 150 words in the language it's written in, with 1 to 3 sources; its translation says the
  * same at whatever length that takes, with no limit of its own (D15). An article is long form and lists its sources
  * too. A page (the about page) is the site's own text: no sources, never listed.
@@ -80,6 +95,8 @@ const fields = z.strictObject({
   news_date: z.iso.date().optional(),
   /** Its lead image (R-WEB-15), or none. A page has none. */
   image: image.nullable().default(null),
+  /** Up to three quotations, drawn as cards on its page (R-WEB-17). A page has none. */
+  quotes: z.array(quote).max(3).default([]),
   /**
    * Who wrote it, when a person did (R-WEB-3, D19): their name as the site shows it. None, it's written by AI and
    * checked by the editor. Each version has its own: a translation without one, of a signed original, is an AI one.
@@ -112,6 +129,9 @@ const bodyIn = (language: Lang) =>
     }
     if (post.type === 'page' && post.image !== null) {
       context.addIssue({ code: 'custom', path: ['image'], message: 'a page has no image' });
+    }
+    if (post.type === 'page' && post.quotes.length > 0) {
+      context.addIssue({ code: 'custom', path: ['quotes'], message: 'a page has no quotations' });
     }
     if (post.type === 'page' && post.news_date !== undefined) {
       context.addIssue({

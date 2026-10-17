@@ -323,6 +323,76 @@ describe('authors (R-WEB-3, D19)', () => {
   });
 });
 
+describe('quotes (R-WEB-17, D21)', () => {
+  const quote = {
+    text: '  An example sentence someone posted.  ',
+    author: 'Persona de Ejemplo',
+    handle: '@ejemplo',
+    url: 'https://x.com/ejemplo/status/1234567890',
+    date: '2026-10-16',
+    translation: 'Una frase de ejemplo que alguien publicó.',
+  };
+  const bluesky = {
+    text: 'Another example.',
+    author: 'Otra Persona',
+    url: 'https://bsky.app/profile/example.org/post/3abc',
+    date: '2026-10-15',
+  };
+
+  it('keeps up to three credited quotations on a post, trimmed, and shows them on its page', async () => {
+    const pushedPost = await put('es/informe-de-ejemplo', { ...BREVE, quotes: [quote, bluesky] });
+    expect(pushedPost.statusCode, pushedPost.body).toBe(201);
+    await pushed('en/example-report', {
+      ...EN_BREVE,
+      translation_of: { lang: 'es', slug: 'informe-de-ejemplo' },
+    });
+    const post = (await read('/public/posts/es/informe-de-ejemplo')).json<{ quotes: unknown }>();
+    expect(post.quotes).toEqual([
+      { ...quote, text: 'An example sentence someone posted.' },
+      bluesky,
+    ]);
+    expect((await read('/public/posts/en/example-report')).json()).toMatchObject({ quotes: [] });
+    // The list doesn't carry them: only the post's page shows them.
+    const listed = (await read('/public/posts?lang=es')).json<Record<string, unknown>[]>();
+    expect(listed[0]).not.toHaveProperty('quotes');
+  });
+
+  it('refuses more than three, a missing or overlong field, a link that isn’t the web, or a date that isn’t one', async () => {
+    const bad = [
+      [quote, quote, quote, quote],
+      [{ ...quote, text: '   ' }],
+      [{ ...quote, text: 'x'.repeat(281) }],
+      [{ ...quote, author: '' }],
+      [{ ...quote, author: 'x'.repeat(101) }],
+      [{ ...quote, handle: 'x'.repeat(61) }],
+      [{ ...quote, url: 'javascript:alert(1)' }],
+      [{ ...quote, url: 'ftp://example.org/post' }],
+      [{ ...quote, date: '2026-13-01' }],
+      [{ ...quote, date: '16/10/2026' }],
+      [{ ...quote, translation: 'x'.repeat(401) }],
+      [{ ...quote, platform: 'X' }],
+    ];
+    for (const quotes of bad) {
+      const response = await put('es/informe-de-ejemplo', { ...BREVE, quotes });
+      expect(response.statusCode, JSON.stringify(quotes[0])).toBe(400);
+    }
+  });
+
+  it('gives a page no quotations', async () => {
+    const about = {
+      ...BREVE,
+      type: 'page',
+      body_md: 'Texto de ejemplo.',
+      sources: [],
+      news_date: undefined,
+      quotes: [bluesky],
+    };
+    expect((await put('es/sobre', about)).json()).toEqual({
+      error: 'quotes: a page has no quotations',
+    });
+  });
+});
+
 describe('both languages (D11)', () => {
   it('shows neither version of a story until both are published', async () => {
     await pushed('es/informe-de-ejemplo', BREVE);

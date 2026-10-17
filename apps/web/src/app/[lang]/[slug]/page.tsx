@@ -11,6 +11,7 @@ import type { Lang } from '@/i18n';
 import { getPost, type Post } from '@/api';
 import { bylineOf } from '@/byline';
 import { LeadImage } from '@/components/LeadImage';
+import { QuoteCard } from '@/components/QuoteCard';
 import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
 import { Translations } from '@/components/Translations';
@@ -180,6 +181,9 @@ const PostPage = async (props: Props) => {
         ) : null}
       </header>
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(post.body_md) }} />
+      {(post.quotes ?? []).map((quote) => (
+        <QuoteCard key={quote.url + quote.text} lang={lang} quote={quote} />
+      ))}
       <Sources
         lang={lang}
         sources={post.sources}

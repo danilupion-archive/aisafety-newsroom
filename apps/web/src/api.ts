@@ -2,6 +2,7 @@ import { cache } from 'react';
 
 import type { Lang } from './i18n';
 import type { Cursor, Order } from './paging';
+import type { Quote } from './quotes';
 
 import { type Answer, createReadCache } from './read-cache';
 import { site } from './site';
@@ -59,6 +60,8 @@ export interface Post extends PostSummary {
   body_md: string;
   sources: Source[];
   translations: Translation[];
+  /** Its quotations, drawn as cards (R-WEB-17); absent from an API older than them. */
+  quotes?: Quote[];
 }
 
 export interface TagCount {
