@@ -43,6 +43,8 @@ export const TagView = async ({ word, params, searchParams }: TagProps & { word:
         <p>{t.noOlder}</p>
       ) : (
         <ContinuousTimeline
+          // A new order or topic is a new list: the posts already loaded must not carry over.
+          key={`${tag}:${order}`}
           lang={lang}
           path={path}
           order={order}

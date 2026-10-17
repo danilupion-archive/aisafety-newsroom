@@ -70,6 +70,8 @@ const Home = async ({ params, searchParams }: Props) => {
         <p>{after ? t.noOlder : t.nothingYet}</p>
       ) : (
         <ContinuousTimeline
+          // A new order is a new list: the posts already loaded in the other order must not carry over.
+          key={order}
           lang={lang}
           path={home}
           order={order}
