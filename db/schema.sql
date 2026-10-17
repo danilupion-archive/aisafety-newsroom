@@ -203,18 +203,14 @@ CREATE TABLE app.images (
     sha256 text NOT NULL,
     width integer NOT NULL,
     height integer NOT NULL,
-    full_webp bytea,
-    thumb_webp bytea,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     removed_at timestamp with time zone,
-    full_bytes integer,
-    thumb_bytes integer,
+    full_bytes integer NOT NULL,
+    thumb_bytes integer NOT NULL,
     CONSTRAINT images_full_bytes_positive CHECK ((full_bytes > 0)),
-    CONSTRAINT images_full_size CHECK (((octet_length(full_webp) >= 1) AND (octet_length(full_webp) <= 2097152))),
     CONSTRAINT images_height_positive CHECK ((height > 0)),
     CONSTRAINT images_sha256_format CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT images_thumb_bytes_positive CHECK ((thumb_bytes > 0)),
-    CONSTRAINT images_thumb_size CHECK (((octet_length(thumb_webp) >= 1) AND (octet_length(thumb_webp) <= 262144))),
     CONSTRAINT images_width_positive CHECK ((width > 0))
 );
 
@@ -416,9 +412,7 @@ CREATE VIEW app.public_images WITH (security_barrier='true') AS
  SELECT image.sha256,
     ref.kind,
     image.width,
-    image.height,
-    NULL::bytea AS full_webp,
-    NULL::bytea AS thumb_webp
+    image.height
    FROM (app.images image
      JOIN ( SELECT (published.image ->> 'sha256'::text) AS sha256,
             'lead'::text AS kind

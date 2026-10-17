@@ -457,7 +457,7 @@ describe('the site’s switches (R-CAP-10, R-CAP-11)', () => {
   const story = async () => {
     for (const sha256 of [LEAD, PREVIEW]) {
       await asSuperuser(
-        `INSERT INTO app.images (sha256, width, height, full_webp, thumb_webp) VALUES ($1, 10, 10, '\\x01', '\\x02')`,
+        `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes) VALUES ($1, 10, 10, 1, 2)`,
         [sha256],
       );
     }

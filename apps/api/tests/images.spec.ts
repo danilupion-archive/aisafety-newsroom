@@ -320,11 +320,11 @@ describe('images’ files on a volume, and only there (D22)', () => {
     const full = await store.read(sha256Of(lead), 'full');
     expect((await sharp(full).metadata()).width).toBe(1600);
     expect(await store.has(sha256Of(lead), 'thumb')).toBe(true);
-    const [row] = await asSuperuser<{ bytes: boolean; full_bytes: number }>(
-      'SELECT full_webp IS NOT NULL OR thumb_webp IS NOT NULL AS bytes, full_bytes FROM app.images WHERE sha256 = $1',
+    const [row] = await asSuperuser<{ full_bytes: number }>(
+      'SELECT full_bytes FROM app.images WHERE sha256 = $1',
       [sha256Of(lead)],
     );
-    expect(row).toEqual({ bytes: false, full_bytes: full?.length });
+    expect(row).toEqual({ full_bytes: full?.length });
     expect((await imageInfo(db, sha256Of(lead)))?.full_bytes).toBe(full?.length);
   });
 

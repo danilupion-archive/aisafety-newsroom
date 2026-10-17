@@ -16,14 +16,13 @@ export interface ImageInfo {
   removed_at: Date | null;
 }
 
-// The sizes in bytes the row records (D22, step 2a); rows written by an API older than it only have the bytes themselves,
-// until step 2b drops them.
+// What the row records (D22): the image's size in pixels and its files' sizes in bytes, never the files.
 const info = [
   'sha256',
   'width',
   'height',
-  sql<number>`coalesce(full_bytes, octet_length(full_webp))`.as('full_bytes'),
-  sql<number>`coalesce(thumb_bytes, octet_length(thumb_webp))`.as('thumb_bytes'),
+  'full_bytes',
+  'thumb_bytes',
   'created_at',
   'removed_at',
 ] as const;

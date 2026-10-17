@@ -8,11 +8,11 @@ const LEAD = 'a'.repeat(64);
 const PREVIEW = 'b'.repeat(64);
 const UNUSED = 'c'.repeat(64);
 
-/** A stored image: the bytes don't matter here, only that the row exists. */
+/** A stored image: its files are on the volume (D22); the row says what it is. */
 const insertImage = (client: pg.Client, sha256: string) =>
   client.query(
-    `INSERT INTO app.images (sha256, width, height, full_webp, thumb_webp)
-     VALUES ($1, 1200, 800, '\\x01'::bytea, '\\x02'::bytea)`,
+    `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes)
+     VALUES ($1, 1200, 800, 1000, 200)`,
     [sha256],
   );
 
@@ -82,8 +82,8 @@ describe('app.images', () => {
         expect(
           await failure(
             client,
-            `INSERT INTO app.images (sha256, width, height, full_webp, thumb_webp)
-             VALUES ($1, 1, 1, '\\x01', '\\x01')`,
+            `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes)
+             VALUES ($1, 1, 1, 1, 1)`,
             [sha256],
           ),
         ).toEqual({ code: '23514', constraint: 'images_sha256_format' });
@@ -91,17 +91,17 @@ describe('app.images', () => {
     });
   });
 
-  it('keeps what an image is without its bytes, which live on the volume (D22): sizes over zero', async () => {
+  it('keeps what an image is, never its bytes, which live on the volume (D22): both sizes, over zero', async () => {
     await inRolledBackTransaction(async (client) => {
       await client.query(
         `INSERT INTO app.images (sha256, width, height, full_bytes, thumb_bytes) VALUES ($1, 10, 10, 100, 20)`,
         [LEAD],
       );
-      const { rows } = await client.query<{ full_bytes: number; bytes: boolean }>(
-        `SELECT full_bytes, full_webp IS NOT NULL AS bytes FROM app.images WHERE sha256 = $1`,
+      const { rows } = await client.query<{ full_bytes: number; thumb_bytes: number }>(
+        `SELECT full_bytes, thumb_bytes FROM app.images WHERE sha256 = $1`,
         [LEAD],
       );
-      expect(rows).toEqual([{ full_bytes: 100, bytes: false }]);
+      expect(rows).toEqual([{ full_bytes: 100, thumb_bytes: 20 }]);
       expect(
         await failure(
           client,
@@ -109,11 +109,23 @@ describe('app.images', () => {
           [PREVIEW],
         ),
       ).toEqual({ code: '23514', constraint: 'images_full_bytes_positive' });
-      // The public view no longer carries any image's bytes.
-      const { rows: seen } = await client.query<{ full: boolean }>(
-        `SELECT bool_or(full_webp IS NOT NULL OR thumb_webp IS NOT NULL) AS full FROM app.public_images`,
+      expect(
+        await failure(
+          client,
+          `INSERT INTO app.images (sha256, width, height, thumb_bytes) VALUES ($1, 1, 1, 1)`,
+          [UNUSED],
+        ),
+      ).toMatchObject({ code: '23502' });
+    });
+  });
+
+  it('has no column for an image’s bytes, in the table or the public view (D22, step 2b)', async () => {
+    await inRolledBackTransaction(async (client) => {
+      const { rows } = await client.query<{ table_name: string; column_name: string }>(
+        `SELECT table_name, column_name FROM information_schema.columns
+         WHERE table_schema = 'app' AND table_name IN ('images', 'public_images') AND data_type = 'bytea'`,
       );
-      expect(seen[0]?.full ?? false).toBe(false);
+      expect(rows).toEqual([]);
     });
   });
 

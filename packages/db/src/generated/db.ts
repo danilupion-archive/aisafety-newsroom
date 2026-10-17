@@ -38,13 +38,11 @@ export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface AppImages {
   created_at: Generated<Timestamp>;
-  full_bytes: number | null;
-  full_webp: Buffer | null;
+  full_bytes: number;
   height: number;
   removed_at: Timestamp | null;
   sha256: string;
-  thumb_bytes: number | null;
-  thumb_webp: Buffer | null;
+  thumb_bytes: number;
   width: number;
 }
 
@@ -112,11 +110,9 @@ export interface AppPosts {
 }
 
 export interface AppPublicImages {
-  full_webp: Buffer | null;
   height: number | null;
   kind: string | null;
   sha256: string | null;
-  thumb_webp: Buffer | null;
   width: number | null;
 }
 
