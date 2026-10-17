@@ -1,6 +1,10 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.14** · 2026-10-17 · Owner: Dani
+Status: **draft v0.15** · 2026-10-17 · Owner: Dani
+
+v0.15 changes: search (`/buscar`, `/en/search`; R-WEB-18); the timeline keeps loading as the
+reader scrolls, pausing for a button every 100 posts (R-WEB-19); `buscar` and `search` are
+reserved; a footer in two parts.
 
 v0.14 changes: quote cards: a post may quote up to three public posts (X, Bluesky…), drawn
 by the site with author, date and a link, never a screenshot or an embed (R-WEB-17, D21).
@@ -605,11 +609,12 @@ credit}`, the file under `sources/previews/`, saved when the source is fetched. 
 
 | Page                       | Spanish           | English         |
 | -------------------------- | ----------------- | --------------- |
-| Latest items, page by page | `/`               | `/en`           |
+| Latest items, continuous   | `/`               | `/en`           |
 | One item                   | `/<slug>`         | `/en/<slug>`    |
 | A tag's items (named tags) | `/etiqueta/<tag>` | `/en/tag/<tag>` |
 | Topics index               | `/temas`          | `/en/topics`    |
 | About                      | `/sobre`          | `/en/about`     |
+| Search                     | `/buscar?q=`      | `/en/search?q=` |
 | Atom feed                  | `/feed.xml`       | `/en/feed.xml`  |
 
 `/` is the Spanish home for every reader, whatever their browser asks for: the main
@@ -621,7 +626,7 @@ the page itself: the site's proxy tells them (asking the API about a post or a t
 serves that page with the status, since a page's own not-found is drawn by script. The
 about page's text is a post of type `page` whose slug is its language's word (`sobre`,
 `about`), pushed from aisafety-media like the rest (R-WEB-2): pages are never listed,
-need no sources, and nothing on the site is written in its code. The six path words, the
+need no sources, and nothing on the site is written in its code. The eight path words, the
 two languages' prefixes, `healthz`, and `img` and `og` (the images' and the share cards'
 folders, D17), which share the root with Spanish posts, are refused as slugs in both
 languages, so no post hides behind a page.
@@ -700,6 +705,25 @@ languages, so no post hides behind a page.
   post's, labelled "Traducción nuestra" / "Our translation". Nothing loads from the
   platform: no avatar, no embed, no script (R-WEB-7). aisafety-media keeps verbatim quotes
   short by its own rule; a page has none.
+- **R-WEB-18** Should: a search page in each language, `/buscar?q=` and `/en/search?q=`,
+  reached from a magnifier in the header: a plain form that works without JavaScript, and
+  the results as the timeline's cards, each with an excerpt where it matched, the matched
+  words marked. It searches what the site shows (published breves and articles, never
+  pages) with Postgres's full-text search in the language's own rules, so a word's forms
+  match ("regulación", "regular"), and a word typed without its accents still finds it.
+  The title weighs most, then the summary, then the text; a reader may use quotes for a
+  phrase, `OR`, and a minus to leave a word out. Twenty results a page, a link to the
+  next. The page is kept out of search engines (`noindex`), and the query is shown as
+  text. No outside service, nothing tracked.
+- **R-WEB-19** Should: the timelines (the home in either order, a tag's page) go on as the
+  reader reads: the next 20 posts load on their own near the end, until 100 have loaded
+  that way; then a "Cargar más" / "Load more" button waits, and after it they load on
+  their own for 100 more, and so on, so a reader who stops can reach the footer. The
+  address keeps how many posts the reader has (`?mostrar=`, `?show=`, at most 300), so a
+  reload renders them all and puts the reader back, and back from a post the page fetches
+  what it lacks and returns to the same place. A screen reader hears each batch arrive
+  ("20 publicaciones más"). Without JavaScript the end of the list is the plain "older
+  entries" link to the next page, as before.
 
 **Posts API.** Under `/api/v1/` on the API host, with the same bearer token and the
 same rules as §9. A post's address is its language and its slug.
@@ -735,7 +759,10 @@ share an instant; `order=news` lists by news date, its next page led by the last
 as `before_date`), `GET /public/posts/:lang/:slug` (with `author`, `original_author`
 and `quotes`, and the story's other version as `translations`; `404` until both are
 published, `410` once either is
-unpublished), `GET /public/tags?lang=`,
+unpublished), `GET /public/tags?lang=`, `GET /public/search?lang=&q=` (R-WEB-18: up to
+100 characters in the search engines' syntax; `limit` up to 50 and `cursor`, where the page
+starts; `{results, next}`, each result a list entry with its `excerpt` as plain-text
+segments, `{text, match}`, and `next` null at the end),
 `GET /public/images/:kind/:sha256?size=full|thumb` (`lead` or `preview`; the WebP
 while a published post shows it so and the switches allow it, `404` otherwise),
 and `GET /public/unpublished`, the addresses the site's proxy answers `410` for. Lists and
