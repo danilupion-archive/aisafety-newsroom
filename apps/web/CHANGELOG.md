@@ -1,5 +1,12 @@
 # @aisafety-newsroom/web
 
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [c6eb7a3]
+  - @aisafety-newsroom/domain@0.7.0
+
 ## 0.9.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # @aisafety-newsroom/migrations
 
+## 0.6.0
+
+### Minor Changes
+
+- c6eb7a3: Each inbox item says what Dani wants from it (D18): `intent` is `post` (the default) or `log`. The bot's
+  `/log <link> [note]` saves a link to log only, and makes an existing one log only; `/log <id>` and `/post <id>` switch
+  an item, naming it, refusing a discarded one and warning on a logged one; `/pending` marks "· log only". `GET /items`
+  and `GET /items/:id` return `intent`.
+
 ## 0.5.0
 
 ### Minor Changes
