@@ -1,11 +1,16 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyInstance } from 'fastify';
 
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import sharp from 'sharp';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { backfillImages, imageInfo } from '../src/images/data.js';
 import { sha256Of } from '../src/images/process.js';
+import { createImageStore, type ImageStore } from '../src/images/store.js';
 import { appDatabase, asSuperuser, emptyTables, publicDatabase } from './db.js';
 
 const TOKEN = 'a'.repeat(43);
@@ -294,5 +299,95 @@ describe('takedowns (R-CAP-11)', () => {
     >();
     expect(listed.find((post) => post.slug === 'con-imagen')?.taken_down_at).not.toBeNull();
     expect(listed.find((post) => post.slug === 'with-image')?.taken_down_at).toBeNull();
+  });
+});
+
+describe('images’ files on a volume (D22)', () => {
+  let dir: string;
+  let store: ImageStore;
+  let onVolume: FastifyInstance;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'newsroom-images-'));
+    store = createImageStore(dir);
+    onVolume = buildApp({ apiToken: TOKEN, db, publicDb, imageStore: store });
+  });
+  afterEach(async () => {
+    await onVolume.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('writes an upload’s two files and still its row with the bytes, until step 2', async () => {
+    const response = await onVolume.inject({
+      method: 'PUT',
+      url: `/api/v1/images/${sha256Of(lead)}`,
+      headers: { ...auth, 'content-type': 'image/jpeg' },
+      payload: lead,
+    });
+    expect(response.statusCode).toBe(201);
+    const full = await store.read(sha256Of(lead), 'full');
+    expect((await sharp(full).metadata()).width).toBe(1600);
+    expect(await store.has(sha256Of(lead), 'thumb')).toBe(true);
+    expect((await imageInfo(db, sha256Of(lead)))?.full_bytes).toBe(full?.length);
+  });
+
+  it('serves the volume’s bytes once the database allows the image, and heals a missing file from the database', async () => {
+    await storyWithImages();
+    const sha = sha256Of(preview);
+    const healed = await onVolume.inject({
+      method: 'GET',
+      url: `/public/images/preview/${sha}?size=thumb`,
+    });
+    expect(healed.statusCode).toBe(200);
+    expect(await store.has(sha, 'thumb')).toBe(true);
+    // From now on the file is what's served: a marker written over it comes back.
+    await writeFile(join(dir, `${sha}.thumb.webp`), 'from the volume');
+    const served = await onVolume.inject({
+      method: 'GET',
+      url: `/public/images/preview/${sha}?size=thumb`,
+    });
+    expect(served.body).toBe('from the volume');
+    // The database still decides: a switched-off preview isn't served, whatever the volume holds.
+    await setImages('licensed');
+    const hidden = await onVolume.inject({
+      method: 'GET',
+      url: `/public/images/preview/${sha}?size=thumb`,
+    });
+    expect(hidden.statusCode).toBe(404);
+  });
+
+  it('backfills every image the database holds and the volume lacks, once', async () => {
+    await storyWithImages();
+    expect(await backfillImages(db, store)).toEqual({ checked: 2, copied: 4 });
+    expect(await backfillImages(db, store)).toEqual({ checked: 2, copied: 0 });
+    expect(await store.has(sha256Of(lead), 'full')).toBe(true);
+  });
+
+  it('counts the images and the files the volume has, for checking before step 2', async () => {
+    await storyWithImages();
+    const before = (
+      await onVolume.inject({ method: 'GET', url: '/api/v1/images', headers: auth })
+    ).json();
+    expect(before).toEqual({
+      store: 'files',
+      count: 2,
+      on_disk: 0,
+      missing: [sha256Of(lead), sha256Of(preview)].sort(),
+    });
+    await backfillImages(db, store);
+    const after = (
+      await onVolume.inject({ method: 'GET', url: '/api/v1/images', headers: auth })
+    ).json();
+    expect(after).toEqual({ store: 'files', count: 2, on_disk: 2, missing: [] });
+    const inDatabase = (await read('/api/v1/images')).statusCode;
+    expect(inDatabase).toBe(401);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/images', headers: auth })).json(),
+    ).toEqual({
+      store: 'database',
+      count: 2,
+      on_disk: null,
+      missing: [],
+    });
   });
 });

@@ -4,11 +4,11 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { parse } from '../parse.js';
-import { imageInfo, storeImage } from './data.js';
+import { imageCensus, imageInfo, storeImage } from './data.js';
 import { processImage, sha256Of, UPLOAD_MAX_BYTES } from './process.js';
+import { type ImageStore, SHA256 } from './store.js';
 
-/** An image's address: the SHA-256 of the bytes uploaded, in lowercase hex. */
-export const SHA256 = /^[0-9a-f]{64}$/;
+export { SHA256 } from './store.js';
 const address = z.strictObject({
   sha256: z
     .string()
@@ -27,7 +27,7 @@ const REFUSED = {
  * nothing (R-API-3), and a post can name its images before anything is stored.
  */
 export const imagesRoutes =
-  (db: Database): FastifyPluginAsync =>
+  (db: Database, store?: ImageStore): FastifyPluginAsync =>
   async (app) => {
     // The image's bytes as they are, for this plugin's routes only.
     app.addContentTypeParser(
@@ -64,10 +64,21 @@ export const imagesRoutes =
           const refusal = REFUSED[processed];
           return reply.code(refusal.status).send({ error: refusal.error });
         }
+        // The files first (D22): once the row exists, its files do too. Bytes in the database as well, until step 2.
+        if (store) {
+          await store.write(params.sha256, 'full', processed.full);
+          await store.write(params.sha256, 'thumb', processed.thumb);
+        }
         const { created, image } = await storeImage(db, params.sha256, processed);
         return reply.code(created ? 201 : 200).send(image);
       },
     );
+
+    /**
+     * The images and the store (D22): how many the database holds, how many the volume has both files of, and the
+     * first few it lacks, to check before the database stops keeping their bytes.
+     */
+    app.get('/api/v1/images', async () => imageCensus(db, store));
 
     app.get<{ Params: { sha256: string } }>('/api/v1/images/:sha256', async (request, reply) => {
       const params = parse(address, request.params, reply);

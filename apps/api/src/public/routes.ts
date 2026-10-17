@@ -4,7 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { type RawBuilder, sql } from 'kysely';
 import { z } from 'zod';
 
-import { SHA256 } from '../images/routes.js';
+import { type ImageStore, SHA256 } from '../images/store.js';
 import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
 import {
@@ -40,7 +40,7 @@ const imageAddress = z.strictObject({
 const imageQuery = z.object({ size: z.enum(['full', 'thumb']).default('full') });
 
 export const publicRoutes =
-  (db: Database | undefined): FastifyPluginAsync =>
+  (db: Database | undefined, store?: ImageStore): FastifyPluginAsync =>
   async (app) => {
     app.addHook('onRequest', async (_request, reply) => {
       void reply.header('cache-control', 'no-store');
@@ -251,17 +251,40 @@ export const publicRoutes =
         if (!address || !query) {
           return reply;
         }
-        const row = await db
+        const shown = db
           .selectFrom('app.public_images')
-          .select(query.size === 'thumb' ? 'thumb_webp as bytes' : 'full_webp as bytes')
           .where('sha256', '=', address.sha256)
           .where('kind', '=', address.kind)
-          .limit(1)
-          .executeTakeFirst();
-        if (!row?.bytes) {
+          .limit(1);
+        const fromDatabase = async () => {
+          const row = await shown
+            .select(query.size === 'thumb' ? 'thumb_webp as bytes' : 'full_webp as bytes')
+            .executeTakeFirst();
+          return row?.bytes ? Buffer.from(row.bytes) : undefined;
+        };
+        // The database decides whether the image may be shown, as before (R-CAP-10, R-CAP-11); the bytes come from the
+        // volume (D22). A file the volume lacks comes from the database once and is written back.
+        let bytes: Buffer | undefined;
+        if (store) {
+          if (!(await shown.select('sha256').executeTakeFirst())) {
+            return reply.code(404).send({ error: 'No such image' });
+          }
+          bytes = await store.read(address.sha256, query.size);
+          if (!bytes) {
+            bytes = await fromDatabase();
+            if (bytes) {
+              await store.write(address.sha256, query.size, bytes).catch((error: unknown) => {
+                request.log.warn({ err: error }, 'an image file could not be written back');
+              });
+            }
+          }
+        } else {
+          bytes = await fromDatabase();
+        }
+        if (!bytes) {
           return reply.code(404).send({ error: 'No such image' });
         }
-        return reply.type('image/webp').send(Buffer.from(row.bytes));
+        return reply.type('image/webp').send(bytes);
       },
     );
 

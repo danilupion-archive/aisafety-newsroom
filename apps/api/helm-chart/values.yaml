@@ -111,6 +111,18 @@ networkPolicy:
   # The site's pods' app.kubernetes.io/name: the web chart's nameOverride in the umbrella (web). They must match.
   webName: web
 
+# Images' files on a volume (SPEC D22), mounted read-write in the API's pods only (never the worker's) and named to the
+# API by IMAGES_DIR. Off, the API keeps their bytes in the database alone, as before. Both replicas share the claim, so
+# its storage must let pods on one node mount it together (ReadWriteOnce does, on a single node). The API checks at
+# start that it can write there, and copies in every image the database holds that the volume lacks.
+imageStore:
+  enabled: false
+  # A claim to mount instead of the chart's own.
+  existingClaim: ''
+  size: 5Gi
+  # The chart's claim's storage class; empty is the cluster's default.
+  storageClassName: ''
+
 # Extra environment (plain values, or secretKeyRef for credentials sealed in gitops).
 env: []
 envFrom: []

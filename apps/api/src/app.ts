@@ -2,6 +2,7 @@ import type { Database } from '@aisafety-newsroom/db/client';
 
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 
+import type { ImageStore } from './images/store.js';
 import type { TelegramApi } from './telegram/api.js';
 
 import { imagesRoutes } from './images/routes.js';
@@ -28,6 +29,8 @@ export interface AppOptions {
   bot?: BotOptions;
   /** newsroom_public's connection, for the site's reads (R-WEB-6). Without it, /public answers 503. */
   publicDb?: Database;
+  /** Where images' files live (D22). Without it, their bytes stay in the database only, as before. */
+  imageStore?: ImageStore;
   /** Told of every 5xx, to report it (SPEC §15); the client gets no message either way. */
   onServerError?: (error: Error) => void;
   logger?: FastifyServerOptions['logger'];
@@ -72,6 +75,7 @@ export const buildApp = ({
   db,
   bot,
   publicDb,
+  imageStore,
   onServerError,
   logger = false,
 }: AppOptions): FastifyInstance => {
@@ -101,14 +105,14 @@ export const buildApp = ({
   if (db) {
     void app.register(inboxRoutes(db));
     void app.register(postsRoutes(db));
-    void app.register(imagesRoutes(db));
+    void app.register(imagesRoutes(db, imageStore));
     // Dani's private chat with the bot has Dani's user id: the first allowed user's (R-CAP-1, D20).
     const chatId = bot?.allowedUserIds[0];
     void app.register(
       notifyRoutes(db, bot && chatId !== undefined ? { api: bot.api, chatId } : undefined),
     );
   }
-  void app.register(publicRoutes(publicDb));
+  void app.register(publicRoutes(publicDb, imageStore));
   void app.register(
     telegramRoutes(
       db && bot

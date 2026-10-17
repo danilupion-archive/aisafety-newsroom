@@ -1,0 +1,18 @@
+{{- if and .Values.imageStore.enabled (not .Values.imageStore.existingClaim) }}
+# Images' files (SPEC D22): the API's replicas mount it read-write; the worker never does.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aisafety-newsroom-api.fullname" . }}-images
+  labels:
+    {{- include "aisafety-newsroom-api.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.imageStore.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.imageStore.size | quote }}
+{{- end }}

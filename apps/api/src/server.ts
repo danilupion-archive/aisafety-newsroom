@@ -5,6 +5,8 @@ import { captureException, flush } from '@sentry/node';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { initErrorTracking } from './error-tracking.js';
+import { backfillImages } from './images/data.js';
+import { createImageStore } from './images/store.js';
 import { createTelegramApi } from './telegram/api.js';
 
 const config = loadConfig(process.env);
@@ -23,10 +25,14 @@ const publicDb = config.publicDatabaseUrl
     })
   : undefined;
 const telegram = config.telegram ? createTelegramApi(config.telegram.botToken) : undefined;
+// Images' files on the API's volume (D22): a folder the API can't write to stops it here, before it takes requests.
+const imageStore = config.imagesDir ? createImageStore(config.imagesDir) : undefined;
+await imageStore?.check();
 const app = buildApp({
   apiToken: config.apiToken,
   db,
   publicDb,
+  imageStore,
   bot:
     config.telegram && telegram
       ? {
@@ -59,6 +65,18 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
 }
 
 await app.listen({ host: config.host, port: config.port });
+
+// Every image the database holds and the volume doesn't yet, copied in the background (D22): idempotent, so both
+// replicas can do it on every start. Until it's done, a missing file is served from the database and written back.
+if (imageStore) {
+  backfillImages(db, imageStore).then(
+    ({ checked, copied }) => app.log.info({ checked, copied }, 'image files backfilled'),
+    (error: unknown) => {
+      app.log.warn({ err: error }, 'image files could not be backfilled');
+      captureException(error);
+    },
+  );
+}
 
 // Point Telegram at the webhook on every start: idempotent, so both replicas can do it. A failure leaves the webhook as
 // it was, and the next start tries again.

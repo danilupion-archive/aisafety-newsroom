@@ -23,6 +23,8 @@ export interface ApiConfig {
   appDatabaseUrl: string;
   /** newsroom_public's, for the site's reads (R-WEB-6); undefined, /public answers 503. */
   publicDatabaseUrl: string | undefined;
+  /** The folder on the API's volume for images' files (D22); undefined, their bytes stay in the database only. */
+  imagesDir: string | undefined;
   /** The bot (SPEC §6). Undefined until it's created: the webhook then answers 503. */
   telegram: TelegramConfig | undefined;
 }
@@ -96,6 +98,7 @@ export const loadConfig = (env: Env): ApiConfig => {
     apiToken: readApiToken(env.API_TOKEN),
     appDatabaseUrl: env.APP_DATABASE_URL,
     publicDatabaseUrl: env.PUBLIC_DATABASE_URL || undefined,
+    imagesDir: env.IMAGES_DIR || undefined,
     telegram: readTelegram(env),
   };
 };

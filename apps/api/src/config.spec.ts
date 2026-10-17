@@ -17,8 +17,14 @@ describe('loadConfig', () => {
       apiToken: TOKEN,
       appDatabaseUrl: DATABASE,
       publicDatabaseUrl: undefined,
+      imagesDir: undefined,
       telegram: undefined,
     });
+  });
+
+  it('keeps images on a volume only when IMAGES_DIR names one (D22)', () => {
+    expect(loadConfig({ ...base, IMAGES_DIR: '/data/images' }).imagesDir).toBe('/data/images');
+    expect(loadConfig({ ...base, IMAGES_DIR: '' }).imagesDir).toBeUndefined();
   });
 
   it('reads the port and log level', () => {

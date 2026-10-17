@@ -3,6 +3,7 @@ import type { Database } from '@aisafety-newsroom/db/client';
 import { sql } from 'kysely';
 
 import type { ProcessedImage } from './process.js';
+import type { ImageStore } from './store.js';
 
 /** What the posts API says of a stored image (§13 `GET /images/:sha256`): never its bytes. */
 export interface ImageInfo {
@@ -93,4 +94,67 @@ export const markRemoved = async (
     .returning('sha256')
     .execute();
   return rows.map((row) => row.sha256);
+};
+
+const BYTES = { full: 'full_webp as bytes', thumb: 'thumb_webp as bytes' } as const;
+
+/** How many images the database holds, how many the store has both files of, and the first few it lacks. */
+export interface ImageCensus {
+  store: 'files' | 'database';
+  count: number;
+  on_disk: number | null;
+  missing: string[];
+}
+
+/** For checking the store before the database stops keeping images' bytes (D22, step 2). */
+export const imageCensus = async (
+  db: Database,
+  store: ImageStore | undefined,
+): Promise<ImageCensus> => {
+  const rows = await db.selectFrom('app.images').select('sha256').orderBy('sha256').execute();
+  if (!store) {
+    return { store: 'database', count: rows.length, on_disk: null, missing: [] };
+  }
+  const missing: string[] = [];
+  for (const { sha256 } of rows) {
+    if (!(await store.has(sha256, 'full')) || !(await store.has(sha256, 'thumb'))) {
+      missing.push(sha256);
+    }
+  }
+  return {
+    store: 'files',
+    count: rows.length,
+    on_disk: rows.length - missing.length,
+    missing: missing.slice(0, 10),
+  };
+};
+
+/**
+ * Copies into the store every image's file the database holds and the store doesn't (D22): removed images too, so a
+ * restore finds them. One image at a time, so its memory stays small; idempotent, and harmless with both API replicas
+ * running it at once.
+ */
+export const backfillImages = async (
+  db: Database,
+  store: ImageStore,
+): Promise<{ checked: number; copied: number }> => {
+  const rows = await db.selectFrom('app.images').select('sha256').orderBy('sha256').execute();
+  let copied = 0;
+  for (const { sha256 } of rows) {
+    for (const size of ['full', 'thumb'] as const) {
+      if (await store.has(sha256, size)) {
+        continue;
+      }
+      const row = await db
+        .selectFrom('app.images')
+        .select(BYTES[size])
+        .where('sha256', '=', sha256)
+        .executeTakeFirst();
+      if (row?.bytes) {
+        await store.write(sha256, size, row.bytes);
+        copied += 1;
+      }
+    }
+  }
+  return { checked: rows.length, copied };
 };
