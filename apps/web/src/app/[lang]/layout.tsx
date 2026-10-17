@@ -129,6 +129,15 @@ const footer = css({
   paddingY: { base: '7', md: '8' },
   color: 'muted',
   fontSize: '0.9375rem',
+  // Links look like links here too, as in posts: brighter than the text, underlined in the accent.
+  '& a': {
+    color: 'text',
+    textDecoration: 'underline',
+    textDecorationColor: 'accent',
+    textDecorationThickness: '1px',
+    textUnderlineOffset: '0.25em',
+  },
+  '& a:hover': { color: 'accent' },
 });
 // Two parts: who makes it on the left; on the right on a wide screen, below on a phone, where to go next.
 const footerRow = css({
@@ -152,7 +161,6 @@ const footerLinks = css({
   columnGap: '5',
   rowGap: '2',
   flexShrink: '0',
-  '& a': { color: 'body' },
 });
 
 /**
