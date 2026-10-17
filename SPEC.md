@@ -1,6 +1,9 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.8** · 2026-10-17 · Owner: Dani
+Status: **draft v0.9** · 2026-10-17 · Owner: Dani
+
+v0.9 changes: YouTube videos play on the card and the post, loaded only when the reader
+presses play (R-WEB-12). A card without a lead image shows its first source's preview.
 
 v0.8 changes: images (D17, Q13 closed): a share card the site makes for every page
 (R-WEB-14), a post's lead image with a clear licence (R-WEB-15) and its sources' preview
@@ -589,12 +592,16 @@ languages, so no post hides behind a page.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
 - **R-WEB-7** Should: Plausible for analytics and nothing else (no cookie banner
-  needed); GlitchTip for server-side errors. No error SDK in the browser in v1.
-- **R-WEB-12** Should (not built yet): a source that is a video shows as a link with its
-  length and channel ("vídeo · 13 min · <channel>", "video · 13 min · <channel>"), which
-  the source's entry in the posts API then carries. No embedded player: one tracks its
-  viewers and loads from another host, against R-WEB-7. A still the site serves itself,
-  which loads the player only when clicked, may come with images (Q13).
+  needed); GlitchTip for server-side errors. No error SDK in the browser in v1. Beyond
+  Plausible, a page loads nothing from another host until a reader presses play on a
+  video (R-WEB-12).
+- **R-WEB-12** Should: a source that is a YouTube video plays on the site, but only when
+  the reader asks. A card whose picture is that source's preview, and the top of the post,
+  show the site's own still with a play button; pressing it puts YouTube's
+  privacy-enhanced player (`youtube-nocookie.com`) in its place, playing there. Nothing
+  reaches YouTube before that click (R-WEB-7), and the caption says the video loads from
+  YouTube. The site's policy lets that one host into a frame, no other. The video's length
+  and channel in the sources list aren't built yet.
 - **R-WEB-13** Must: a breve or an article has a news date, the day its story happened
   as its original source dates it (`news_date`, a calendar day; a page has none; D16).
   Both versions of a story carry the same one, or the site shows neither, like D11. The
