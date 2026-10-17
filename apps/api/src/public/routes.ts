@@ -61,10 +61,11 @@ export const publicRoutes =
         ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
-        // The first source preview the view still shows, for a card without a lead image (R-WEB-16, R-CAP-10).
+        // The first source preview the view still shows, for a card without a lead image (R-WEB-16, R-CAP-10), with
+        // its source's address: a video's still becomes its player (R-WEB-12).
         .select(
-          sql<{ sha256: string; credit: string } | null>`(
-            select source.value -> 'preview'
+          sql<{ sha256: string; credit: string; source_url: string } | null>`(
+            select (source.value -> 'preview') || jsonb_build_object('source_url', source.value -> 'url')
             from jsonb_array_elements(sources) with ordinality as source(value, position)
             where source.value ? 'preview'
             order by source.position

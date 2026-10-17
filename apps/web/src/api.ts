@@ -41,7 +41,7 @@ export interface PostSummary {
   /** Its lead image, for the card's thumbnail; absent from an API older than images. */
   image?: PostImage | null;
   /** Its first source preview the switches show, for a card without a lead image (R-WEB-16); absent from older APIs. */
-  preview?: { sha256: string; credit: string } | null;
+  preview?: { sha256: string; credit: string; source_url?: string } | null;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */

@@ -1,5 +1,4 @@
 import { css } from '@styled-system/css';
-import Image from 'next/image';
 import Link from 'next/link';
 
 import type { PostSummary } from '@/api';
@@ -7,6 +6,7 @@ import type { Lang } from '@/i18n';
 import type { Order } from '@/paging';
 
 import { Pending } from '@/components/Pending';
+import { VideoPlayer } from '@/components/VideoPlayer';
 import { calendarParts, dateParts, newsNote } from '@/format';
 import { paths } from '@/i18n';
 import { cardImage } from '@/images';
@@ -85,7 +85,20 @@ const card = css({
 });
 const pills = css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2' });
 // With a picture (its lead image, or else its first source's preview): beside the pills and the title, which wrap.
-const head = css({ display: 'flex', alignItems: 'flex-start', gap: { base: '3', md: '5' } });
+// On a phone the picture spans the card above the text; wider, it sits on the text's right. A video that plays wraps
+// below the text, at the card's whole width.
+const head = css({
+  display: 'flex',
+  flexDirection: { base: 'column-reverse', md: 'row' },
+  flexWrap: { md: 'wrap' },
+  alignItems: { base: 'stretch', md: 'flex-start' },
+  gap: { base: '3.5', md: '5' },
+});
+const videoSlot = css({
+  flexShrink: '0',
+  width: { base: '100%', md: '220px' },
+  md: { '&[data-playing]': { width: '100%', flexBasis: '100%' } },
+});
 const headText = css({
   display: 'flex',
   flexDirection: 'column',
@@ -93,10 +106,12 @@ const headText = css({
   minWidth: '0',
   flex: '1',
 });
+// Outlets make their previews wide (about 1.9:1): a 16:9 frame shows most of one, never a square crop.
 const thumb = css({
   flexShrink: '0',
-  width: { base: '76px', md: '120px' },
-  height: { base: '76px', md: '90px' },
+  width: { base: '100%', md: '220px' },
+  height: 'auto',
+  aspectRatio: '16 / 9',
   objectFit: 'cover',
   borderRadius: 'lg',
   bg: 'deep',
@@ -171,23 +186,51 @@ const Entry = ({
                 <Pending />
               </Link>
             </h2>
+            {post.summary === '' ? null : (
+              <p className={summary} data-featured={featured ? '' : undefined}>
+                {post.summary}
+              </p>
+            )}
           </div>
-          {picture ? (
-            // The title beside it is the link; the thumbnail only illustrates it (R-WEB-15, R-WEB-16).
-            <Image src={picture.src} alt="" width={120} height={90} unoptimized className={thumb} />
+          {picture?.video !== undefined ? (
+            // In the picture's place until played; playing, it takes the card's whole width (R-WEB-12).
+            <VideoPlayer
+              lang={lang}
+              videoId={picture.video}
+              stillSrc={picture.src}
+              title={post.title}
+              credit={picture.credit ?? 'YouTube'}
+              caption={false}
+              className={videoSlot}
+            />
+          ) : picture ? (
+            // The title is the link; the picture only illustrates it (R-WEB-15, R-WEB-16). The full image across a
+            // phone's card, the thumbnail beside the title on a wider screen.
+            <picture>
+              <source media="(min-width: 768px)" srcSet={picture.thumbSrc} />
+              {/* oxlint-disable-next-line next/no-img-element -- a <picture> with two sizes; next/image has none */}
+              <img
+                src={picture.src}
+                alt=""
+                width={480}
+                height={270}
+                loading="lazy"
+                decoding="async"
+                className={thumb}
+              />
+            </picture>
           ) : null}
         </div>
-        {post.summary === '' ? null : (
-          <p className={summary} data-featured={featured ? '' : undefined}>
-            {post.summary}
-          </p>
-        )}
         <p className={meta}>
           {note === undefined ? null : <>{note} · </>}
           {typeof post.source_count === 'number' ? (
             <>{t.sourceCount(post.source_count)} · </>
           ) : null}
-          {picture?.credit === undefined ? null : <>{t.previewCredit(picture.credit)} · </>}
+          {picture?.credit === undefined ? null : picture.video === undefined ? (
+            <>{t.previewCredit(picture.credit)} · </>
+          ) : (
+            <>{t.videoCaption(picture.credit)} · </>
+          )}
           <Link href={href} className={read} aria-label={`${t.read}: ${post.title}`}>
             {t.read}
             <Pending />

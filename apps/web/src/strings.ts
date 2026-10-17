@@ -57,6 +57,10 @@ export interface Strings {
   feedCredit: (editor: string) => string;
   /** The footer's link to the about page, with the site's name from configuration (R-WEB-9). */
   aboutSite: (site: string) => string;
+  /** A video player's button, before anything loads from YouTube (R-WEB-12). */
+  play: (title: string) => string;
+  /** Under a video: whose it is, and that playing it loads it from YouTube. */
+  videoCaption: (channel: string) => string;
   /** The texts' licence (D14), linked to its deed in this language. */
   licence: { name: string; url: string };
   feed: string;
@@ -111,6 +115,8 @@ export const STRINGS: Record<Lang, Strings> = {
     aiNote: 'Texto escrito por IA a partir de estas fuentes.',
     feedCredit: (editor) => `Texto escrito por IA, elegido y revisado por ${editor}.`,
     aboutSite: (site) => `Sobre ${site}`,
+    play: (title) => `Reproducir el vídeo: ${title}`,
+    videoCaption: (channel) => `Vídeo: ${channel} · Al reproducirlo se carga desde YouTube.`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.es' },
     feed: 'Feed (Atom)',
     followFeed: 'Síguelo en tu lector de RSS.',
@@ -162,6 +168,8 @@ export const STRINGS: Record<Lang, Strings> = {
     aiNote: 'Written by AI from these sources.',
     feedCredit: (editor) => `Written by AI, picked and checked by ${editor}.`,
     aboutSite: (site) => `About ${site}`,
+    play: (title) => `Play the video: ${title}`,
+    videoCaption: (channel) => `Video: ${channel} · Playing it loads it from YouTube.`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.en' },
     feed: 'Feed (Atom)',
     followFeed: 'Follow it in your RSS reader.',

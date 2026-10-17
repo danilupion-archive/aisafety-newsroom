@@ -15,6 +15,7 @@ import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
 import { namedTags, tagLabel } from './tags';
+import { videoOf, youtubeEmbed } from './video';
 
 const POST: PostSummary = {
   lang: 'es',
@@ -233,12 +234,31 @@ describe('images (D17)', () => {
       height: 900,
     };
     const preview = { sha256: 'e'.repeat(64), credit: 'example.org' };
-    expect(cardImage({ image: lead, preview })).toEqual({ src: imagePath('lead', SHA, 'thumb') });
+    expect(cardImage({ image: lead, preview })).toEqual({
+      src: imagePath('lead', SHA),
+      thumbSrc: imagePath('lead', SHA, 'thumb'),
+    });
     expect(cardImage({ image: null, preview })).toEqual({
-      src: imagePath('preview', preview.sha256, 'thumb'),
+      src: imagePath('preview', preview.sha256),
+      thumbSrc: imagePath('preview', preview.sha256, 'thumb'),
       credit: 'example.org',
     });
     expect(cardImage({ image: null, preview: null })).toBeUndefined();
+    expect(
+      cardImage({
+        image: null,
+        preview: { ...preview, source_url: 'https://youtu.be/dQw4w9WgXcQ?si=x' },
+      }),
+    ).toEqual({
+      src: imagePath('preview', preview.sha256),
+      thumbSrc: imagePath('preview', preview.sha256, 'thumb'),
+      credit: 'example.org',
+      video: 'dQw4w9WgXcQ',
+    });
+    expect(youtubeEmbed('dQw4w9WgXcQ')).toBe(
+      'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0',
+    );
+    expect(videoOf('https://example.org/video')).toBeUndefined();
     expect(cardImage({})).toBeUndefined();
   });
 
@@ -390,6 +410,12 @@ describe('contentSecurityPolicy', () => {
     expect(policy).toContain("connect-src 'self';");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).not.toContain('unsafe-eval');
+  });
+
+  it('lets only YouTube’s privacy-enhanced player into a frame (R-WEB-12)', () => {
+    expect(contentSecurityPolicy(undefined)).toContain(
+      'frame-src https://www.youtube-nocookie.com;',
+    );
   });
 
   it('allows Plausible’s origin alone when it is configured (R-WEB-7)', () => {

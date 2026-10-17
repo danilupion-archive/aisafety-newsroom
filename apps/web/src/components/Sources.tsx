@@ -35,12 +35,15 @@ const list = css({
   },
 });
 const accessed = css({ color: 'muted' });
-// A source with its outlet's preview: the image small beside its text, which wraps next to it.
+// A source with its outlet's preview: its text, then the image small on its right.
 const withPreview = css({ display: 'flex', alignItems: 'flex-start', gap: '3.5' });
+const grow = css({ flex: '1', minWidth: '0' });
+// The outlet's wide preview in a 16:9 frame, never a square crop.
 const thumb = css({
   flexShrink: '0',
-  width: { base: '72px', md: '96px' },
-  height: { base: '54px', md: '72px' },
+  width: { base: '96px', md: '128px' },
+  height: 'auto',
+  aspectRatio: '16 / 9',
   objectFit: 'cover',
   borderRadius: 'md',
   bg: 'card',
@@ -65,18 +68,8 @@ export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Sourc
         {sources.map((source) => (
           <li key={source.url}>
             <div className={source.preview ? withPreview : undefined}>
-              {source.preview ? (
-                // The link beside it says what it is: the image only illustrates it.
-                <Image
-                  src={imagePath('preview', source.preview.sha256, 'thumb')}
-                  alt=""
-                  width={96}
-                  height={72}
-                  unoptimized
-                  className={thumb}
-                />
-              ) : null}
-              <span>
+              {/* The text first: the list's number lines up with its first line, the picture on its right. */}
+              <span className={source.preview ? grow : undefined}>
                 <a href={source.url} rel="noopener noreferrer">
                   {source.title}
                 </a>{' '}
@@ -87,6 +80,17 @@ export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Sourc
                   <span className={credit}>{t.previewCredit(source.preview.credit)}</span>
                 ) : null}
               </span>
+              {source.preview ? (
+                // The link beside it says what it is: the image only illustrates it.
+                <Image
+                  src={imagePath('preview', source.preview.sha256, 'thumb')}
+                  alt=""
+                  width={128}
+                  height={72}
+                  unoptimized
+                  className={thumb}
+                />
+              ) : null}
             </div>
           </li>
         ))}

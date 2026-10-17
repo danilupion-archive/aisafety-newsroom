@@ -233,6 +233,7 @@ describe('a post’s images (R-WEB-15, R-WEB-16)', () => {
     expect(listed.find((row) => row.slug === 'con-imagen')?.preview).toEqual({
       sha256: sha256Of(preview),
       credit: 'example.org',
+      source_url: sourcesWith(preview)[1]?.url,
     });
     await setImages('licensed');
     const hidden = (await read('/public/posts?lang=es')).json<Listed[]>();

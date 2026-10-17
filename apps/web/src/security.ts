@@ -3,11 +3,13 @@ import type { Lang } from './i18n';
 import { xml } from './feed';
 import { paths } from './i18n';
 import { STRINGS } from './strings';
+import { PLAYER_ORIGIN } from './video';
 
 /**
  * The site's Content Security Policy, as aiontheballot's public site sets it: scripts may be inline (Next writes the
  * page's data into inline scripts), and nothing loads from another host but Plausible's script and its events, when
- * configured (R-WEB-7). No frame may hold a page.
+ * configured (R-WEB-7), and YouTube's privacy-enhanced player in a frame, which a page adds only once a reader pressed
+ * play (R-WEB-12). No frame may hold a page.
  */
 export const contentSecurityPolicy = (
   analyticsScriptUrl: string | undefined,
@@ -21,6 +23,7 @@ export const contentSecurityPolicy = (
     "img-src 'self' data:",
     "font-src 'self'",
     `connect-src 'self'${analytics}`,
+    `frame-src ${PLAYER_ORIGIN}`,
     "form-action 'self'",
     "frame-ancestors 'none'",
     "base-uri 'none'",

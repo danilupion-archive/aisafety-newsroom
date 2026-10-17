@@ -13,6 +13,7 @@ import { LeadImage } from '@/components/LeadImage';
 import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
 import { Translations } from '@/components/Translations';
+import { VideoPlayer } from '@/components/VideoPlayer';
 import { longDate, newsNote } from '@/format';
 import { paths } from '@/i18n';
 import { alternates, pageLang } from '@/params';
@@ -20,6 +21,7 @@ import { site } from '@/site';
 import { STRINGS } from '@/strings';
 import { column, label, pageTitle, prose, tagPill } from '@/styles';
 import { isSlug, tagLabel } from '@/tags';
+import { postVideo } from '@/video';
 
 type Props = { params: Promise<{ lang: string; slug: string }> };
 
@@ -124,6 +126,7 @@ const PostPage = async (props: Props) => {
   const [firstTag] = post.tags;
   // Posted on another day than its story happened: which day that was (R-WEB-13).
   const newsDay = newsNote(lang, post, 'long');
+  const video = post.type === 'page' ? undefined : postVideo(post.sources);
   return (
     <article className={column}>
       <Link href={paths.home(lang)} className={back}>
@@ -152,7 +155,17 @@ const PostPage = async (props: Props) => {
         )}
         <h1 className={pageTitle}>{post.title}</h1>
         {post.summary === '' ? null : <p className={summary}>{post.summary}</p>}
-        {post.image ? <LeadImage lang={lang} image={post.image} /> : null}
+        {post.image ? (
+          <LeadImage lang={lang} image={post.image} />
+        ) : video ? (
+          <VideoPlayer
+            lang={lang}
+            videoId={video.id}
+            stillSrc={video.stillSrc}
+            title={post.title}
+            credit={video.credit}
+          />
+        ) : null}
       </header>
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(post.body_md) }} />
       <Sources lang={lang} sources={post.sources} />
