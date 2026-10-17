@@ -65,13 +65,19 @@ export interface Unpublished {
   slug: string;
 }
 
+/** Well inside the gateway's 15 s: a stuck API makes an error page, never a request left hanging. */
+const READ_TIMEOUT_MS = 8000;
+
 /**
  * Never cached here: reads stay inside the cluster and are cheap, and a cache that revalidates in the background would
  * serve an answer past its 60 s to the first visitor after it (R-WEB-6, AC-7). The feeds' own `max-age=60` is the
  * only wait.
  */
 const read = async (path: string): Promise<Response> =>
-  fetch(`${site().apiUrl}${path}`, { cache: 'no-store' });
+  fetch(`${site().apiUrl}${path}`, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+  });
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await read(path);

@@ -18,6 +18,8 @@ const publicDb = config.publicDatabaseUrl
   ? createDatabase({
       connectionString: config.publicDatabaseUrl,
       applicationName: 'aisafety-newsroom-api-public',
+      // A page waits on these: a slow read fails fast and the site answers its error page.
+      statementTimeoutMs: 5000,
     })
   : undefined;
 const telegram = config.telegram ? createTelegramApi(config.telegram.botToken) : undefined;
