@@ -1,5 +1,13 @@
 # @aisafety-newsroom/web
 
+## 0.9.2
+
+### Patch Changes
+
+- 496ccaf: A card shows a story's YouTube video, when one of its sources has a still, before an earlier source's image, so it
+  plays from the timeline. The sources list drops its numbers: one row per source, its title as the link, a muted line
+  with the day it was consulted and the image's credit, the picture on its right.
+
 ## 0.9.1
 
 ### Patch Changes
