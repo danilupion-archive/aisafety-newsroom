@@ -9,6 +9,7 @@ import { connection } from 'next/server';
 import type { Lang } from '@/i18n';
 
 import { getPost, type Post } from '@/api';
+import { LeadImage } from '@/components/LeadImage';
 import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
 import { Translations } from '@/components/Translations';
@@ -84,7 +85,11 @@ export const generateMetadata = async (props: Props): Promise<Metadata> => {
     title: post.title,
     description: post.summary || undefined,
     alternates: alternates(lang, self, post.translations.length === 0 ? {} : languages),
+    // The post's own share card, never its lead image nor a source's (R-WEB-14).
     openGraph: {
+      images: [
+        { url: paths.shareCard(lang, post.slug), width: 1200, height: 630, alt: post.title },
+      ],
       type: 'article',
       title: post.title,
       description: post.summary || undefined,
@@ -95,6 +100,12 @@ export const generateMetadata = async (props: Props): Promise<Metadata> => {
       publishedTime: post.published_at,
       modifiedTime: post.updated_at,
       tags: post.tags,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: post.summary || undefined,
+      images: [paths.shareCard(lang, post.slug)],
     },
   };
 };
@@ -141,6 +152,7 @@ const PostPage = async (props: Props) => {
         )}
         <h1 className={pageTitle}>{post.title}</h1>
         {post.summary === '' ? null : <p className={summary}>{post.summary}</p>}
+        {post.image ? <LeadImage lang={lang} image={post.image} /> : null}
       </header>
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(post.body_md) }} />
       <Sources lang={lang} sources={post.sources} />

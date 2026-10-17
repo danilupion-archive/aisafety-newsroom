@@ -330,6 +330,7 @@ describe('commands (R-CAP-8)', () => {
     for (const text of [
       '/discard',
       '/note 3',
+      '/restore',
       '/restore x',
       '/discard 99',
       `/discard ${logged}`,
@@ -340,7 +341,9 @@ describe('commands (R-CAP-8)', () => {
     expect(texts()).toEqual([
       'Usage: /discard <id> [reason]',
       'Usage: /note <id> <text>',
-      'Usage: /restore <id>',
+      'Usage: /restore <id>, /restore <post>, or /restore image <post> [lead|<source number>]',
+      // Not an item's number: a post's name (R-CAP-11).
+      'No post x',
       'No item #99',
       `Item #${logged} is logged: it can't be discarded`,
       "I don't know /frobnicate. Send /help for the commands.",
@@ -359,5 +362,118 @@ describe('commands (R-CAP-8)', () => {
     await deliver(update);
     await deliver(update);
     expect(texts()).toEqual(['Nothing pending.']);
+  });
+});
+
+describe('the site’s switches (R-CAP-10, R-CAP-11)', () => {
+  const LEAD = 'a'.repeat(64);
+  const PREVIEW = 'b'.repeat(64);
+
+  /** A published story in both languages; the Spanish one with a lead image and a source preview. */
+  const story = async () => {
+    for (const sha256 of [LEAD, PREVIEW]) {
+      await asSuperuser(
+        `INSERT INTO app.images (sha256, width, height, full_webp, thumb_webp) VALUES ($1, 10, 10, '\\x01', '\\x02')`,
+        [sha256],
+      );
+    }
+    const sources = JSON.stringify([
+      { title: 'Fuente', url: 'https://example.com/a', accessed: '2026-10-01' },
+      {
+        title: 'Otra',
+        url: 'https://example.org/b',
+        accessed: '2026-10-01',
+        preview: { sha256: PREVIEW, credit: 'example.org' },
+      },
+    ]);
+    const image = JSON.stringify({
+      sha256: LEAD,
+      alt: 'Ejemplo',
+      credit: 'Autora de ejemplo',
+      licence: 'CC BY 4.0',
+      source_url: 'https://example.com/foto',
+    });
+    await asSuperuser(
+      `INSERT INTO app.posts (slug, lang, type, title, body_md, published_at, content_ref, news_date, sources, image)
+       VALUES ('informe-ficticio', 'es', 'breve', 'Un informe ficticio', 'Texto.', '2026-10-01', '{}', '2026-09-30', $1, $2)`,
+      [sources, image],
+    );
+    await asSuperuser(
+      `INSERT INTO app.posts (slug, lang, type, title, body_md, published_at, content_ref, news_date,
+         translation_of_lang, translation_of_slug)
+       VALUES ('fictional-report', 'en', 'breve', 'A fictional report', 'Text.', '2026-10-01', '{}', '2026-09-30',
+         'es', 'informe-ficticio')`,
+    );
+  };
+  const takenDown = async () =>
+    (
+      await asSuperuser<{ slug: string }>(
+        'SELECT slug FROM app.posts WHERE taken_down_at IS NOT NULL ORDER BY slug',
+      )
+    ).map((row) => row.slug);
+  const removed = async () =>
+    (
+      await asSuperuser<{ sha256: string }>(
+        'SELECT sha256 FROM app.images WHERE removed_at IS NOT NULL ORDER BY sha256',
+      )
+    ).map((row) => row.sha256.slice(0, 1));
+  const imagesMode = async () =>
+    (await asSuperuser<{ images: string }>('SELECT images FROM app.site_settings'))[0]?.images;
+
+  it('/images says the switch, and sets it: off, licensed, on', async () => {
+    await deliver(command('/images'));
+    await deliver(command('/images off'));
+    expect(await imagesMode()).toBe('none');
+    await deliver(command('/images licensed'));
+    expect(await imagesMode()).toBe('licensed');
+    await deliver(command('/images on'));
+    expect(await imagesMode()).toBe('all');
+    await deliver(command('/images sideways'));
+    expect(texts()).toEqual([
+      expect.stringContaining('Images on'),
+      expect.stringContaining('Images off: the site shows none'),
+      expect.stringContaining('licensed only'),
+      expect.stringContaining('Images on'),
+      'Usage: /images [on|licensed|off]',
+    ]);
+  });
+
+  it('/takedown hides a story at once, named any way Dani has it, and /restore brings it back', async () => {
+    await story();
+    await deliver(command('/takedown https://pandoria.example/en/fictional-report'));
+    expect(await takenDown()).toEqual(['fictional-report']);
+    expect(texts().at(-1)).toContain(
+      'Taken down: “A fictional report” (en/fictional-report) and es/informe-ficticio',
+    );
+    await deliver(command('/takedown informe-ficticio'));
+    expect(await takenDown()).toEqual(['fictional-report', 'informe-ficticio']);
+    // Restored through either version, the whole story comes back.
+    await deliver(command('/restore es/informe-ficticio'));
+    expect(await takenDown()).toEqual([]);
+    expect(texts().at(-1)).toContain('Restored: “Un informe ficticio”');
+    await deliver(command('/takedown es/no-such-post'));
+    expect(texts().at(-1)).toBe('No post es/no-such-post');
+  });
+
+  it('/takedown image hides a post’s images, its lead image or one preview, and /restore image undoes it', async () => {
+    await story();
+    await deliver(command('/takedown image es/informe-ficticio 2'));
+    expect(await removed()).toEqual(['b']);
+    expect(texts().at(-1)).toContain('source 2’s preview (example.org)');
+    await deliver(command('/takedown image en/fictional-report'));
+    // The English version shares the story: with no choice, both versions' images go.
+    expect(await removed()).toEqual(['a', 'b']);
+    await deliver(command('/restore image es/informe-ficticio lead'));
+    expect(await removed()).toEqual(['b']);
+    await deliver(command('/restore image es/informe-ficticio'));
+    expect(await removed()).toEqual([]);
+    // The posts themselves were never touched.
+    expect(await takenDown()).toEqual([]);
+  });
+
+  it('keeps /restore <id> for the inbox', async () => {
+    const id = await insertItem({ status: 'discarded' });
+    await deliver(command(`/restore ${id}`));
+    expect(texts().at(-1)).toMatch(/^Restored #\d+/);
   });
 });

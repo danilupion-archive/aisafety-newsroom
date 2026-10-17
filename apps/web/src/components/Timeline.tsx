@@ -1,4 +1,5 @@
 import { css } from '@styled-system/css';
+import Image from 'next/image';
 import Link from 'next/link';
 
 import type { PostSummary } from '@/api';
@@ -7,6 +8,7 @@ import type { Order } from '@/paging';
 
 import { calendarParts, dateParts, newsNote } from '@/format';
 import { paths } from '@/i18n';
+import { imagePath } from '@/images';
 import { STRINGS } from '@/strings';
 import { label, typePill } from '@/styles';
 
@@ -81,6 +83,23 @@ const card = css({
   '&[data-type=article]': { borderColor: 'muted' },
 });
 const pills = css({ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2' });
+// With a lead image: its thumbnail beside the pills and the title, which wrap next to it.
+const head = css({ display: 'flex', alignItems: 'flex-start', gap: { base: '3', md: '5' } });
+const headText = css({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '2.5',
+  minWidth: '0',
+  flex: '1',
+});
+const thumb = css({
+  flexShrink: '0',
+  width: { base: '76px', md: '120px' },
+  height: { base: '76px', md: '90px' },
+  objectFit: 'cover',
+  borderRadius: 'lg',
+  bg: 'deep',
+});
 const title = css({
   fontSize: { base: '1.25rem', md: '1.5rem' },
   fontWeight: '700',
@@ -136,15 +155,30 @@ const Entry = ({
         <span className={dot} data-type={post.type} />
       </div>
       <article className={card} data-type={post.type}>
-        <div className={pills}>
-          <Tags lang={lang} tags={post.tags} />
-          <span className={typePill} data-type={post.type}>
-            {t.type[post.type]}
-          </span>
+        <div className={head}>
+          <div className={headText}>
+            <div className={pills}>
+              <Tags lang={lang} tags={post.tags} />
+              <span className={typePill} data-type={post.type}>
+                {t.type[post.type]}
+              </span>
+            </div>
+            <h2 className={title} data-featured={featured ? '' : undefined}>
+              <Link href={href}>{post.title}</Link>
+            </h2>
+          </div>
+          {post.image ? (
+            // The title beside it is the link; the thumbnail only illustrates it (R-WEB-15).
+            <Image
+              src={imagePath('lead', post.image.sha256, 'thumb')}
+              alt=""
+              width={120}
+              height={90}
+              unoptimized
+              className={thumb}
+            />
+          ) : null}
         </div>
-        <h2 className={title} data-featured={featured ? '' : undefined}>
-          <Link href={href}>{post.title}</Link>
-        </h2>
         {post.summary === '' ? null : (
           <p className={summary} data-featured={featured ? '' : undefined}>
             {post.summary}

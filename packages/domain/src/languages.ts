@@ -16,9 +16,10 @@ export const PATH_WORDS = {
 
 /**
  * What else shares the root with Spanish posts: the languages' prefixes (`/en` is English's home, `/es` redirects to
- * `/`) and the health check. The site's other root files have a dot in their names, which no slug has.
+ * `/`), the health check, and the folders of the site's images and share cards (`/img/…`, `/og/…`, D17). The site's
+ * other root files have a dot in their names, which no slug has.
  */
-const ROOT_WORDS = [...LANGS, 'healthz'];
+const ROOT_WORDS = [...LANGS, 'healthz', 'img', 'og'];
 
 /**
  * Every word either language uses for the site's pages, and the root's own words. The site routes each page word in

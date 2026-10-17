@@ -21,6 +21,7 @@
     "@aisafety-newsroom/domain": "workspace:*",
     "@aisafety-newsroom/observability": "workspace:*",
     "@fontsource-variable/hanken-grotesk": "5.3.0",
+    "@fontsource/hanken-grotesk": "5.3.0",
     "@sentry/node": "11.7.0",
     "next": "16.4.0",
     "react": "19.3.0",

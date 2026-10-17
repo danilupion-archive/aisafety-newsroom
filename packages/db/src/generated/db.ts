@@ -34,6 +34,16 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AppImages {
+  created_at: Generated<Timestamp>;
+  full_webp: Buffer;
+  height: number;
+  removed_at: Timestamp | null;
+  sha256: string;
+  thumb_webp: Buffer;
+  width: number;
+}
+
 export interface AppInboxItems {
   content_type: string | null;
   created_at: Generated<Timestamp>;
@@ -73,6 +83,7 @@ export interface AppPosts {
   body_md: string;
   content_ref: Json;
   created_at: Generated<Timestamp>;
+  image: Json | null;
   lang: AppPostLang;
   news_date: Timestamp | null;
   published_at: Timestamp;
@@ -80,6 +91,7 @@ export interface AppPosts {
   sources: Generated<Json>;
   summary: Generated<string>;
   tags: Generated<string[]>;
+  taken_down_at: Timestamp | null;
   title: string;
   translation_of_lang: AppPostLang | null;
   translation_of_slug: string | null;
@@ -88,8 +100,18 @@ export interface AppPosts {
   updated_at: Generated<Timestamp>;
 }
 
+export interface AppPublicImages {
+  full_webp: Buffer | null;
+  height: number | null;
+  kind: string | null;
+  sha256: string | null;
+  thumb_webp: Buffer | null;
+  width: number | null;
+}
+
 export interface AppPublishedPosts {
   body_md: string | null;
+  image: Json | null;
   lang: AppPostLang | null;
   news_date: Timestamp | null;
   published_at: Timestamp | null;
@@ -104,6 +126,12 @@ export interface AppPublishedPosts {
   updated_at: Timestamp | null;
 }
 
+export interface AppSiteSettings {
+  id: Generated<boolean>;
+  images: Generated<string>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface AppTelegramUpdates {
   received_at: Generated<Timestamp>;
   update_id: Int8;
@@ -116,9 +144,12 @@ export interface AppUnpublishedPosts {
 }
 
 export interface DB {
+  'app.images': AppImages;
   'app.inbox_items': AppInboxItems;
   'app.posts': AppPosts;
+  'app.public_images': AppPublicImages;
   'app.published_posts': AppPublishedPosts;
+  'app.site_settings': AppSiteSettings;
   'app.telegram_updates': AppTelegramUpdates;
   'app.unpublished_posts': AppUnpublishedPosts;
 }

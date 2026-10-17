@@ -33,6 +33,14 @@ export const generateMetadata = async ({ params }: Props): Promise<Metadata> => 
     metadataBase: new URL(url),
     title: { default: name[lang], template: `%s · ${name[lang]}` },
     description: STRINGS[lang].intro,
+    // Every page's share card unless it has its own (R-WEB-14): the language's home's.
+    openGraph: {
+      type: 'website',
+      siteName: name[lang],
+      locale: STRINGS[lang].ogLocale,
+      images: [{ url: paths.shareCard(lang), width: 1200, height: 630, alt: name[lang] }],
+    },
+    twitter: { card: 'summary_large_image', images: [paths.shareCard(lang)] },
     alternates: {
       types: { 'application/atom+xml': [{ url: paths.feed(lang), title: name[lang] }] },
     },
@@ -120,7 +128,19 @@ const footer = css({
   color: 'muted',
   fontSize: '0.9375rem',
 });
-const footerRow = css({ display: 'flex', flexWrap: 'wrap', columnGap: '2', rowGap: '1' });
+/**
+ * The footer's items: one per line on a phone, where separators would strand at line starts; in a row on wider
+ * screens, each after the first led by a middle dot.
+ */
+const footerRow = css({
+  listStyle: 'none',
+  display: 'flex',
+  flexDirection: { base: 'column', md: 'row' },
+  flexWrap: 'wrap',
+  columnGap: '2',
+  rowGap: '1',
+  md: { '& > li + li::before': { content: '"·"', marginRight: '2', color: 'muted' } },
+});
 
 /**
  * A post's version in the other language, for the header's switch: on a post's address only (a word of the
@@ -214,10 +234,9 @@ const RootLayout = async ({ children, params }: Props) => {
         </header>
         <main id="main">{children}</main>
         <footer className={footer}>
-          <p className={`${container} ${footerRow}`}>
-            <span>{name[lang]}</span>
-            <span aria-hidden="true">·</span>
-            <span>
+          <ul className={`${container} ${footerRow}`}>
+            <li>{name[lang]}</li>
+            <li>
               {t.credit}{' '}
               {authorUrl === undefined ? (
                 author
@@ -226,17 +245,20 @@ const RootLayout = async ({ children, params }: Props) => {
                   {author}
                 </a>
               )}
-            </span>
-            <span aria-hidden="true">·</span>
-            <a href={t.licence.url} rel="license">
-              {t.licence.name}
-            </a>
-            <span aria-hidden="true">·</span>
-            <Link href={paths.about(lang)}>{t.howItsMade}</Link>
-            <span aria-hidden="true">·</span>
-            {/* oxlint-disable-next-line next/no-html-link-for-pages */}
-            <a href={paths.feed(lang)}>{t.feed}</a>
-          </p>
+            </li>
+            <li>
+              <a href={t.licence.url} rel="license">
+                {t.licence.name}
+              </a>
+            </li>
+            <li>
+              <Link href={paths.about(lang)}>{t.aboutSite(name[lang])}</Link>
+            </li>
+            <li>
+              {/* oxlint-disable-next-line next/no-html-link-for-pages */}
+              <a href={paths.feed(lang)}>{t.feed}</a>
+            </li>
+          </ul>
         </footer>
       </body>
     </html>

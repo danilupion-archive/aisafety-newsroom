@@ -1,9 +1,10 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { missingImages } from '../images/data.js';
 import { parse } from '../parse.js';
 import { listPosts, unpublishPost, upsertPost } from './data.js';
-import { postAddress, postBody, reservedSlug } from './schemas.js';
+import { imagesOf, postAddress, postBody, reservedSlug } from './schemas.js';
 
 type AddressParams = { Params: { lang: string; slug: string } };
 
@@ -24,6 +25,13 @@ export const postsRoutes =
         const reserved = reservedSlug(address.lang, address.slug, body.type);
         if (reserved !== undefined) {
           return reply.code(400).send({ error: reserved });
+        }
+        // The images first, then the post that names them (R-API-5).
+        const [missing] = await missingImages(db, imagesOf(body));
+        if (missing !== undefined) {
+          return reply.code(400).send({
+            error: `Image ${missing} isn’t uploaded: PUT /api/v1/images/${missing} first`,
+          });
         }
         const { created, post } = await upsertPost(db, address, body);
         return reply.code(created ? 201 : 200).send(post);

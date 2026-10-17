@@ -25,6 +25,9 @@ export const paths = {
   topics: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].topics}`,
   about: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].about}`,
   feed: (lang: Lang) => `${prefix(lang)}/feed.xml`,
+  /** A page's share card (R-WEB-14): its language's home's, or a post's own. */
+  shareCard: (lang: Lang, slug?: string) =>
+    slug === undefined ? `/og/${lang}.png` : `/og/${lang}/${slug}.png`,
 };
 
 /**
@@ -45,6 +48,9 @@ export const readPath = (
   }
   return { lang: DEFAULT_LANG, segments: first === '' ? [] : [first, ...rest] };
 };
+
+/** The folders of the site's own files: the images (`/img/…`, D17) and the share cards (`/og/…`, R-WEB-14). */
+const ROOT_FOLDERS = ['/img/', '/og/'];
 
 /** The site's own files outside the languages, served as they are. */
 const ROOT_FILES = new Set([
@@ -83,7 +89,11 @@ export type Route =
 export const missingPage = (lang: Lang): string => `/${lang}/missing.html`;
 
 export const route = (pathname: string): Route => {
-  if (ROOT_FILES.has(pathname) || pathname.startsWith('/_next/')) {
+  if (
+    ROOT_FILES.has(pathname) ||
+    pathname.startsWith('/_next/') ||
+    ROOT_FOLDERS.some((folder) => pathname.startsWith(folder))
+  ) {
     return { kind: 'file' };
   }
   const path = readPath(pathname);

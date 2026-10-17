@@ -74,7 +74,15 @@ describe('pendingList (R-CAP-8)', () => {
 
 describe('HELP', () => {
   it('lists every command', () => {
-    for (const command of ['/pending', '/discard', '/restore', '/note', '/help']) {
+    for (const command of [
+      '/pending',
+      '/discard',
+      '/restore',
+      '/note',
+      '/images',
+      '/takedown',
+      '/help',
+    ]) {
       expect(HELP).toContain(command);
     }
   });

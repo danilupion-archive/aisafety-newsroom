@@ -27,7 +27,7 @@ const nextConfig = {
   // Trace dependencies from the monorepo root so the standalone output includes workspace packages.
   outputFileTracingRoot: join(appDir, '../..'),
   poweredByHeader: false,
-  // The site shows no images (R-WEB-3): no optimizer either.
+  // The images are the API's own re-encodings, already sized (R-WEB-15): no optimizer.
   images: { unoptimized: true },
   // Metadata in <head> for every client, not streamed into the body: crawlers Next doesn't recognise read only the head.
   htmlLimitedBots: /.*/,

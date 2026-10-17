@@ -25,8 +25,15 @@ export const asSuperuser = async <T extends pg.QueryResultRow>(
   }
 };
 
-export const emptyTables = (): Promise<unknown> =>
-  asSuperuser('TRUNCATE app.inbox_items, app.telegram_updates, app.posts RESTART IDENTITY CASCADE');
+export const emptyTables = async (): Promise<void> => {
+  await asSuperuser(
+    'TRUNCATE app.inbox_items, app.telegram_updates, app.posts, app.images RESTART IDENTITY CASCADE',
+  );
+  // One settings row, every image shown: as the migration leaves it.
+  await asSuperuser(
+    "INSERT INTO app.site_settings (id, images) VALUES (true, 'all') ON CONFLICT (id) DO UPDATE SET images = 'all'",
+  );
+};
 
 export interface Fixture {
   url?: string | null;

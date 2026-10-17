@@ -225,6 +225,8 @@ describe('reserved slugs', () => {
     });
     expect((await put('es/es', BREVE)).statusCode).toBe(400);
     expect((await put('es/healthz', BREVE)).statusCode).toBe(400);
+    expect((await put('es/img', BREVE)).statusCode).toBe(400);
+    expect((await put('es/og', BREVE)).statusCode).toBe(400);
   });
 });
 

@@ -45,13 +45,18 @@ export interface Strings {
   /** From a post back to the timeline. */
   allEntries: string;
   accessed: (date: string) => string;
+  /** A lead image's caption (R-WEB-15): who to credit, linked to where it came from, and its licence. */
+  imageCredit: string;
+  /** Under a source's preview (R-WEB-16): the outlet it's from. */
+  previewCredit: (outlet: string) => string;
   /** Who writes the texts and who answers for them (R-WEB-3), before the editor's name, in the footer. */
   credit: string;
   /** Above a post's sources: the text is AI-written from them (R-WEB-3). */
   aiNote: string;
   /** At the end of each feed entry, which readers show without the site's footer (R-WEB-3). */
   feedCredit: (editor: string) => string;
-  howItsMade: string;
+  /** The footer's link to the about page, with the site's name from configuration (R-WEB-9). */
+  aboutSite: (site: string) => string;
   /** The texts' licence (D14), linked to its deed in this language. */
   licence: { name: string; url: string };
   feed: string;
@@ -100,10 +105,12 @@ export const STRINGS: Record<Lang, Strings> = {
     read: 'Leer',
     allEntries: 'Todas las entradas',
     accessed: (date) => `consultado el ${date}`,
+    imageCredit: 'Imagen:',
+    previewCredit: (outlet) => `Imagen: ${outlet}`,
     credit: 'Textos escritos por IA, elegidos y revisados por',
     aiNote: 'Texto escrito por IA a partir de estas fuentes.',
     feedCredit: (editor) => `Texto escrito por IA, elegido y revisado por ${editor}.`,
-    howItsMade: 'Cómo se hace',
+    aboutSite: (site) => `Sobre ${site}`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.es' },
     feed: 'Feed (Atom)',
     followFeed: 'Síguelo en tu lector de RSS.',
@@ -149,10 +156,12 @@ export const STRINGS: Record<Lang, Strings> = {
     read: 'Read',
     allEntries: 'All entries',
     accessed: (date) => `accessed ${date}`,
+    imageCredit: 'Image:',
+    previewCredit: (outlet) => `Image: ${outlet}`,
     credit: 'Texts written by AI, picked and checked by',
     aiNote: 'Written by AI from these sources.',
     feedCredit: (editor) => `Written by AI, picked and checked by ${editor}.`,
-    howItsMade: 'How it’s made',
+    aboutSite: (site) => `About ${site}`,
     licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.en' },
     feed: 'Feed (Atom)',
     followFeed: 'Follow it in your RSS reader.',

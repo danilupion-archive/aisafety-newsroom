@@ -184,6 +184,28 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: images; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.images (
+    sha256 text NOT NULL,
+    width integer NOT NULL,
+    height integer NOT NULL,
+    full_webp bytea NOT NULL,
+    thumb_webp bytea NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    removed_at timestamp with time zone,
+    CONSTRAINT images_full_size CHECK (((octet_length(full_webp) >= 1) AND (octet_length(full_webp) <= 2097152))),
+    CONSTRAINT images_height_positive CHECK ((height > 0)),
+    CONSTRAINT images_sha256_format CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT images_thumb_size CHECK (((octet_length(thumb_webp) >= 1) AND (octet_length(thumb_webp) <= 262144))),
+    CONSTRAINT images_width_positive CHECK ((width > 0))
+);
+
+
+ALTER TABLE app.images OWNER TO newsroom_owner;
+
+--
 -- Name: inbox_items; Type: TABLE; Schema: app; Owner: newsroom_owner
 --
 
@@ -271,8 +293,12 @@ CREATE TABLE app.posts (
     translation_of_lang app.post_lang,
     translation_of_slug text,
     news_date date,
+    image jsonb,
+    taken_down_at timestamp with time zone,
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
+    CONSTRAINT posts_image_object CHECK (((image IS NULL) OR (jsonb_typeof(image) = 'object'::text))),
+    CONSTRAINT posts_page_has_no_image CHECK (((type <> 'page'::app.post_type) OR (image IS NULL))),
     CONSTRAINT posts_page_has_no_news_date CHECK (((type <> 'page'::app.post_type) OR (news_date IS NULL))),
     CONSTRAINT posts_slug_format CHECK (((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(slug) <= 120))),
     CONSTRAINT posts_sources_array CHECK ((jsonb_typeof(sources) = 'array'::text)),
@@ -286,6 +312,21 @@ CREATE TABLE app.posts (
 ALTER TABLE app.posts OWNER TO newsroom_owner;
 
 --
+-- Name: site_settings; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.site_settings (
+    id boolean DEFAULT true NOT NULL,
+    images text DEFAULT 'all'::text NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT site_settings_images CHECK ((images = ANY (ARRAY['all'::text, 'licensed'::text, 'none'::text]))),
+    CONSTRAINT site_settings_one_row CHECK (id)
+);
+
+
+ALTER TABLE app.site_settings OWNER TO newsroom_owner;
+
+--
 -- Name: published_posts; Type: VIEW; Schema: app; Owner: newsroom_owner
 --
 
@@ -295,7 +336,15 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
     post.title,
     post.summary,
     post.body_md,
-    post.sources,
+    ( SELECT COALESCE(jsonb_agg(
+                CASE
+                    WHEN (NOT (source.value ? 'preview'::text)) THEN source.value
+                    WHEN ((settings.images = 'all'::text) AND (EXISTS ( SELECT
+                       FROM app.images image
+                      WHERE ((image.sha256 = ((source.value -> 'preview'::text) ->> 'sha256'::text)) AND (image.removed_at IS NULL))))) THEN source.value
+                    ELSE (source.value - 'preview'::text)
+                END ORDER BY source."position"), '[]'::jsonb) AS "coalesce"
+           FROM jsonb_array_elements(post.sources) WITH ORDINALITY source(value, "position")) AS sources,
     post.tags,
     post.published_at,
     post.updated_at,
@@ -305,13 +354,47 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
         CASE
             WHEN (post.type <> 'page'::app.post_type) THEN COALESCE(post.news_date, ((post.published_at AT TIME ZONE 'Europe/Madrid'::text))::date)
             ELSE NULL::date
-        END AS news_date
-   FROM (app.posts post
+        END AS news_date,
+        CASE
+            WHEN (settings.images = ANY (ARRAY['all'::text, 'licensed'::text])) THEN ( SELECT (post.image || jsonb_build_object('width', image.width, 'height', image.height))
+               FROM app.images image
+              WHERE ((image.sha256 = (post.image ->> 'sha256'::text)) AND (image.removed_at IS NULL)))
+            ELSE NULL::jsonb
+        END AS image
+   FROM ((app.posts post
+     LEFT JOIN app.site_settings settings ON (true))
      JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
-  WHERE ((post.unpublished_at IS NULL) AND (post.published_at <= now()) AND (other.unpublished_at IS NULL) AND (other.published_at <= now()) AND ((post.type = 'page'::app.post_type) OR (COALESCE(post.news_date, ((post.published_at AT TIME ZONE 'Europe/Madrid'::text))::date) = COALESCE(other.news_date, ((other.published_at AT TIME ZONE 'Europe/Madrid'::text))::date))));
+  WHERE ((post.unpublished_at IS NULL) AND (post.published_at <= now()) AND (post.taken_down_at IS NULL) AND (other.unpublished_at IS NULL) AND (other.published_at <= now()) AND (other.taken_down_at IS NULL) AND ((post.type = 'page'::app.post_type) OR (COALESCE(post.news_date, ((post.published_at AT TIME ZONE 'Europe/Madrid'::text))::date) = COALESCE(other.news_date, ((other.published_at AT TIME ZONE 'Europe/Madrid'::text))::date))));
 
 
 ALTER VIEW app.published_posts OWNER TO newsroom_owner;
+
+--
+-- Name: public_images; Type: VIEW; Schema: app; Owner: newsroom_owner
+--
+
+CREATE VIEW app.public_images WITH (security_barrier='true') AS
+ SELECT image.sha256,
+    ref.kind,
+    image.width,
+    image.height,
+    image.full_webp,
+    image.thumb_webp
+   FROM (app.images image
+     JOIN ( SELECT (published.image ->> 'sha256'::text) AS sha256,
+            'lead'::text AS kind
+           FROM app.published_posts published
+          WHERE (published.image IS NOT NULL)
+        UNION
+         SELECT ((source.value -> 'preview'::text) ->> 'sha256'::text),
+            'preview'::text
+           FROM app.published_posts published,
+            LATERAL jsonb_array_elements(published.sources) source(value)
+          WHERE (source.value ? 'preview'::text)) ref ON ((ref.sha256 = image.sha256)))
+  WHERE (image.removed_at IS NULL);
+
+
+ALTER VIEW app.public_images OWNER TO newsroom_owner;
 
 --
 -- Name: telegram_updates; Type: TABLE; Schema: app; Owner: newsroom_owner
@@ -331,11 +414,11 @@ ALTER TABLE app.telegram_updates OWNER TO newsroom_owner;
 
 CREATE VIEW app.unpublished_posts WITH (security_barrier='true') AS
  SELECT post.slug,
-    COALESCE(post.unpublished_at, other.unpublished_at) AS unpublished_at,
+    COALESCE(post.unpublished_at, other.unpublished_at, post.taken_down_at, other.taken_down_at) AS unpublished_at,
     post.lang
    FROM (app.posts post
      LEFT JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
-  WHERE ((post.unpublished_at IS NOT NULL) OR (other.unpublished_at IS NOT NULL));
+  WHERE ((post.unpublished_at IS NOT NULL) OR (other.unpublished_at IS NOT NULL) OR (post.taken_down_at IS NOT NULL) OR (other.taken_down_at IS NOT NULL));
 
 
 ALTER VIEW app.unpublished_posts OWNER TO newsroom_owner;
@@ -350,6 +433,14 @@ CREATE TABLE public.schema_migrations (
 
 
 ALTER TABLE public.schema_migrations OWNER TO newsroom_owner;
+
+--
+-- Name: images images_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.images
+    ADD CONSTRAINT images_pkey PRIMARY KEY (sha256);
+
 
 --
 -- Name: inbox_items inbox_items_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
@@ -373,6 +464,14 @@ ALTER TABLE ONLY app.posts
 
 ALTER TABLE ONLY app.posts
     ADD CONSTRAINT posts_pkey PRIMARY KEY (lang, slug);
+
+
+--
+-- Name: site_settings site_settings_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.site_settings
+    ADD CONSTRAINT site_settings_pkey PRIMARY KEY (id);
 
 
 --
@@ -462,6 +561,13 @@ CREATE TRIGGER posts_translation BEFORE INSERT OR UPDATE OF translation_of_lang,
 
 
 --
+-- Name: site_settings site_settings_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER site_settings_touch_updated_at BEFORE UPDATE ON app.site_settings FOR EACH ROW EXECUTE FUNCTION private.touch_updated_at();
+
+
+--
 -- Name: inbox_items inbox_items_follows_up_fkey; Type: FK CONSTRAINT; Schema: app; Owner: newsroom_owner
 --
 
@@ -522,6 +628,13 @@ REVOKE ALL ON FUNCTION private.touch_updated_at() FROM PUBLIC;
 
 
 --
+-- Name: TABLE images; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE app.images TO newsroom_app;
+
+
+--
 -- Name: TABLE inbox_items; Type: ACL; Schema: app; Owner: newsroom_owner
 --
 
@@ -536,10 +649,24 @@ GRANT SELECT,INSERT,UPDATE ON TABLE app.posts TO newsroom_app;
 
 
 --
+-- Name: TABLE site_settings; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,UPDATE ON TABLE app.site_settings TO newsroom_app;
+
+
+--
 -- Name: TABLE published_posts; Type: ACL; Schema: app; Owner: newsroom_owner
 --
 
 GRANT SELECT ON TABLE app.published_posts TO newsroom_public;
+
+
+--
+-- Name: TABLE public_images; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT ON TABLE app.public_images TO newsroom_public;
 
 
 --

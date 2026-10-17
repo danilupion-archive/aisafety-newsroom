@@ -23,11 +23,15 @@ export interface Post {
   published_at: Date;
   /** The day its story happened (R-WEB-13), `YYYY-MM-DD`; null for a page. */
   news_date: string | null;
+  /** Its lead image (R-WEB-15), as pushed. */
+  image: unknown;
   translation_of: PostAddress | null;
   content_ref: unknown;
   created_at: Date;
   updated_at: Date;
   unpublished_at: Date | null;
+  /** Taken down by the bot (R-CAP-11): gone from the site until the bot's /restore, whatever a push says. */
+  taken_down_at: Date | null;
 }
 
 /** The two columns that hold a translation's original, as one address or none. */
@@ -67,8 +71,8 @@ const postedDay = (value: string) =>
 
 /**
  * Creates or replaces a post (§13 `PUT /posts/:lang/:slug`). Pushing an unpublished post publishes it again, unless
- * the push says it's unpublished (a rebuild's). The same push twice gives the same post (R-API-3); `created` says
- * whether it's new. A translation's original must have been pushed already, published or not, and the database keeps
+ * the push says it's unpublished (a rebuild's); a takedown stays, whatever the push (R-CAP-11). The same push twice
+ * gives the same post (R-API-3); `created` says whether it's new. A translation's original must have been pushed already, published or not, and the database keeps
  * a story to one original (R-WEB-10). The site shows either version only once both are published (D11).
  */
 export const upsertPost = async (
@@ -88,6 +92,7 @@ export const upsertPost = async (
     translation_of_lang: body.translation_of?.lang ?? null,
     translation_of_slug: body.translation_of?.slug ?? null,
     content_ref: JSON.stringify(body.content_ref),
+    image: body.image === null ? null : JSON.stringify(body.image),
   };
   const row = await db
     .insertInto('app.posts')
@@ -157,6 +162,7 @@ export const listPosts = async (db: Database) => {
       'translation_of_lang',
       'translation_of_slug',
       'content_ref',
+      'taken_down_at',
       newsDate(),
     ])
     .orderBy('published_at', 'desc')

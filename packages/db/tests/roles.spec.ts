@@ -8,17 +8,26 @@ import { failure, inRolledBackTransaction, RUNTIME_ROLES } from './db.js';
  */
 const EXPECTED_GRANTS: Record<(typeof RUNTIME_ROLES)[number], string[]> = {
   newsroom_app: [
+    'app.images: INSERT',
+    'app.images: SELECT',
+    'app.images: UPDATE',
     'app.inbox_items: INSERT',
     'app.inbox_items: SELECT',
     'app.inbox_items: UPDATE',
     'app.posts: INSERT',
     'app.posts: SELECT',
     'app.posts: UPDATE',
+    'app.site_settings: SELECT',
+    'app.site_settings: UPDATE',
     'app.telegram_updates: INSERT',
     'app.telegram_updates: SELECT',
   ],
-  // Published posts only, through views; never the table (SPEC §7, §13).
-  newsroom_public: ['app.published_posts: SELECT', 'app.unpublished_posts: SELECT'],
+  // Published posts and the images they show only, through views; never the tables (SPEC §7, §13).
+  newsroom_public: [
+    'app.public_images: SELECT',
+    'app.published_posts: SELECT',
+    'app.unpublished_posts: SELECT',
+  ],
 };
 
 describe('runtime roles', () => {
@@ -109,6 +118,24 @@ describe('runtime roles', () => {
       await client.query('SET LOCAL ROLE newsroom_public');
       expect(await failure(client, 'SELECT FROM app.inbox_items')).toEqual({ code: '42501' });
       expect(await failure(client, 'SELECT FROM app.telegram_updates')).toEqual({ code: '42501' });
+    });
+  });
+
+  it('newsroom_public reads neither the image store nor the switches, only what the views let through', async () => {
+    await inRolledBackTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE newsroom_public');
+      expect(await failure(client, 'SELECT FROM app.images')).toEqual({ code: '42501' });
+      expect(await failure(client, 'SELECT FROM app.site_settings')).toEqual({ code: '42501' });
+      expect(await failure(client, 'SELECT FROM app.public_images')).toBeNull();
+    });
+  });
+
+  it('newsroom_app never deletes an image or the settings row: removing one only marks it', async () => {
+    await inRolledBackTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE newsroom_app');
+      expect(await failure(client, 'DELETE FROM app.images')).toEqual({ code: '42501' });
+      expect(await failure(client, 'DELETE FROM app.site_settings')).toEqual({ code: '42501' });
+      expect(await failure(client, "UPDATE app.site_settings SET images = 'none'")).toBeNull();
     });
   });
 });

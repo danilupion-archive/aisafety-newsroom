@@ -24,11 +24,36 @@ export const reservedSlug = (language: Lang, name: string, type: string): string
     ? `${name} is one of the site's own paths`
     : undefined;
 
-/** A source as the site lists it (R-WEB-1): its title, its link and when it was checked. */
+/** An image a post names: uploaded first (`PUT /images/:sha256`), by the SHA-256 of its bytes (R-API-5). */
+const sha256 = z
+  .string()
+  .regex(/^[0-9a-f]{64}$/, 'an image is named by the SHA-256 of its bytes, in lowercase hex');
+
+/**
+ * A source's preview (R-WEB-16): the outlet's own image for the page, small, beside the link, credited to the outlet.
+ * Copies of the outlets' photos: the bot's switches take them down (R-CAP-10, R-CAP-11).
+ */
+const preview = z.strictObject({ sha256, credit: z.string().trim().min(1).max(100) });
+
+/** A source as the site lists it (R-WEB-1): its title, its link and when it was checked, and its preview if any. */
 const source = z.strictObject({
   title: z.string().trim().min(1).max(300),
   url: z.url({ protocol: /^https?$/ }),
   accessed: z.iso.date(),
+  preview: preview.optional(),
+});
+
+/**
+ * A post's lead image (R-WEB-15): one under a clear licence (a Commons file, a press kit, a public-domain image), never
+ * AI-generated (R-WEB-3), with its alt text in the post's language, who to credit, under what licence, and where it
+ * came from.
+ */
+const image = z.strictObject({
+  sha256,
+  alt: z.string().trim().min(1).max(300),
+  credit: z.string().trim().min(1).max(200),
+  licence: z.string().trim().min(1).max(100),
+  source_url: z.url({ protocol: /^https?$/ }),
 });
 
 /**
@@ -53,6 +78,8 @@ const fields = z.strictObject({
    * a story have the same one, or the site shows neither.
    */
   news_date: z.iso.date().optional(),
+  /** Its lead image (R-WEB-15), or none. A page has none. */
+  image: image.nullable().default(null),
   /** The post this one translates, in the other language (R-WEB-10); none for an original. */
   translation_of: z.strictObject({ lang, slug }).nullable().default(null),
   /**
@@ -77,6 +104,9 @@ const bodyIn = (language: Lang) =>
         path: ['translation_of'],
         message: 'a translation is of a post in the other language',
       });
+    }
+    if (post.type === 'page' && post.image !== null) {
+      context.addIssue({ code: 'custom', path: ['image'], message: 'a page has no image' });
     }
     if (post.type === 'page' && post.news_date !== undefined) {
       context.addIssue({
@@ -119,6 +149,14 @@ export const postBody: Record<Lang, ReturnType<typeof bodyIn>> = {
 };
 
 export type PostBody = z.output<typeof fields>;
+
+/** Every image a post names, its lead image and its sources' previews, each once. */
+export const imagesOf = (post: Pick<PostBody, 'image' | 'sources'>): string[] => [
+  ...new Set([
+    ...(post.image ? [post.image.sha256] : []),
+    ...post.sources.flatMap((entry) => (entry.preview ? [entry.preview.sha256] : [])),
+  ]),
+];
 
 /** A post's address in the API's paths: `/posts/:lang/:slug`. */
 export const postAddress = z.strictObject({ lang, slug });

@@ -8,6 +8,8 @@ import { splitWordmark } from './brand';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
+import { IMAGE_CACHE, imagePath, readImagePath } from './images';
+import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
@@ -207,9 +209,62 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       '/robots.txt',
       '/icon.svg',
       '/_next/data/x.json',
+      // The images and the share cards (D17, R-WEB-14): never a Spanish page, never waiting on the API in the proxy.
+      `/img/lead/${'a'.repeat(64)}.webp`,
+      '/og/es.png',
+      '/og/en/example-report.png',
     ]) {
       expect(route(file)).toEqual({ kind: 'file' });
     }
+  });
+});
+
+const SHA = 'f'.repeat(64);
+
+describe('images (D17)', () => {
+  it('names each image by kind and SHA-256, full or thumbnail, and reads nothing else', () => {
+    expect(imagePath('lead', SHA)).toBe(`/img/lead/${SHA}.webp`);
+    expect(imagePath('preview', SHA, 'thumb')).toBe(`/img/preview/${SHA}.thumb.webp`);
+    expect(readImagePath('lead', `${SHA}.webp`)).toEqual({
+      kind: 'lead',
+      sha256: SHA,
+      size: 'full',
+    });
+    expect(readImagePath('preview', `${SHA}.thumb.webp`)).toEqual({
+      kind: 'preview',
+      sha256: SHA,
+      size: 'thumb',
+    });
+    for (const [kind, file] of [
+      ['other', `${SHA}.webp`],
+      ['lead', `${SHA}.png`],
+      ['lead', `${SHA.toUpperCase()}.webp`],
+      ['lead', '../etc/passwd'],
+      ['lead', `${SHA}.thumb.thumb.webp`],
+    ] as const) {
+      expect(readImagePath(kind, file)).toBeUndefined();
+    }
+  });
+
+  it('lets browsers keep a file: its name changes whenever its bytes would', () => {
+    expect(IMAGE_CACHE).toBe('public, max-age=604800, immutable');
+  });
+});
+
+describe('share cards (R-WEB-14)', () => {
+  it('has one per language’s home and one per post', () => {
+    expect(paths.shareCard('es')).toBe('/og/es.png');
+    expect(paths.shareCard('en', 'example-report')).toBe('/og/en/example-report.png');
+  });
+
+  it('sets a title smaller the longer it is, and cuts one past any title’s length at a word', () => {
+    expect(cardTitle('Un título corto').size).toBe(80);
+    expect(cardTitle('x'.repeat(70)).size).toBe(66);
+    expect(cardTitle('palabra '.repeat(14)).size).toBe(54);
+    const long = cardTitle('palabra '.repeat(40));
+    expect(long.size).toBe(48);
+    expect(long.text.endsWith('palabra…')).toBe(true);
+    expect(long.text.length).toBeLessThanOrEqual(161);
   });
 });
 

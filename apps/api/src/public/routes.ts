@@ -2,7 +2,9 @@ import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { sql } from 'kysely';
+import { z } from 'zod';
 
+import { SHA256 } from '../images/routes.js';
 import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
 import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.js';
@@ -12,6 +14,13 @@ import { postAddress, publicListQuery, publicTagsQuery } from '../posts/schemas.
  * /api, so no token: no gateway routes them, and only the web pods reach them inside the cluster. Without the role's
  * connection they answer 503. Never cached on the way: the site keeps its own copy, for at most 60 s.
  */
+/** An image file the site may serve: a post's lead image or a source's preview, in either size (R-WEB-15, R-WEB-16). */
+const imageAddress = z.strictObject({
+  kind: z.enum(['lead', 'preview']),
+  sha256: z.string().regex(SHA256, 'an image is named by its SHA-256, in lowercase hex'),
+});
+const imageQuery = z.object({ size: z.enum(['full', 'thumb']).default('full') });
+
 export const publicRoutes =
   (db: Database | undefined): FastifyPluginAsync =>
   async (app) => {
@@ -38,7 +47,18 @@ export const publicRoutes =
       }
       let select = db
         .selectFrom('app.published_posts')
-        .select(['lang', 'slug', 'type', 'title', 'summary', 'tags', 'published_at', 'updated_at'])
+        .select([
+          'lang',
+          'slug',
+          'type',
+          'title',
+          'summary',
+          'tags',
+          'published_at',
+          'updated_at',
+          // For the card's thumbnail, already held to the switches by the view (R-CAP-10).
+          'image',
+        ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
         .where('lang', '=', query.lang)
@@ -136,6 +156,33 @@ export const publicRoutes =
         .orderBy('lang')
         .orderBy('slug')
         .execute(),
+    );
+
+    /**
+     * An image's WebP, full or thumbnail, while a published post shows it as that kind and the switches allow it: the
+     * view decides on every request, so a switch or a removal takes effect at once (R-CAP-10, R-CAP-11). 404 for
+     * anything else, an upload no published post names included.
+     */
+    app.get<{ Params: { kind: string; sha256: string } }>(
+      '/public/images/:kind/:sha256',
+      async (request, reply) => {
+        const address = parse(imageAddress, request.params, reply);
+        const query = address && parse(imageQuery, request.query, reply);
+        if (!address || !query) {
+          return reply;
+        }
+        const row = await db
+          .selectFrom('app.public_images')
+          .select(query.size === 'thumb' ? 'thumb_webp as bytes' : 'full_webp as bytes')
+          .where('sha256', '=', address.sha256)
+          .where('kind', '=', address.kind)
+          .limit(1)
+          .executeTakeFirst();
+        if (!row?.bytes) {
+          return reply.code(404).send({ error: 'No such image' });
+        }
+        return reply.type('image/webp').send(Buffer.from(row.bytes));
+      },
     );
 
     /** Every tag in one language with its count of published posts, for the tag pages. */

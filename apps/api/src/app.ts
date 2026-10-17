@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 
 import type { TelegramApi } from './telegram/api.js';
 
+import { imagesRoutes } from './images/routes.js';
 import { inboxRoutes } from './inbox/routes.js';
 import { postsRoutes } from './posts/routes.js';
 import { publicRoutes } from './public/routes.js';
@@ -62,6 +63,7 @@ const CONFLICTS: Readonly<Record<string, string>> = {
   posts_translation_of_original: 'That post is a translation itself: translate its original',
   posts_translated_is_original: 'This post has translations, so it can’t be a translation itself',
   posts_page_has_no_news_date: 'A page has no news date',
+  posts_page_has_no_image: 'A page has no image',
 };
 
 export const buildApp = ({
@@ -98,6 +100,7 @@ export const buildApp = ({
   if (db) {
     void app.register(inboxRoutes(db));
     void app.register(postsRoutes(db));
+    void app.register(imagesRoutes(db));
   }
   void app.register(publicRoutes(publicDb));
   void app.register(

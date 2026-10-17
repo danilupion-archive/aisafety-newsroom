@@ -5,11 +5,23 @@ import type { Cursor, Order } from './paging';
 
 import { site } from './site';
 
-/** A source as the site lists it (R-WEB-1). */
+/** A source as the site lists it (R-WEB-1), with its outlet's preview image when the switches show it (R-WEB-16). */
 export interface Source {
   title: string;
   url: string;
   accessed: string;
+  preview?: { sha256: string; credit: string };
+}
+
+/** A post's lead image (R-WEB-15), its size included, when the switches show it; null otherwise. */
+export interface PostImage {
+  sha256: string;
+  alt: string;
+  credit: string;
+  licence: string;
+  source_url: string;
+  width: number;
+  height: number;
 }
 
 export interface PostSummary {
@@ -25,6 +37,8 @@ export interface PostSummary {
   source_count?: number;
   /** The day its story happened, `YYYY-MM-DD` (R-WEB-13); absent from an API older than news dates. */
   news_date?: string | null;
+  /** Its lead image, for the card's thumbnail; absent from an API older than images. */
+  image?: PostImage | null;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */

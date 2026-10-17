@@ -10,6 +10,8 @@ describe('languages (D10)', () => {
       'es',
       'etiqueta',
       'healthz',
+      'img',
+      'og',
       'sobre',
       'tag',
       'temas',
@@ -18,9 +20,12 @@ describe('languages (D10)', () => {
     expect(PATH_WORDS.es.about).toBe('sobre');
   });
 
-  it('reserves what shares the root with Spanish posts: the language prefixes and the health check', () => {
-    // Spanish is at the root (D10): `/en` is English's home, `/es` redirects to `/`, `/healthz` is the probe's.
-    expect(['en', 'es', 'healthz'].every((word) => RESERVED_SLUGS.has(word))).toBe(true);
+  it('reserves what shares the root with Spanish posts: the language prefixes, the health check, the files', () => {
+    // Spanish is at the root (D10): `/en` is English's home, `/es` redirects to `/`, `/healthz` is the probe's, and
+    // `/img/…` and `/og/…` serve the images and the share cards (D17).
+    expect(['en', 'es', 'healthz', 'img', 'og'].every((word) => RESERVED_SLUGS.has(word))).toBe(
+      true,
+    );
   });
 
   it('knows its two languages and nothing else', () => {

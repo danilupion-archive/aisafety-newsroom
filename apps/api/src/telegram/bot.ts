@@ -30,6 +30,7 @@ import {
   wasProcessed,
 } from './capture.js';
 import { HELP, label, pendingList } from './replies.js';
+import { imagesCommand, restoreImages, restorePost, takedownCommand } from './switches.js';
 
 /** The parts of a Bot API `Update` this system reads: messages only, as the webhook asks for (R-CAP-2). */
 export interface TelegramUpdate {
@@ -112,13 +113,23 @@ const runCommand = async (
             (item) => `Discarded ${label(item)}`,
           );
     case 'restore':
-      if (id === undefined) {
-        return 'Usage: /restore <id>';
+      // An item's number brings it back to the inbox; `image …` or a post's name undoes a takedown (R-CAP-11).
+      if (id !== undefined && rest === '') {
+        return outcomeReply(
+          await restore(db, id),
+          (item) => `Restored ${label(item)} (${item.status})`,
+        );
       }
-      return outcomeReply(
-        await restore(db, id),
-        (item) => `Restored ${label(item)} (${item.status})`,
-      );
+      if (/^image(?:\s|$)/i.test(command.args)) {
+        return restoreImages(db, command.args.replace(/^image\s*/i, ''));
+      }
+      return command.args === ''
+        ? 'Usage: /restore <id>, /restore <post>, or /restore image <post> [lead|<source number>]'
+        : restorePost(db, command.args);
+    case 'images':
+      return imagesCommand(db, command.args);
+    case 'takedown':
+      return takedownCommand(db, command.args);
     case 'note':
       return id === undefined || rest === ''
         ? 'Usage: /note <id> <text>'
