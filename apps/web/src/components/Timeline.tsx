@@ -64,9 +64,10 @@ const dot = css({
   width: { base: '14px', md: '16px' },
   height: { base: '14px', md: '16px' },
   borderRadius: 'full',
-  bg: 'accent',
-  boxShadow: '0 0 0 4px token(colors.page)',
-  '&[data-type=article]': { bg: 'text' },
+  // A breve's dot is a highlight (R-WEB-11): pink, glowing; an article's is light.
+  bg: 'highlight',
+  boxShadow: '0 0 0 4px token(colors.page), 0 0 12px token(colors.highlightGlow)',
+  '&[data-type=article]': { bg: 'text', boxShadow: '0 0 0 4px token(colors.page)' },
 });
 const card = css({
   gridArea: 'card',
@@ -252,7 +253,7 @@ const Entry = ({
 
 /**
  * Posts as a timeline, latest first (SPEC §13 pages): the date in the page's language, a dot per entry on the rail
- * (orange for a breve, light for an article), and each post's card. The newest entry of the first page is larger. In
+ * (pink for a breve, light for an article), and each post's card. The newest entry of the first page is larger. In
  * news order (R-WEB-13) the date is the day each story happened.
  */
 export const Timeline = ({

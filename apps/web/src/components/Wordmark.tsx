@@ -8,15 +8,15 @@ const wordmark = css({
   lineHeight: '1',
   color: 'text',
 });
-const ia = css({ color: 'accent' });
 
-/** The configured name as the logo writes it: PandorIA, the IA in orange; any other name plain. */
+/** The configured name as the logo writes it: PandorIA, the IA in the aquamarine-to-pink gradient; any other plain. */
 export const Wordmark = ({ name, className }: { name: string; className?: string }) => {
   const { lead, ia: tail } = splitWordmark(name);
   return (
     <span className={`${wordmark} ${className ?? ''}`}>
       {lead}
-      {tail ? <span className={ia}>{tail}</span> : null}
+      {/* Its colours: .wordmark-ia in src/app/globals.css. */}
+      {tail ? <span className="wordmark-ia">{tail}</span> : null}
     </span>
   );
 };

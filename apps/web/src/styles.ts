@@ -48,7 +48,7 @@ export const pillRow = css({
   padding: '0',
   margin: '0',
 });
-/** A tag: orange on its soft fill, a link to the tag's page. */
+/** A tag: aquamarine on its soft fill, a link to the tag's page. */
 export const tagPill = css({
   display: 'inline-block',
   paddingX: '2.5',
@@ -88,7 +88,7 @@ export const authorPill = css({
   fontSize: '0.875rem',
   fontWeight: '600',
 });
-/** A rounded button: orange, or outlined. At least 44 px tall, for a finger. */
+/** A rounded button: aquamarine with navy text, or outlined. At least 44 px tall, for a finger. */
 export const button = css({
   display: 'inline-flex',
   alignItems: 'center',

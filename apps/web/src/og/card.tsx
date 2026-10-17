@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { readFile } from 'node:fs/promises';
 
 import { splitWordmark } from '@/brand';
+import { COLORS, IA_GRADIENT_STOPS } from '@/palette';
 
 import { cardTitle } from './title';
 
@@ -26,25 +27,23 @@ const fonts = async () => {
   ];
 };
 
-const NAVY = '#0F172A';
-const ORANGE = '#FF9416';
 const TEXT = '#F8FAFC';
-const MUTED = '#94A3B8';
 
-/** The box with its lid ajar and light escaping (R-WEB-11), as the header draws it. */
-const MARK = (
-  <svg width={104} height={104} viewBox="0 0 120 120">
-    <g fill={ORANGE} opacity={0.5}>
-      <polygon points="96,52 120,42 120,50" />
-      <polygon points="96,48 115,20 120,27" />
-      <polygon points="94,46 103,3 111,6" />
-    </g>
-    <polygon points="24,60 96,60 96,43 24,58" fill={ORANGE} />
-    <rect x="24" y="60" width="72" height="44" rx="5" fill="#E2E8F0" />
-    <rect x="24" y="60" width="72" height="7" fill="#CBD5E1" />
-    <polygon points="18,52 100,34 102,43 20,61" fill={TEXT} />
-  </svg>
-);
+/**
+ * The mark (R-WEB-11), as the header draws it but rendered once to a PNG (src/og/mark.png), since the card renderer
+ * draws no SVG filters and the mark's glow is one: 272 px square, the mark's 208 px in the middle and its glow around
+ * it, on a transparent ground. An asset of the build, like the fonts.
+ */
+const MARK_PNG = new URL('./mark.png', import.meta.url);
+const markSrc = async () =>
+  `data:image/png;base64,${(await readFile(MARK_PNG)).toString('base64')}`;
+
+/** The "IA" as the header writes it, aquamarine to pink, with stops computed in OKLCH (the renderer mixes in sRGB). */
+const IA_STYLE = {
+  backgroundImage: `linear-gradient(90deg, ${IA_GRADIENT_STOPS.join(', ')})`,
+  backgroundClip: 'text',
+  color: 'transparent',
+} as const;
 
 /**
  * A page's share card (R-WEB-14): what a link to it shows on X, WhatsApp or Telegram. The site's own drawing, never a
@@ -64,6 +63,7 @@ export const shareCard = async ({
 }): Promise<ImageResponse> => {
   const wordmark = splitWordmark(name);
   const heading = cardTitle(title);
+  const mark = await markSrc();
   return new ImageResponse(
     <div
       style={{
@@ -73,16 +73,24 @@ export const shareCard = async ({
         flexDirection: 'column',
         justifyContent: 'space-between',
         padding: '56px 72px 60px',
-        background: NAVY,
+        background: COLORS.page,
         color: TEXT,
         fontFamily: 'Hanken Grotesk',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        {MARK}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* The PNG's glow margin (40 px a side at this size) overlaps the padding instead of pushing the name away. */}
+        {/* oxlint-disable-next-line next/no-img-element -- the card renderer draws plain <img>, not next/image */}
+        <img
+          src={mark}
+          width={170}
+          height={170}
+          alt=""
+          style={{ margin: '-24px -10px -24px -20px' }}
+        />
         <div style={{ display: 'flex', fontSize: 56, fontWeight: 800, letterSpacing: '-0.01em' }}>
           <span>{wordmark.lead}</span>
-          {wordmark.ia === '' ? null : <span style={{ color: ORANGE }}>{wordmark.ia}</span>}
+          {wordmark.ia === '' ? null : <span style={IA_STYLE}>{wordmark.ia}</span>}
         </div>
       </div>
       <div
@@ -102,8 +110,8 @@ export const shareCard = async ({
           justifyContent: 'space-between',
           alignItems: 'center',
           fontSize: 30,
-          color: MUTED,
-          borderTop: `3px solid ${ORANGE}`,
+          color: COLORS.muted,
+          borderTop: `3px solid ${COLORS.accent}`,
           paddingTop: 22,
         }}
       >

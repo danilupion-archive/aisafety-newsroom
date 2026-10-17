@@ -1,9 +1,11 @@
 import { defineConfig } from '@pandacss/dev';
 
+import { ACCENT_SOFT, COLORS, HIGHLIGHT_GLOW } from './src/palette';
+
 /**
- * PandorIA's one theme, night (R-WEB-4): navy and orange, one typeface (Hanken Grotesk, served by the site itself, so
- * nothing loads from another host). Every text colour on every background it's used on passes WCAG 2.2 AA; orange is
- * never text on a light background.
+ * PandorIA's one theme, night (R-WEB-4, R-WEB-11): navy, aquamarine for the workhorse accent and hot pink for
+ * highlights only, one typeface (Hanken Grotesk, served by the site itself, so nothing loads from another host). The
+ * colours live in src/palette.ts, where a test holds every text colour to WCAG 2.2 AA on the grounds it's used on.
  */
 export default defineConfig({
   preflight: true,
@@ -16,18 +18,10 @@ export default defineConfig({
     extend: {
       tokens: {
         colors: {
-          // The page and what sits on it: cards, and the darker box of a post's sources.
-          page: { value: '#0F172A' },
-          card: { value: '#1E293B' },
-          deep: { value: '#0B1220' },
-          // Borders, the timeline's rail, quiet fills.
-          rule: { value: '#334155' },
-          // Headings and links; running text; dates, counts and asides.
-          text: { value: '#F1F5F9' },
-          body: { value: '#CBD5E1' },
-          muted: { value: '#94A3B8' },
-          accent: { value: '#FF9416' },
-          accentSoft: { value: 'rgba(255, 148, 22, 0.15)' },
+          ...Object.fromEntries(Object.entries(COLORS).map(([name, value]) => [name, { value }])),
+          // A tag's fill, and the glow around a highlight.
+          accentSoft: { value: ACCENT_SOFT },
+          highlightGlow: { value: HIGHLIGHT_GLOW },
         },
         fonts: {
           body: { value: "'Hanken Grotesk Variable', system-ui, sans-serif" },

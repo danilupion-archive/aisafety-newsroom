@@ -33,11 +33,12 @@ const play = css({
   width: { base: '56px', md: '68px' },
   height: { base: '56px', md: '68px' },
   borderRadius: 'full',
-  bg: 'accent',
+  // A highlight (R-WEB-11): the pink, glowing, with the navy triangle on it.
+  bg: 'highlight',
   color: 'page',
   display: 'grid',
   placeItems: 'center',
-  boxShadow: '0 6px 24px rgba(0, 0, 0, 0.45)',
+  boxShadow: '0 6px 24px rgba(0, 0, 0, 0.45), 0 0 22px token(colors.highlightGlow)',
   transition: 'transform 0.15s ease',
   '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
 });

@@ -1,1 +1,23 @@
 @layer reset, base, tokens, recipes, utilities;
+
+/*
+ * The wordmark's "IA" (R-WEB-11): aquamarine where a browser can't interpolate a gradient in OKLCH or clip one to text,
+ * and where it can, a gradient from aquamarine to pink that passes through cyan and violet, never grey. Plain CSS, not a
+ * Panda style, for the -webkit- prefix the clip still needs in some browsers.
+ */
+.wordmark-ia {
+  color: var(--colors-accent);
+}
+@supports (background-image: linear-gradient(in oklch, red, blue)) and
+  ((background-clip: text) or (-webkit-background-clip: text)) {
+  .wordmark-ia {
+    background-image: linear-gradient(
+      in oklch 90deg,
+      var(--colors-accent),
+      var(--colors-highlight)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}

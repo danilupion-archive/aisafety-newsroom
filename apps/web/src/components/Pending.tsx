@@ -9,7 +9,7 @@ const bar = css({
   left: '0',
   right: '0',
   height: '3px',
-  bg: 'accent',
+  bg: 'highlight',
   zIndex: '50',
   pointerEvents: 'none',
   animation: 'pulse',

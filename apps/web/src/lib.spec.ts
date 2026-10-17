@@ -1,4 +1,6 @@
 import { runInNewContext } from 'node:vm';
+import { createElement, Fragment } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { PostSummary } from './api';
@@ -6,12 +8,14 @@ import type { PostSummary } from './api';
 import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { bylineOf } from './byline';
+import { Mark } from './components/Mark';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
 import { cardImage, IMAGE_CACHE, imagePath, readImagePath } from './images';
 import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
+import { ACCENT_SOFT, COLORS, contrast } from './palette';
 import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
@@ -212,6 +216,7 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       '/sitemap.xml',
       '/robots.txt',
       '/icon.svg',
+      '/apple-icon.png',
       '/_next/data/x.json',
       // The images and the share cards (D17, R-WEB-14): never a Spanish page, never waiting on the API in the proxy.
       `/img/lead/${'a'.repeat(64)}.webp`,
@@ -636,5 +641,76 @@ describe('a post’s sources, counted', () => {
       '1 source',
       '2 sources',
     ]);
+  });
+});
+
+describe('the palette (R-WEB-11)', () => {
+  /** A colour at some opacity over another, as the eye sees it: a tag's fill. */
+  const over = (rgba: string, ground: string): string => {
+    const [r, g, b, a] = rgba.match(/[\d.]+/g)!.map(Number) as [number, number, number, number];
+    const mix = (value: number, at: number) =>
+      Math.round(value * a + Number.parseInt(ground.slice(at, at + 2), 16) * (1 - a));
+    return `#${[mix(r, 1), mix(g, 3), mix(b, 5)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+  };
+
+  it('measures contrast as WCAG 2.2 does', () => {
+    expect(contrast('#000000', '#FFFFFF')).toBeCloseTo(21, 5);
+    expect(contrast('#777777', '#777777')).toBe(1);
+  });
+
+  it('keeps every text colour readable on every ground it sits on (AA, 4.5:1)', () => {
+    const { page, card, deep, text, body, muted, accent, highlight } = COLORS;
+    const pairs: [string, string][] = [
+      [text, page],
+      [text, card],
+      [text, deep],
+      [body, page],
+      [body, card],
+      [muted, page],
+      [muted, card],
+      [muted, deep],
+      // Aquamarine, the workhorse: links, dates, tags (on their fill too), and navy text on its buttons and switches.
+      [accent, page],
+      [accent, card],
+      [accent, deep],
+      [accent, over(ACCENT_SOFT, card)],
+      [page, accent],
+      // Navy on the pink of the play button.
+      [page, highlight],
+    ];
+    for (const [fg, ground] of pairs) {
+      expect(contrast(fg, ground), `${fg} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('keeps the pink a highlight that stands out, never small text', () => {
+    expect(contrast(COLORS.highlight, COLORS.page)).toBeGreaterThanOrEqual(3);
+    expect(contrast(COLORS.highlight, COLORS.card)).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('Mark', () => {
+  it('gives each mark its own filter and gradient ids, so two on a page don’t borrow each other’s', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        Fragment,
+        null,
+        createElement(Mark, { size: 46 }),
+        createElement(Mark, { size: 46 }),
+      ),
+    );
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids.length).toBe(10);
+    expect(new Set(ids).size).toBe(10);
+    for (const id of ids) {
+      expect(html).toContain(`url(#${id})`);
+    }
+  });
+
+  it('draws only the rising tentacle when it’s too small for the rest', () => {
+    const small = renderToStaticMarkup(createElement(Mark, { size: 24 }));
+    const large = renderToStaticMarkup(createElement(Mark, { size: 46 }));
+    expect(small.match(/<circle/g)).toBeNull();
+    expect(large.match(/<circle/g)?.length).toBeGreaterThan(10);
   });
 });

@@ -59,6 +59,7 @@ const ROOT_FILES = new Set([
   '/robots.txt',
   '/favicon.ico',
   '/icon.svg',
+  '/apple-icon.png',
 ]);
 
 /**
