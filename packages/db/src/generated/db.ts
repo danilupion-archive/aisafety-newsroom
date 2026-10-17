@@ -83,6 +83,7 @@ export interface AppInboxItems {
 }
 
 export interface AppPosts {
+  author: string | null;
   body_md: string;
   content_ref: Json;
   created_at: Generated<Timestamp>;
@@ -113,10 +114,12 @@ export interface AppPublicImages {
 }
 
 export interface AppPublishedPosts {
+  author: string | null;
   body_md: string | null;
   image: Json | null;
   lang: AppPostLang | null;
   news_date: Timestamp | null;
+  original_author: string | null;
   published_at: Timestamp | null;
   slug: string | null;
   sources: Json | null;

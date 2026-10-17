@@ -1,6 +1,7 @@
 import type { PostSummary } from './api';
 import type { Lang } from './i18n';
 
+import { bylineOf } from './byline';
 import { paths } from './i18n';
 import { STRINGS } from './strings';
 
@@ -23,7 +24,7 @@ export interface FeedSite {
 /**
  * One language's Atom feed of its latest posts (SPEC §13 pages), their summaries as the entries' text. Each language
  * has its own: a reader subscribes to the one they read. Readers show an entry without the site's footer, so each one
- * says itself that its text is AI-written and who picked and checked it (R-WEB-3).
+ * says itself who wrote its text: AI from the linked sources, picked by the editor, or a person (R-WEB-3, D19).
  */
 export const atomFeed = (lang: Lang, site: FeedSite, posts: readonly PostSummary[]): string => {
   const updated = posts.reduce(
@@ -31,7 +32,16 @@ export const atomFeed = (lang: Lang, site: FeedSite, posts: readonly PostSummary
     '',
   );
   const home = `${site.url}${paths.home(lang)}`;
-  const credit = STRINGS[lang].feedCredit(site.author);
+  const t = STRINGS[lang];
+  // Each entry says who wrote it (R-WEB-3, D19): AI, picked by the editor; a person; or AI translating a person.
+  const creditOf = (post: PostSummary): string => {
+    const byline = bylineOf(post);
+    return byline.kind === 'person'
+      ? t.feedWrittenBy(byline.author)
+      : byline.kind === 'translation'
+        ? t.feedTranslatedFrom(byline.author)
+        : t.feedCredit(site.author);
+  };
   const entries = posts.map((post) => {
     const link = `${site.url}${paths.post(lang, post.slug)}`;
     return [
@@ -42,7 +52,7 @@ export const atomFeed = (lang: Lang, site: FeedSite, posts: readonly PostSummary
       `    <published>${xml(new Date(post.published_at).toISOString())}</published>`,
       `    <updated>${xml(new Date(post.updated_at).toISOString())}</updated>`,
       ...post.tags.map((tag) => `    <category term="${xml(tag)}"/>`),
-      `    <summary>${xml(post.summary === '' ? credit : `${post.summary}\n\n${credit}`)}</summary>`,
+      `    <summary>${xml(post.summary === '' ? creditOf(post) : `${post.summary}\n\n${creditOf(post)}`)}</summary>`,
       '  </entry>',
     ]
       .filter((line) => line !== '')

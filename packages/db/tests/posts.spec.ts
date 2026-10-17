@@ -43,6 +43,37 @@ describe('app.posts', () => {
     });
   });
 
+  it('names who wrote a post when a person did, and for a translation its original’s writer (R-WEB-3, D19)', async () => {
+    const shown = await inRolledBackTransaction(async (client) => {
+      await insertPost(client, 'escrita-a-mano');
+      await insertPost(client, 'written-by-hand', {
+        lang: 'en',
+        translation_of: 'es/escrita-a-mano',
+      });
+      await client.query(
+        `UPDATE app.posts SET author = 'Autora de Ejemplo' WHERE slug = 'escrita-a-mano'`,
+      );
+      for (const author of ['', ' Con espacios ', 'x'.repeat(101)]) {
+        expect(
+          await failure(client, `UPDATE app.posts SET author = $1 WHERE slug = 'escrita-a-mano'`, [
+            author,
+          ]),
+        ).toEqual({ code: '23514', constraint: 'posts_author_format' });
+      }
+      await client.query('SET LOCAL ROLE newsroom_public');
+      const { rows } = await client.query<{
+        slug: string;
+        author: string | null;
+        original_author: string | null;
+      }>('SELECT slug, author, original_author FROM app.published_posts ORDER BY lang');
+      return rows;
+    });
+    expect(shown).toEqual([
+      { slug: 'escrita-a-mano', author: 'Autora de Ejemplo', original_author: null },
+      { slug: 'written-by-hand', author: null, original_author: 'Autora de Ejemplo' },
+    ]);
+  });
+
   it('shows newsroom_public published posts only, and never where they came from', async () => {
     const visible = await inRolledBackTransaction(async (client) => {
       await insertPost(client, 'publicada');

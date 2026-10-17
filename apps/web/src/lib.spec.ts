@@ -5,6 +5,7 @@ import type { PostSummary } from './api';
 
 import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
+import { bylineOf } from './byline';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
@@ -103,6 +104,8 @@ describe('languages (D10)', () => {
     expect(namedTags('en')).toEqual(namedTags('es'));
     expect(tagLabel('es', 'eu-regulation')).toBe('regulación europea');
     expect(tagLabel('en', 'eu-regulation')).toBe('EU regulation');
+    expect(tagLabel('es', 'self-improvement')).toBe('automejora recursiva');
+    expect(tagLabel('en', 'self-improvement')).toBe('recursive self-improvement');
     expect(tagLabel('en', 'a-new-tag')).toBe('a-new-tag');
   });
 
@@ -221,6 +224,23 @@ describe('the proxy’s routes (D10, AC-11)', () => {
 });
 
 const SHA = 'f'.repeat(64);
+
+describe('bylineOf (R-WEB-3, D19)', () => {
+  it('reads a post as AI-written, a person’s, or an AI translation of a person’s', () => {
+    expect(bylineOf({})).toEqual({ kind: 'ai' });
+    expect(bylineOf({ author: null, original_author: null })).toEqual({ kind: 'ai' });
+    expect(bylineOf({ author: 'Autora' })).toEqual({ kind: 'person', author: 'Autora' });
+    expect(bylineOf({ author: null, original_author: 'Autora' })).toEqual({
+      kind: 'translation',
+      author: 'Autora',
+    });
+    // A translation its translator signed is theirs.
+    expect(bylineOf({ author: 'Traductora', original_author: 'Autora' })).toEqual({
+      kind: 'person',
+      author: 'Traductora',
+    });
+  });
+});
 
 describe('images (D17)', () => {
   it('illustrates a card with its lead image, else its first source preview with the outlet’s credit', () => {
@@ -364,7 +384,7 @@ describe('atomFeed', () => {
     expect(feed).toContain('<published>2026-10-15T08:00:00.000Z</published>');
     expect(feed).toContain('<category term="evals"/>');
     expect(feed).toContain(
-      '<summary>Resumen de ejemplo.\n\nTexto escrito por IA, elegido y revisado por Autora.</summary>',
+      '<summary>Resumen de ejemplo.\n\nTexto escrito por IA a partir de las fuentes enlazadas y elegido por Autora.</summary>',
     );
     expect(feed).toContain('<updated>2026-10-15T09:30:00.000Z</updated>');
   });
@@ -375,11 +395,27 @@ describe('atomFeed', () => {
     expect(xml(`<a href='x'>`)).toBe('&lt;a href=&apos;x&apos;&gt;');
   });
 
-  it('says in every entry that its text is AI-written, and who picked and checked it (R-WEB-3)', () => {
+  it('says in every entry that its text is AI-written from its sources, and who picked it (R-WEB-3)', () => {
     const bare = atomFeed('en', { url: 'https://n.example', name: 'N', author: 'A' }, [
       { ...POST, summary: '' },
     ]);
-    expect(bare).toContain('<summary>Written by AI, picked and checked by A.</summary>');
+    expect(bare).toContain(
+      '<summary>Written by AI from the linked sources and picked by A.</summary>',
+    );
+    // Nothing claims a check that isn't always made (D19).
+    expect(bare).not.toMatch(/checked/);
+  });
+
+  it('credits a signed entry to its writer, and says when a signed text was translated with AI (D19)', () => {
+    const site = { url: 'https://n.example', name: 'N', author: 'A' };
+    const signed = atomFeed('es', site, [{ ...POST, summary: '', author: 'Autora de Ejemplo' }]);
+    expect(signed).toContain('<summary>Escrito por Autora de Ejemplo.</summary>');
+    const translated = atomFeed('en', site, [
+      { ...POST, summary: '', original_author: 'Autora de Ejemplo' },
+    ]);
+    expect(translated).toContain(
+      '<summary>Written by Autora de Ejemplo; translated with AI.</summary>',
+    );
   });
 
   it('states the texts’ licence (D14)', () => {

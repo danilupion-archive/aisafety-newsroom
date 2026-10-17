@@ -250,6 +250,7 @@ const RootLayout = async ({ children, params }: Props) => {
                   {author}
                 </a>
               )}
+              {t.creditTail}
             </li>
             <li>
               <a href={t.licence.url} rel="license">

@@ -9,6 +9,7 @@ import { connection } from 'next/server';
 import type { Lang } from '@/i18n';
 
 import { getPost, type Post } from '@/api';
+import { bylineOf } from '@/byline';
 import { LeadImage } from '@/components/LeadImage';
 import { Sources } from '@/components/Sources';
 import { Tags } from '@/components/Tags';
@@ -41,6 +42,7 @@ const kicker = css({
   marginTop: '3',
 });
 const kickerText = css({ color: 'muted' });
+const byLine = css({ color: 'accent' });
 const summary = css({
   color: 'body',
   fontSize: { base: '1.1875rem', md: '1.375rem' },
@@ -127,6 +129,7 @@ const PostPage = async (props: Props) => {
   // Posted on another day than its story happened: which day that was (R-WEB-13).
   const newsDay = newsNote(lang, post, 'long');
   const video = post.type === 'page' ? undefined : postVideo(post.sources);
+  const byline = bylineOf(post);
   return (
     <article className={column}>
       <Link href={paths.home(lang)} className={back}>
@@ -150,7 +153,16 @@ const PostPage = async (props: Props) => {
                   <time dateTime={post.news_date ?? undefined}>{newsDay}</time>
                 </>
               )}
+              {/* An AI-written post says so beside its type and date (R-WEB-3, D19). */}
+              {byline.kind === 'ai' ? ` · ${t.aiLabel}` : null}
             </span>
+            {byline.kind === 'ai' ? null : (
+              // Who wrote it, when a person did (R-WEB-3, D19); an AI translation of their text says so.
+              <span className={byLine}>
+                {t.writtenBy(byline.author)}
+                {byline.kind === 'translation' ? ` · ${t.aiTranslation}` : ''}
+              </span>
+            )}
           </p>
         )}
         <h1 className={pageTitle}>{post.title}</h1>
@@ -168,7 +180,17 @@ const PostPage = async (props: Props) => {
         ) : null}
       </header>
       <div className={prose} dangerouslySetInnerHTML={{ __html: renderMarkdown(post.body_md) }} />
-      <Sources lang={lang} sources={post.sources} />
+      <Sources
+        lang={lang}
+        sources={post.sources}
+        note={
+          byline.kind === 'ai'
+            ? t.aiNote
+            : byline.kind === 'translation'
+              ? t.translationNote
+              : undefined
+        }
+      />
       <footer className={endRow}>
         <Translations translations={post.translations} />
         <Tags lang={lang} tags={post.tags} />

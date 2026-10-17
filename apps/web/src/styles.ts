@@ -75,6 +75,19 @@ export const typePill = css({
   textTransform: 'uppercase',
   '&[data-type=article]': { bg: 'text', color: 'page' },
 });
+/** A signed post's badge (R-WEB-3, D19): its writer's name, outlined in the accent, beside its type. */
+export const authorPill = css({
+  display: 'inline-block',
+  paddingX: '2.5',
+  paddingY: '0.5',
+  borderRadius: 'full',
+  borderWidth: '1px',
+  borderStyle: 'solid',
+  borderColor: 'accent',
+  color: 'accent',
+  fontSize: '0.875rem',
+  fontWeight: '600',
+});
 /** A rounded button: orange, or outlined. At least 44 px tall, for a finger. */
 export const button = css({
   display: 'inline-flex',

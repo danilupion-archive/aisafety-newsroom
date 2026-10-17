@@ -27,12 +27,16 @@ export interface ReplyTarget {
   messageId: number;
 }
 
-/** A save that went through, with the reply to edit if there is one; undefined if the item had left the queue. */
-export type Saved = { reply: ReplyTarget | null } | undefined;
+/**
+ * A save that went through, with the reply to edit if there is one and whether Dani wants the item logged only (D18),
+ * which the edited reply keeps saying; undefined if the item had left the queue.
+ */
+export type Saved = { reply: ReplyTarget | null; logOnly: boolean } | undefined;
 
 interface ReplyColumns {
   reply_chat_id: string | null;
   reply_message_id: string | null;
+  intent: 'post' | 'log';
 }
 
 const replyOf = (row: ReplyColumns): ReplyTarget | null =>
@@ -41,7 +45,7 @@ const replyOf = (row: ReplyColumns): ReplyTarget | null =>
     : { chatId: Number(row.reply_chat_id), messageId: Number(row.reply_message_id) };
 
 const saved = (row: ReplyColumns | undefined): Saved =>
-  row === undefined ? undefined : { reply: replyOf(row) };
+  row === undefined ? undefined : { reply: replyOf(row), logOnly: row.intent === 'log' };
 
 /**
  * Claims up to `limit` queued items that are due (R-FET-1): `FOR UPDATE SKIP LOCKED`, so overlapping claims never take
@@ -76,15 +80,19 @@ export const claimDue = async (db: Database, limit = 1): Promise<Claimed[]> => {
  */
 export const abandonCrashed = async (
   db: Database,
-): Promise<{ id: number; reply: ReplyTarget | null }[]> => {
+): Promise<{ id: number; reply: ReplyTarget | null; logOnly: boolean }[]> => {
   const { rows } = await sql<{ id: string } & ReplyColumns>`
     UPDATE app.inbox_items
     SET status = 'needs_review', fetch_status = 'failed', last_error = 'crashed', next_fetch_at = NULL
     WHERE status = 'queued' AND url IS NOT NULL AND fetch_attempts >= ${MAX_ATTEMPTS}
       AND next_fetch_at <= now()
-    RETURNING id, reply_chat_id, reply_message_id
+    RETURNING id, reply_chat_id, reply_message_id, intent
   `.execute(db);
-  return rows.map((row) => ({ id: Number(row.id), reply: replyOf(row) }));
+  return rows.map((row) => ({
+    id: Number(row.id),
+    reply: replyOf(row),
+    logOnly: row.intent === 'log',
+  }));
 };
 
 export interface Page {
@@ -120,7 +128,7 @@ export const saveFetched = async (db: Database, id: number, page: Page): Promise
     })
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
-    .returning(['reply_chat_id', 'reply_message_id'])
+    .returning(['reply_chat_id', 'reply_message_id', 'intent'])
     .executeTakeFirst();
   return saved(row);
 };
@@ -132,7 +140,7 @@ export const markSkipped = async (db: Database, id: number): Promise<Saved> => {
     .set({ status: 'ready', fetch_status: 'skipped', next_fetch_at: null })
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
-    .returning(['reply_chat_id', 'reply_message_id'])
+    .returning(['reply_chat_id', 'reply_message_id', 'intent'])
     .executeTakeFirst();
   return saved(row);
 };
@@ -159,7 +167,7 @@ export const saveFailure = async (
     )
     .where('id', '=', String(id))
     .where('status', '=', 'queued')
-    .returning(['reply_chat_id', 'reply_message_id'])
+    .returning(['reply_chat_id', 'reply_message_id', 'intent'])
     .executeTakeFirst();
   return saved(row);
 };

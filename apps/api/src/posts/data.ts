@@ -25,6 +25,8 @@ export interface Post {
   news_date: string | null;
   /** Its lead image (R-WEB-15), as pushed. */
   image: unknown;
+  /** Who wrote it when a person did (R-WEB-3, D19); null when it's written by AI. */
+  author: string | null;
   translation_of: PostAddress | null;
   content_ref: unknown;
   created_at: Date;
@@ -93,6 +95,7 @@ export const upsertPost = async (
     translation_of_slug: body.translation_of?.slug ?? null,
     content_ref: JSON.stringify(body.content_ref),
     image: body.image === null ? null : JSON.stringify(body.image),
+    author: body.author,
   };
   const row = await db
     .insertInto('app.posts')

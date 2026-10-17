@@ -289,6 +289,40 @@ describe('translations (R-WEB-10)', () => {
   });
 });
 
+describe('authors (R-WEB-3, D19)', () => {
+  const translation = { ...EN_BREVE, translation_of: { lang: 'es', slug: 'informe-de-ejemplo' } };
+
+  it('takes a person’s name on a post they wrote, and shows it with its translation’s original writer', async () => {
+    const signed = await put('es/informe-de-ejemplo', { ...BREVE, author: '  Autora de Ejemplo ' });
+    expect(signed.statusCode).toBe(201);
+    expect(signed.json()).toMatchObject({ author: 'Autora de Ejemplo' });
+    await put('en/example-report', translation);
+
+    expect((await read('/public/posts/es/informe-de-ejemplo')).json()).toMatchObject({
+      author: 'Autora de Ejemplo',
+      original_author: null,
+    });
+    // Its translation names no writer of its own: an AI translation of a signed text.
+    expect((await read('/public/posts/en/example-report')).json()).toMatchObject({
+      author: null,
+      original_author: 'Autora de Ejemplo',
+    });
+    type Listed = { slug: string; author: unknown; original_author: unknown };
+    const listed = (await read('/public/posts?lang=en')).json<Listed[]>();
+    expect(listed.find((post) => post.slug === 'example-report')).toMatchObject({
+      author: null,
+      original_author: 'Autora de Ejemplo',
+    });
+  });
+
+  it('leaves an AI-written post without an author, and refuses an empty or overlong name', async () => {
+    expect((await put('es/informe-de-ejemplo', BREVE)).json()).toMatchObject({ author: null });
+    for (const author of ['', '   ', 'x'.repeat(101)]) {
+      expect((await put('es/informe-de-ejemplo', { ...BREVE, author })).statusCode).toBe(400);
+    }
+  });
+});
+
 describe('both languages (D11)', () => {
   it('shows neither version of a story until both are published', async () => {
     await pushed('es/informe-de-ejemplo', BREVE);

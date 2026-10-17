@@ -80,6 +80,11 @@ const fields = z.strictObject({
   news_date: z.iso.date().optional(),
   /** Its lead image (R-WEB-15), or none. A page has none. */
   image: image.nullable().default(null),
+  /**
+   * Who wrote it, when a person did (R-WEB-3, D19): their name as the site shows it. None, it's written by AI and
+   * checked by the editor. Each version has its own: a translation without one, of a signed original, is an AI one.
+   */
+  author: z.string().trim().min(1).max(100).nullable().default(null),
   /** The post this one translates, in the other language (R-WEB-10); none for an original. */
   translation_of: z.strictObject({ lang, slug }).nullable().default(null),
   /**

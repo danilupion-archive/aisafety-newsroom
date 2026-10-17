@@ -288,6 +288,31 @@ describe('a round (R-FET-2)', () => {
     ]);
   });
 
+  it('keeps "log only" in every reply it edits for an item Dani wants logged only (D18)', async () => {
+    const fetchedId = await queue('https://example.com/solo-registro');
+    const skippedId = await queue('https://x.com/someone/status/2');
+    await asSuperuser(`UPDATE app.inbox_items SET intent = 'log' WHERE id IN ($1, $2)`, [
+      fetchedId,
+      skippedId,
+    ]);
+    const edits: Edit[] = [];
+    await runOnce(deps(async () => page(), edits));
+    expect(edits.map((edit) => edit.text)).toEqual([
+      `#${fetchedId} · Un informe de ejemplo · log only`,
+      `#${skippedId} · x.com (not fetched; your note goes to /news) · log only`,
+    ]);
+
+    const failedId = await queue('https://example.com/caida');
+    await asSuperuser(`UPDATE app.inbox_items SET intent = 'log' WHERE id = $1`, [failedId]);
+    const failures: Edit[] = [];
+    await runOnce(
+      deps(async () => {
+        throw new FetchRefused('status', 404);
+      }, failures),
+    );
+    expect(failures[0]?.text).toMatch(/your note goes to \/news · log only$/);
+  });
+
   it('skips x.com without fetching, and the item relies on its note (R-FET-3, AC-3)', async () => {
     const id = await queue('https://x.com/someone/status/1');
     const edits: Edit[] = [];

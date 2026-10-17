@@ -308,6 +308,8 @@ CREATE TABLE app.posts (
     news_date date,
     image jsonb,
     taken_down_at timestamp with time zone,
+    author text,
+    CONSTRAINT posts_author_format CHECK (((author IS NULL) OR (((char_length(author) >= 1) AND (char_length(author) <= 100)) AND (author = btrim(author))))),
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
     CONSTRAINT posts_image_object CHECK (((image IS NULL) OR (jsonb_typeof(image) = 'object'::text))),
@@ -373,7 +375,12 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
                FROM app.images image
               WHERE ((image.sha256 = (post.image ->> 'sha256'::text)) AND (image.removed_at IS NULL)))
             ELSE NULL::jsonb
-        END AS image
+        END AS image,
+    post.author,
+        CASE
+            WHEN (post.translation_of_lang IS NOT NULL) THEN other.author
+            ELSE NULL::text
+        END AS original_author
    FROM ((app.posts post
      LEFT JOIN app.site_settings settings ON (true))
      JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))

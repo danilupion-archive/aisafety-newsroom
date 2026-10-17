@@ -58,14 +58,23 @@ const note = css({ color: 'muted', marginTop: '-1', marginBottom: '3.5' });
  * AI-written from them (R-WEB-3). A source with its outlet's preview shows it small, credited to the outlet (R-WEB-16):
  * the site's own copy, which the API lists only while the switches show previews.
  */
-export const Sources = ({ lang, sources }: { lang: Lang; sources: readonly Source[] }) => {
+export const Sources = ({
+  lang,
+  sources,
+  note: aboveNote,
+}: {
+  lang: Lang;
+  sources: readonly Source[];
+  /** What the text is made from, above the list: the AI note, a translation's, or none for a signed text. */
+  note?: string;
+}) => {
   const t = STRINGS[lang];
   return sources.length === 0 ? null : (
     <section aria-labelledby="sources" className={box}>
       <h2 id="sources" className={sectionTitle}>
         {t.sources}
       </h2>
-      <p className={note}>{t.aiNote}</p>
+      {aboveNote === undefined ? null : <p className={note}>{aboveNote}</p>}
       <ol className={list}>
         {sources.map((source) => (
           <li key={source.url}>

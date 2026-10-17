@@ -1,5 +1,5 @@
 import { abandonCrashed, claimDue, clearOldPageText, staleQueued } from './jobs.js';
-import { editReply, failedReply, processItem, type WorkerDeps } from './process.js';
+import { editReply, failedReply, processItem, replyText, type WorkerDeps } from './process.js';
 
 /** Items fetched per round at most (R-FET-1). */
 export const BATCH = 10;
@@ -14,7 +14,11 @@ export const CLEAR_EVERY_MS = 60 * 60 * 1000;
  */
 export const runOnce = async (deps: WorkerDeps): Promise<number> => {
   for (const crashed of await abandonCrashed(deps.db)) {
-    await editReply(crashed.reply, failedReply(crashed.id, 'crashed'), deps);
+    await editReply(
+      crashed.reply,
+      replyText(failedReply(crashed.id, 'crashed'), crashed.logOnly),
+      deps,
+    );
   }
   let fetched = 0;
   while (fetched < BATCH) {

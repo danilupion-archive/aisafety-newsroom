@@ -5,13 +5,14 @@ import type { PostSummary } from '@/api';
 import type { Lang } from '@/i18n';
 import type { Order } from '@/paging';
 
+import { bylineOf } from '@/byline';
 import { Pending } from '@/components/Pending';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { calendarParts, dateParts, newsNote } from '@/format';
 import { paths } from '@/i18n';
 import { cardImage } from '@/images';
 import { STRINGS } from '@/strings';
-import { label, typePill } from '@/styles';
+import { authorPill, label, typePill } from '@/styles';
 
 import { Tags } from './Tags';
 
@@ -155,6 +156,7 @@ const Entry = ({
   // As posted, a story that happened on another day says which.
   const note = byNews ? undefined : newsNote(lang, post);
   const picture = cardImage(post);
+  const byline = bylineOf(post);
   const href = paths.post(lang, post.slug);
   return (
     <li className={entry}>
@@ -179,6 +181,10 @@ const Entry = ({
               <span className={typePill} data-type={post.type}>
                 {t.type[post.type]}
               </span>
+              {byline.kind === 'ai' ? null : (
+                // A signed post shows its writer (R-WEB-3, D19).
+                <span className={authorPill}>{t.writtenBy(byline.author)}</span>
+              )}
             </div>
             <h2 className={title} data-featured={featured ? '' : undefined}>
               <Link href={href}>
@@ -222,6 +228,9 @@ const Entry = ({
           ) : null}
         </div>
         <p className={meta}>
+          {/* Every AI-written post says so where a reader first meets it (R-WEB-3, D19). */}
+          {byline.kind === 'ai' ? <>{t.aiLabel} · </> : null}
+          {byline.kind === 'translation' ? <>{t.aiTranslation} · </> : null}
           {note === undefined ? null : <>{note} · </>}
           {typeof post.source_count === 'number' ? (
             <>{t.sourceCount(post.source_count)} · </>

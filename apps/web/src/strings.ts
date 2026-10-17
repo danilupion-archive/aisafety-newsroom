@@ -55,6 +55,19 @@ export interface Strings {
   aiNote: string;
   /** At the end of each feed entry, which readers show without the site's footer (R-WEB-3). */
   feedCredit: (editor: string) => string;
+  /** An AI-written post's label, on its card and in its line under the tag (R-WEB-3, D19). */
+  aiLabel: string;
+  /** A signed post's badge and byline (R-WEB-3, D19). */
+  writtenBy: (author: string) => string;
+  /** After the byline of an AI translation of a signed text. */
+  aiTranslation: string;
+  /** Above the sources of an AI translation of a signed text, in place of the AI note. */
+  translationNote: string;
+  /** At the end of a signed feed entry, and of an AI translation of one. */
+  feedWrittenBy: (author: string) => string;
+  feedTranslatedFrom: (author: string) => string;
+  /** After the editor's name in the footer's credit: signed texts are their writers'. */
+  creditTail: string;
   /** The footer's link to the about page, with the site's name from configuration (R-WEB-9). */
   aboutSite: (site: string) => string;
   /** A video player's button, before anything loads from YouTube (R-WEB-12). */
@@ -111,9 +124,17 @@ export const STRINGS: Record<Lang, Strings> = {
     accessed: (date) => `Consultado el ${date}`,
     imageCredit: 'Imagen:',
     previewCredit: (outlet) => `Imagen: ${outlet}`,
-    credit: 'Textos escritos por IA, elegidos y revisados por',
+    credit: 'Textos escritos por IA a partir de las fuentes enlazadas y elegidos por',
     aiNote: 'Texto escrito por IA a partir de estas fuentes.',
-    feedCredit: (editor) => `Texto escrito por IA, elegido y revisado por ${editor}.`,
+    feedCredit: (editor) =>
+      `Texto escrito por IA a partir de las fuentes enlazadas y elegido por ${editor}.`,
+    aiLabel: 'Escrito con IA',
+    writtenBy: (author) => `Escrito por ${author}`,
+    aiTranslation: 'traducción con IA',
+    translationNote: 'Traducción hecha con IA a partir del original.',
+    feedWrittenBy: (author) => `Escrito por ${author}.`,
+    feedTranslatedFrom: (author) => `Escrito por ${author}; traducción hecha con IA.`,
+    creditTail: ', salvo los firmados',
     aboutSite: (site) => `Sobre ${site}`,
     play: (title) => `Reproducir el vídeo: ${title}`,
     videoCaption: (channel) => `Vídeo: ${channel} · Al reproducirlo se carga desde YouTube.`,
@@ -164,9 +185,16 @@ export const STRINGS: Record<Lang, Strings> = {
     accessed: (date) => `Accessed ${date}`,
     imageCredit: 'Image:',
     previewCredit: (outlet) => `Image: ${outlet}`,
-    credit: 'Texts written by AI, picked and checked by',
+    credit: 'Texts written by AI from the linked sources and picked by',
     aiNote: 'Written by AI from these sources.',
-    feedCredit: (editor) => `Written by AI, picked and checked by ${editor}.`,
+    feedCredit: (editor) => `Written by AI from the linked sources and picked by ${editor}.`,
+    aiLabel: 'Written with AI',
+    writtenBy: (author) => `Written by ${author}`,
+    aiTranslation: 'AI translation',
+    translationNote: 'Translated with AI from the original.',
+    feedWrittenBy: (author) => `Written by ${author}.`,
+    feedTranslatedFrom: (author) => `Written by ${author}; translated with AI.`,
+    creditTail: ', unless signed',
     aboutSite: (site) => `About ${site}`,
     play: (title) => `Play the video: ${title}`,
     videoCaption: (channel) => `Video: ${channel} · Playing it loads it from YouTube.`,

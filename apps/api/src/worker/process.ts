@@ -4,7 +4,7 @@ import { hostOf, youtubeVideoId, youtubeWatchUrl } from '@aisafety-newsroom/doma
 
 import type { TelegramApi } from '../telegram/api.js';
 
-import { fetchedLabel } from '../telegram/replies.js';
+import { fetchedLabel, LOG_ONLY } from '../telegram/replies.js';
 import { extract } from './extract.js';
 import { type Fetched, FetchRefused, pageType } from './fetch-url.js';
 import {
@@ -72,6 +72,10 @@ export const editReply = async (
   }
 };
 
+/** A reply as edited: an item Dani wants logged only keeps saying so (D18), as its "Saved #n" reply did. */
+export const replyText = (text: string, logOnly: boolean | undefined): string =>
+  logOnly ? `${text} · ${LOG_ONLY}` : text;
+
 /** The reply for an item the worker gave up on. */
 export const failedReply = (id: number, reason: string): string =>
   `#${id} · couldn't fetch it (${reason}); your note goes to /news`;
@@ -85,7 +89,7 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     const stored = await markSkipped(deps.db, item.id);
     await editReply(
       replyOf(stored),
-      `#${item.id} · ${host} (not fetched; your note goes to /news)`,
+      replyText(`#${item.id} · ${host} (not fetched; your note goes to /news)`, stored?.logOnly),
       deps,
     );
     return;
@@ -111,12 +115,15 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     });
     await editReply(
       replyOf(stored),
-      fetchedLabel({
-        id: item.id,
-        page_title: extracted.title,
-        url: item.url,
-        video: extracted.video,
-      }),
+      replyText(
+        fetchedLabel({
+          id: item.id,
+          page_title: extracted.title,
+          url: item.url,
+          video: extracted.video,
+        }),
+        stored?.logOnly,
+      ),
       deps,
     );
   } catch (error) {
@@ -125,7 +132,11 @@ export const processItem = async (item: Claimed, deps: WorkerDeps): Promise<void
     const retryIn = lastTry ? undefined : RETRY_IN_MINUTES[item.attempts - 1];
     const stored = await saveFailure(deps.db, item.id, reason, retryIn);
     if (lastTry) {
-      await editReply(replyOf(stored), failedReply(item.id, reason), deps);
+      await editReply(
+        replyOf(stored),
+        replyText(failedReply(item.id, reason), stored?.logOnly),
+        deps,
+      );
     }
   }
 };

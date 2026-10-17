@@ -42,6 +42,10 @@ export interface PostSummary {
   image?: PostImage | null;
   /** Its first source preview the switches show, for a card without a lead image (R-WEB-16); absent from older APIs. */
   preview?: { sha256: string; credit: string; source_url?: string } | null;
+  /** Who wrote it when a person did (R-WEB-3, D19); absent or null, AI wrote it. Absent from older APIs. */
+  author?: string | null;
+  /** A translation's original writer, when a person wrote the original (D19). */
+  original_author?: string | null;
 }
 
 /** Another published version of a post's story, in the other language (R-WEB-10). */

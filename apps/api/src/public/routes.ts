@@ -62,6 +62,9 @@ export const publicRoutes =
           'updated_at',
           // For the card's thumbnail, already held to the switches by the view (R-CAP-10).
           'image',
+          // Who wrote it when a person did, and a translation's original writer (R-WEB-3, D19).
+          'author',
+          'original_author',
         ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
