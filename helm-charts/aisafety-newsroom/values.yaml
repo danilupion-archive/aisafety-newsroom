@@ -12,4 +12,4 @@ aisafety-newsroom-web:
   enabled: false
   nameOverride: web
   image:
-    tag: '0.13.0.084dbae'
+    tag: '0.13.1.dc49f87'
