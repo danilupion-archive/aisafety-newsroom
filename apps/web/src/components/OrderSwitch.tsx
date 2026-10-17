@@ -6,12 +6,20 @@ import type { Lang } from '@/i18n';
 import { type Order, orderHref } from '@/paging';
 import { STRINGS } from '@/strings';
 
+const row = css({
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  columnGap: '3',
+  rowGap: '2',
+  marginBottom: '6',
+  marginLeft: { base: '0', md: '8.5rem' },
+});
+const caption = css({ color: 'muted', fontSize: '0.9375rem' });
 const group = css({
   display: 'inline-flex',
   flexWrap: 'wrap',
   gap: '1',
-  marginBottom: '6',
-  marginLeft: { base: '0', md: '8.5rem' },
   padding: '3px',
   borderRadius: 'xl',
   bg: 'card',
@@ -25,7 +33,9 @@ const item = css({
   color: 'muted',
   fontWeight: '600',
   fontSize: '0.9375rem',
-  _hover: { textDecoration: 'none', color: 'text' },
+  _hover: { textDecoration: 'none' },
+  // The chosen order stays as it is under the pointer; the other lights up.
+  '&:not([aria-current]):hover': { color: 'text', bg: 'rule' },
   '&[aria-current]': { bg: 'accent', color: 'page' },
 });
 
@@ -45,9 +55,14 @@ export const OrderSwitch = ({ lang, path, order }: { lang: Lang; path: string; o
     </Link>
   );
   return (
-    <nav aria-label={t.orderNav} className={group}>
-      {link('posted', t.latest)}
-      {link('news', t.orderNews)}
+    <nav aria-label={t.orderNav} className={row}>
+      <span className={caption} aria-hidden="true">
+        {t.sortBy}
+      </span>
+      <span className={group}>
+        {link('posted', t.orderPosted)}
+        {link('news', t.orderNews)}
+      </span>
     </nav>
   );
 };

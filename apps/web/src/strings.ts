@@ -28,6 +28,9 @@ export interface Strings {
   latest: string;
   /** The timeline in the order its stories happened (R-WEB-13), beside `latest`, as posted. */
   orderNews: string;
+  /** The order switch: its label, and the posted order's name in it (the news order's is orderNews). */
+  sortBy: string;
+  orderPosted: string;
   /** The two orders' group of links. */
   orderNav: string;
   /** On a post posted on another day than its story happened: "noticia del 12 oct". */
@@ -109,8 +112,10 @@ export const STRINGS: Record<Lang, Strings> = {
     tagline: 'La caja ya está abierta',
     intro: 'Noticias sobre los riesgos de la IA, en pocas líneas y con las fuentes enlazadas.',
     latest: 'Lo último',
-    orderNews: 'Por fecha de la noticia',
-    orderNav: 'Ordenar',
+    orderNews: 'Fecha de la noticia',
+    sortBy: 'Ordenar por',
+    orderPosted: 'Publicación',
+    orderNav: 'Ordenar por',
     newsFrom: (date) => `noticia del ${date}`,
     older: 'Entradas anteriores',
     nothingYet: 'Todavía no hay publicaciones.',
@@ -170,8 +175,10 @@ export const STRINGS: Record<Lang, Strings> = {
     tagline: 'The box is already open',
     intro: 'News about AI risk, in a few lines, with the sources linked.',
     latest: 'Latest',
-    orderNews: 'By news date',
-    orderNav: 'Sort',
+    orderNews: 'News date',
+    sortBy: 'Sort by',
+    orderPosted: 'Posted',
+    orderNav: 'Sort by',
     newsFrom: (date) => `news from ${date}`,
     older: 'Older entries',
     nothingYet: 'Nothing published yet.',
