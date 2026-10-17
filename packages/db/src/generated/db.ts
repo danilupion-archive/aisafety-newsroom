@@ -7,6 +7,8 @@ import type { ColumnType } from 'kysely';
 
 export type AppFetchStatus = 'failed' | 'ok' | 'pending' | 'skipped';
 
+export type AppInboxIntent = 'log' | 'post';
+
 export type AppInboxStatus = 'discarded' | 'logged' | 'needs_review' | 'queued' | 'ready';
 
 export type AppPostLang = 'en' | 'es';
@@ -55,6 +57,7 @@ export interface AppInboxItems {
   follows_up: Int8 | null;
   http_status: number | null;
   id: Generated<Int8>;
+  intent: Generated<AppInboxIntent>;
   last_error: string | null;
   logged_at: Timestamp | null;
   logged_ref: Json | null;

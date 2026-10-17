@@ -83,6 +83,18 @@ describe('GET /api/v1/items (§9)', () => {
     });
   });
 
+  it('says what Dani wants from each item: a post, or the log only (D18)', async () => {
+    const post = await insertItem();
+    const log = await insertItem();
+    await asSuperuser("UPDATE app.inbox_items SET intent = 'log' WHERE id = $1", [log]);
+    const items = (await get('/api/v1/items')).json<{ id: number; intent: string }[]>();
+    expect(items.map(({ id, intent }) => ({ id, intent }))).toEqual([
+      { id: post, intent: 'post' },
+      { id: log, intent: 'log' },
+    ]);
+    expect((await get(`/api/v1/items/${log}`)).json()).toMatchObject({ intent: 'log' });
+  });
+
   it('sorts by the day each page says it was published when asked, oldest first, undated last (R-API-4)', async () => {
     const recent = await insertItem({ page_published_at: '2026-10-10T08:00:00-07:00' });
     const undated = await insertItem();

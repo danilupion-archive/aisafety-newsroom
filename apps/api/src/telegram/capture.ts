@@ -1,7 +1,7 @@
 import type { Database, DB } from '@aisafety-newsroom/db/client';
 import type { CapturedLink } from '@aisafety-newsroom/domain/telegram';
 
-import { duplicateAction, type InboxStatus } from '@aisafety-newsroom/domain/inbox';
+import { duplicateAction, type InboxStatus, type Intent } from '@aisafety-newsroom/domain/inbox';
 import { appendNote } from '@aisafety-newsroom/domain/notes';
 import { sql, type Transaction } from 'kysely';
 
@@ -62,13 +62,15 @@ const noteOnly = (trx: Transaction<DB>, sender: Sender, followsUp: string | null
     .executeTakeFirstOrThrow();
 
 /**
- * Saves a link as a queued item (R-CAP-3, R-CAP-5), or, if it's already in the inbox, appends the note to it, makes a
- * follow-up of a note about a logged or discarded item, or does nothing (R-CAP-6).
+ * Saves a link as a queued item (R-CAP-3, R-CAP-5), to be posted unless `intent` says log only (D18), or, if it's
+ * already in the inbox, appends the note to it, makes a follow-up of a note about a logged or discarded item, or does
+ * nothing (R-CAP-6). An existing item's intent is the caller's to change.
  */
 export const captureLink = async (
   trx: Transaction<DB>,
   link: CapturedLink,
   sender: Sender,
+  intent: Intent = 'post',
 ): Promise<CaptureResult> => {
   const inserted = await trx
     .insertInto('app.inbox_items')
@@ -79,6 +81,7 @@ export const captureLink = async (
       url_normalized: link.normalized,
       note: appendNote('', sender.note, sender.at),
       status: 'queued',
+      intent,
       next_fetch_at: sql<Date>`now() + make_interval(secs => ${REPLY_GRACE_SECONDS})`,
     })
     .onConflict((conflict) =>
@@ -160,10 +163,10 @@ export const rememberReply = async (
 export const pendingItems = async (
   db: Executor,
   limit = 20,
-): Promise<(Labelled & { status: InboxStatus })[]> => {
+): Promise<(Labelled & { status: InboxStatus; intent: Intent })[]> => {
   const rows = await db
     .selectFrom('app.inbox_items')
-    .select(['id', 'status', 'page_title', 'url'])
+    .select(['id', 'status', 'intent', 'page_title', 'url'])
     .where('status', 'in', ['queued', 'ready', 'needs_review'])
     .orderBy('id')
     .limit(limit)

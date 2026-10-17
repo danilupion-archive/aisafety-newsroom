@@ -17,6 +17,23 @@ const urlEntity = (text: string, url: string) => ({
 });
 
 describe('extractCapture (R-CAP-3)', () => {
+  it('leaves a leading command out of the note: `/log <link> [note]` saves the rest (D18)', () => {
+    const text = '/log https://example.com/a worth a line';
+    const capture = extractCapture(
+      message({
+        text,
+        entities: [
+          { type: 'bot_command', offset: 0, length: 4 },
+          urlEntity(text, 'https://example.com/a'),
+        ],
+      }),
+    );
+    expect(capture.links).toEqual([
+      { url: 'https://example.com/a', normalized: 'https://example.com/a' },
+    ]);
+    expect(capture.note).toBe('worth a line');
+  });
+
   it('takes the URL from a url entity and keeps the rest as the note', () => {
     const text = 'Look at this https://example.com/a?utm_source=x it matters';
     const capture = extractCapture(

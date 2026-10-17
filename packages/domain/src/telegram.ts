@@ -54,7 +54,7 @@ const tidy = (text: string): string =>
 /**
  * The links and the note in a message or its caption (R-CAP-3), forwarded or not. A `url` entity's text is the link
  * and leaves the note; a `text_link` keeps its visible text in the note. A link that isn't http or https, or is longer
- * than MAX_URL_LENGTH, stays in the note.
+ * than MAX_URL_LENGTH, stays in the note. A command the message starts with leaves it too (`/log`, D18).
  */
 export const extractCapture = (message: TelegramMessage): Capture => {
   const rawText = message.text ?? message.caption ?? '';
@@ -80,6 +80,11 @@ export const extractCapture = (message: TelegramMessage): Capture => {
     if (entity.type === 'url') {
       note = note.slice(0, entity.offset) + note.slice(entity.offset + entity.length);
     }
+  }
+  // A command the message starts with (`/log <link> [note]`, D18) isn't part of the note.
+  const command = entities.find((entity) => entity.type === 'bot_command' && entity.offset === 0);
+  if (command) {
+    note = note.slice(command.length);
   }
 
   const seen = new Set<string>();

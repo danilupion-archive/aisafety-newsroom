@@ -23,6 +23,38 @@ const insertLink = async (client: pg.Client, url: string): Promise<string> => {
 };
 
 describe('app.inbox_items', () => {
+  it('wants a post from every item unless told otherwise, and knows only post and log (D18)', async () => {
+    const result = await asApp(async (client) => {
+      const id = await insertLink(client, 'https://example.com/intencion');
+      const before = await client.query<{ intent: string }>(
+        'SELECT intent FROM app.inbox_items WHERE id = $1',
+        [id],
+      );
+      await client.query("UPDATE app.inbox_items SET intent = 'log' WHERE id = $1", [id]);
+      const after = await client.query<{ intent: string }>(
+        'SELECT intent FROM app.inbox_items WHERE id = $1',
+        [id],
+      );
+      const unknown = await failure(
+        client,
+        "UPDATE app.inbox_items SET intent = 'draft' WHERE id = $1",
+        [id],
+      );
+      const missing = await failure(
+        client,
+        'UPDATE app.inbox_items SET intent = NULL WHERE id = $1',
+        [id],
+      );
+      return { before: before.rows[0]?.intent, after: after.rows[0]?.intent, unknown, missing };
+    });
+    expect(result).toMatchObject({
+      before: 'post',
+      after: 'log',
+      unknown: { code: '22P02' },
+      missing: { code: '23502' },
+    });
+  });
+
   it('reads the day a page says it was published, best effort, without ever refusing the fetch (R-API-4)', async () => {
     const read = await asApp(async (client) => {
       const id = await insertLink(client, 'https://example.com/fechas');

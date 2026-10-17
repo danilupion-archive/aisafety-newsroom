@@ -6,6 +6,8 @@ import {
   FETCH_STATUSES,
   INBOX_STATUSES,
   type InboxStatus,
+  INTENTS,
+  isIntent,
   isOpen,
   restoredStatus,
 } from './inbox.js';
@@ -78,5 +80,13 @@ describe('duplicateAction (R-CAP-6)', () => {
       expect(duplicateAction(status, '')).toBe('reply_only');
       expect(duplicateAction(status, '   ')).toBe('reply_only');
     }
+  });
+});
+
+describe('INTENTS (D18)', () => {
+  it('names what Dani wants from an item: a post and its log entry, or the log entry alone', () => {
+    expect(INTENTS).toEqual(['post', 'log']);
+    expect(isIntent('log')).toBe(true);
+    expect(isIntent('draft')).toBe(false);
   });
 });

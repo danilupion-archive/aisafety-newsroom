@@ -1,6 +1,6 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 
-import { isOpen } from '@aisafety-newsroom/domain/inbox';
+import { type Intent, isOpen } from '@aisafety-newsroom/domain/inbox';
 import {
   type Command,
   extractCapture,
@@ -13,10 +13,13 @@ import type { TelegramApi } from './api.js';
 import {
   addNote,
   getItem,
+  type IntentOutcome,
   type ItemDetail,
   markDiscarded,
   type Outcome,
   restore,
+  setIntent,
+  setIntentIn,
 } from '../inbox/items.js';
 import {
   captureFollowUp,
@@ -29,7 +32,7 @@ import {
   type Sender,
   wasProcessed,
 } from './capture.js';
-import { HELP, label, pendingList } from './replies.js';
+import { HELP, label, LOG_ONLY, pendingList } from './replies.js';
 import { imagesCommand, restoreImages, restorePost, takedownCommand } from './switches.js';
 
 /** The parts of a Bot API `Update` this system reads: messages only, as the webhook asks for (R-CAP-2). */
@@ -73,6 +76,33 @@ const idArgs = (args: string): { id: number | undefined; rest: string } => {
 
 const outcomeReply = (outcome: Outcome, done: (item: ItemDetail) => string): string =>
   outcome.ok ? done(outcome.item) : outcome.message;
+
+const loggedWarning = (id: number): string =>
+  `#${id} was already logged: a post may already be on the site (/takedown removes it).`;
+
+/** `/log <id>`, `/post <id>` (D18): the item named, so a wrong id shows, and a word if it was already logged. */
+const intentReply = (outcome: IntentOutcome, intent: Intent): string => {
+  if (!outcome.ok) {
+    return outcome.message;
+  }
+  const { item, changed } = outcome;
+  const what = intent === 'log' ? 'log only' : 'to post';
+  const reply = `${changed ? what.charAt(0).toUpperCase() + what.slice(1) : `Already ${what}`}: ${label(item)}`;
+  return changed && item.status === 'logged' ? `${reply}\n${loggedWarning(item.id)}` : reply;
+};
+
+/** After `/log <link>` (D18): what became of the item, as a suffix to the capture's reply. */
+const logOnlySuffix = (outcome: IntentOutcome | undefined): string => {
+  if (outcome === undefined) {
+    return ` · ${LOG_ONLY}`;
+  }
+  if (!outcome.ok) {
+    return `\n${outcome.message}`;
+  }
+  return outcome.changed && outcome.item.status === 'logged'
+    ? ` · ${LOG_ONLY}\n${loggedWarning(outcome.item.id)}`
+    : ` · ${LOG_ONLY}`;
+};
 
 /**
  * `/note`: added to an open item's note; for one already logged or discarded, a follow-up that `/news` will see, as
@@ -134,6 +164,15 @@ const runCommand = async (
       return id === undefined || rest === ''
         ? 'Usage: /note <id> <text>'
         : noteCommand(db, id, rest, sender);
+    // `/log <link> [note]` never gets here: a message with links is captured (handleUpdate).
+    case 'log':
+      return id === undefined || rest !== ''
+        ? 'Usage: /log <link> [note], or /log <id>'
+        : intentReply(await setIntent(db, id, 'log'), 'log');
+    case 'post':
+      return id === undefined || rest !== ''
+        ? 'Usage: /post <id>'
+        : intentReply(await setIntent(db, id, 'post'), 'post');
     case 'help':
     case 'start':
       return HELP;
@@ -166,7 +205,10 @@ export const handleUpdate = async (update: TelegramUpdate, deps: BotDeps): Promi
   };
 
   const command = parseCommand(message);
-  if (command) {
+  // `/log <link> [note]` (D18) is a capture like any message with links, the item to be logged only.
+  const logCapture = command?.name === 'log' ? extractCapture(message) : undefined;
+  const logOnly = logCapture !== undefined && logCapture.links.length > 0;
+  if (command && !logOnly) {
     // Commands are safe to repeat: a redelivery would only reply again, so it's skipped if already processed.
     if (await wasProcessed(deps.db, update.update_id)) {
       return;
@@ -181,7 +223,8 @@ export const handleUpdate = async (update: TelegramUpdate, deps: BotDeps): Promi
     return;
   }
 
-  const { links, note, rawText } = extractCapture(message);
+  const { links, note, rawText } = logOnly ? logCapture : extractCapture(message);
+  const intent: Intent = logOnly ? 'log' : 'post';
   const sender: Sender = {
     submittedBy: message.from.id,
     rawText,
@@ -199,17 +242,26 @@ export const handleUpdate = async (update: TelegramUpdate, deps: BotDeps): Promi
       return [];
     }
     if (links.length === 0) {
-      return [await captureNote(trx, sender)];
+      return [{ result: await captureNote(trx, sender), suffix: '' }];
     }
-    const saved: CaptureResult[] = [];
+    const saved: { result: CaptureResult; suffix: string }[] = [];
     for (const link of links) {
-      saved.push(await captureLink(trx, link, sender));
+      const result = await captureLink(trx, link, sender, intent);
+      if (intent === 'post') {
+        saved.push({ result, suffix: '' });
+      } else if (result.kind === 'saved') {
+        saved.push({ result, suffix: logOnlySuffix(undefined) });
+      } else {
+        // Already in the inbox: the note went where it always goes, and the item becomes log only.
+        const original = result.kind === 'follow_up' ? result.original : result.id;
+        saved.push({ result, suffix: logOnlySuffix(await setIntentIn(trx, original, 'log')) });
+      }
     }
     return saved;
   });
 
-  for (const result of results) {
-    const messageId = await reply(captureReply(result));
+  for (const { result, suffix } of results) {
+    const messageId = await reply(captureReply(result) + suffix);
     if (result.kind === 'saved' && messageId !== undefined) {
       await rememberReply(deps.db, result.id, message.chat.id, messageId);
     }

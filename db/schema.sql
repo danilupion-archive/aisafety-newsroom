@@ -52,6 +52,18 @@ CREATE TYPE app.fetch_status AS ENUM (
 ALTER TYPE app.fetch_status OWNER TO newsroom_owner;
 
 --
+-- Name: inbox_intent; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.inbox_intent AS ENUM (
+    'post',
+    'log'
+);
+
+
+ALTER TYPE app.inbox_intent OWNER TO newsroom_owner;
+
+--
 -- Name: inbox_status; Type: TYPE; Schema: app; Owner: newsroom_owner
 --
 
@@ -242,6 +254,7 @@ CREATE TABLE app.inbox_items (
     page_author text,
     page_duration_seconds integer,
     page_published_on date GENERATED ALWAYS AS (private.page_published_on(page_published_at)) STORED,
+    intent app.inbox_intent DEFAULT 'post'::app.inbox_intent NOT NULL,
     CONSTRAINT inbox_items_fetch_attempts_positive CHECK ((fetch_attempts >= 0)),
     CONSTRAINT inbox_items_follow_up_is_a_note CHECK (((follows_up IS NULL) OR (url IS NULL))),
     CONSTRAINT inbox_items_logged_has_ref CHECK (((status <> 'logged'::app.inbox_status) OR ((logged_at IS NOT NULL) AND (logged_ref IS NOT NULL)))),

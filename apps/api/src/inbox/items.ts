@@ -4,6 +4,7 @@ import {
   canTransition,
   type FetchStatus,
   type InboxStatus,
+  type Intent,
   restoredStatus,
 } from '@aisafety-newsroom/domain/inbox';
 import { appendNote } from '@aisafety-newsroom/domain/notes';
@@ -39,6 +40,8 @@ export interface Item {
   note: string;
   follows_up: Original | null;
   status: InboxStatus;
+  /** A post as well as the log entry, or the log entry alone (D18); the bot's `/log` and `/post` set it. */
+  intent: Intent;
   fetch_status: FetchStatus;
   fetch_attempts: number;
   http_status: number | null;
@@ -88,6 +91,7 @@ const itemQuery = (db: Executor) =>
       'i.url_normalized',
       'i.note',
       'i.status',
+      'i.intent',
       'i.fetch_status',
       'i.fetch_attempts',
       'i.http_status',
@@ -150,6 +154,7 @@ const toItem = (row: QueryRow): Item => ({
           logged_ref: row.original_logged_ref,
         },
   status: row.status,
+  intent: row.intent,
   fetch_status: row.fetch_status,
   fetch_attempts: row.fetch_attempts,
   http_status: row.http_status,
@@ -268,6 +273,48 @@ export const markDiscarded = (db: Database, id: number, reason: string | null): 
       .execute();
     return done(trx, id);
   });
+
+export type IntentOutcome =
+  | { ok: true; item: ItemDetail; changed: boolean }
+  | { ok: false; error: 'not_found' | 'conflict'; message: string };
+
+/**
+ * Sets what Dani wants from an item (D18, the bot's `/log` and `/post`): `changed` says whether it was something else.
+ * A discarded item is refused, since nothing will come of it until it's restored; a logged one is switched, and the
+ * reply says its post may already be on the site.
+ */
+export const setIntentIn = async (
+  trx: Transaction<DB>,
+  id: number,
+  intent: Intent,
+): Promise<IntentOutcome> => {
+  const row = await trx
+    .selectFrom('app.inbox_items')
+    .select(['id', 'status', 'intent'])
+    .where('id', '=', String(id))
+    .forUpdate()
+    .executeTakeFirst();
+  if (!row) {
+    return { ok: false, error: 'not_found', message: `No item #${id}` };
+  }
+  if (row.status === 'discarded') {
+    return {
+      ok: false,
+      error: 'conflict',
+      message: `Item #${id} is discarded: restore it first (/restore ${id})`,
+    };
+  }
+  if (row.intent !== intent) {
+    await trx.updateTable('app.inbox_items').set({ intent }).where('id', '=', String(id)).execute();
+  }
+  const item = await getItem(trx, id);
+  return item
+    ? { ok: true, item, changed: row.intent !== intent }
+    : { ok: false, error: 'not_found', message: `No item #${id}` };
+};
+
+export const setIntent = (db: Database, id: number, intent: Intent): Promise<IntentOutcome> =>
+  db.transaction().execute((trx) => setIntentIn(trx, id, intent));
 
 /**
  * Brings a discarded item back to where it would be now (R-DB-1): queued if never fetched, ready if fetched or skipped,

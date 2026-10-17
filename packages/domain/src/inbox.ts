@@ -5,6 +5,16 @@ export const FETCH_STATUSES = ['pending', 'ok', 'failed', 'skipped'] as const;
 export type FetchStatus = (typeof FETCH_STATUSES)[number];
 
 /**
+ * What Dani wants from an item (D18): a post on the site as well as its log entry (`post`, every link's default), or
+ * the log entry alone (`log`, the bot's `/log`). aisafety-media's `/news` drafts posts only for `post` (R-MED-2).
+ */
+export const INTENTS = ['post', 'log'] as const;
+export type Intent = (typeof INTENTS)[number];
+
+export const isIntent = (value: string): value is Intent =>
+  (INTENTS as readonly string[]).includes(value);
+
+/**
  * The moves an item may make (R-DB-1). Staying in a status is always allowed: appending a note, a fetch attempt, or
  * marking a logged item logged again with different details. The database's trigger enforces the same table.
  */

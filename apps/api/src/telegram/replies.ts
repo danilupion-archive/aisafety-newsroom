@@ -1,4 +1,4 @@
-import type { InboxStatus } from '@aisafety-newsroom/domain/inbox';
+import type { InboxStatus, Intent } from '@aisafety-newsroom/domain/inbox';
 
 import { hostOf } from '@aisafety-newsroom/domain/url';
 
@@ -60,15 +60,27 @@ export const fetchedLabel = ({
   return `${label(item)} (${details.join(', ')})`;
 };
 
-export const pendingList = (items: (Labelled & { status: InboxStatus })[]): string =>
+/** Marks an item Dani wants logged only, not posted (D18). */
+export const LOG_ONLY = 'log only';
+
+export const pendingList = (
+  items: (Labelled & { status: InboxStatus; intent?: Intent })[],
+): string =>
   items.length === 0
     ? 'Nothing pending.'
-    : items.map((item) => `${label(item)} (${item.status})`).join('\n');
+    : items
+        .map(
+          (item) =>
+            `${label(item)} (${item.status})${item.intent === 'log' ? ` · ${LOG_ONLY}` : ''}`,
+        )
+        .join('\n');
 
 export const HELP = [
-  'Send a link (or forward a message with links) to save it; anything else you write becomes its note.',
-  'Send text without a link to save a note.',
+  'Send a link (or forward a message with links) to save it for a post on the site; anything else you write becomes its',
+  'note. Send text without a link to save a note.',
   '',
+  '/log <link> [note]: save a link for the news log only, no post',
+  '/log <id> · /post <id>: make an item log only, or a post again',
   '/pending: what is waiting for /news',
   '/discard <id> [reason]: drop an item',
   '/restore <id>: bring a discarded item back',
