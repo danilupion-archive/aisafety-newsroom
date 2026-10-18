@@ -21,3 +21,226 @@
     color: transparent;
   }
 }
+
+/*
+ * The header's mark, alive (R-WEB-11; components/Mark.tsx, LiveMark.tsx, mark-motion.ts). Every animated group is the
+ * identity at rest, so whatever doesn't run leaves the still mark: no JavaScript, no CSS animation, or
+ * prefers-reduced-motion, which keeps all of this off. Transforms and opacity only; pivots in the mark's 120 × 120 box.
+ *
+ * - The reveal, on the first page of a visit (the page carries data-mark-reveal): the lid shut, a jolt from inside, the
+ *   lid swinging open as the pink light comes up, the tentacles growing out of the box from behind its front wall and
+ *   the gap, a small settle.
+ * - Always after that, a very light sway: a degree or two around each tentacle's root, slow, each its own period.
+ * - Hovering or focusing the logo turns up a second, faster sway; its width eases in and out (a registered custom
+ *   property's transition), so it never jumps.
+ * - Out of view, it rests (LiveMark adds mark-paused).
+ */
+@property --mark-hover-amp {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+.mark-live {
+  --mark-hover-amp: 0deg;
+  transition: --mark-hover-amp 0.9s ease-in-out;
+}
+.mark-host:is(:hover, :focus-visible) .mark-live {
+  --mark-hover-amp: 6.5deg;
+}
+.mark-live .mark-part {
+  transform-box: view-box;
+}
+.mark-live .mark-lid {
+  transform-origin: 11px 71px;
+}
+.mark-live .mark-up {
+  transform-origin: 74px 72px;
+}
+.mark-live :is(.mark-up-idle, .mark-up-hover) {
+  transform-origin: 73px 70px;
+}
+.mark-live :is(.mark-third, .mark-third-idle, .mark-third-hover) {
+  transform-origin: 77px 70px;
+}
+.mark-live .mark-front {
+  transform-origin: 57px 66px;
+}
+.mark-live :is(.mark-front-idle, .mark-front-hover) {
+  transform-origin: 57px 64px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mark-live .mark-up-idle {
+    animation: mark-idle 7.4s ease-in-out -1.9s infinite;
+  }
+  .mark-live .mark-third-idle {
+    animation: mark-idle 6.3s ease-in-out -4.1s infinite;
+  }
+  .mark-live .mark-front-idle {
+    animation: mark-idle-slight 8.8s ease-in-out -0.7s infinite;
+  }
+  .mark-live .mark-up-hover {
+    animation: mark-hover 2.6s ease-in-out infinite;
+  }
+  .mark-live .mark-third-hover {
+    animation: mark-hover 2.2s ease-in-out -0.8s infinite;
+  }
+  .mark-live .mark-front-hover {
+    animation: mark-hover-half 2.9s ease-in-out -1.5s infinite;
+  }
+  html[data-mark-reveal] .mark-live .mark-lid {
+    animation: mark-lid 1.7s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+  }
+  html[data-mark-reveal] .mark-live .mark-light {
+    animation: mark-light 1.7s ease-out both;
+  }
+  html[data-mark-reveal] .mark-live .mark-up {
+    animation: mark-up 1.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  html[data-mark-reveal] .mark-live .mark-third {
+    animation: mark-third 1.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  html[data-mark-reveal] .mark-live .mark-front {
+    animation: mark-front 1.7s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  }
+  .mark-live.mark-paused .mark-part {
+    animation-play-state: paused;
+  }
+}
+
+@keyframes mark-lid {
+  0%,
+  9% {
+    transform: rotate(23.1deg);
+  }
+  15% {
+    transform: rotate(16deg);
+  }
+  21%,
+  30% {
+    transform: rotate(23.1deg);
+  }
+  58% {
+    transform: rotate(-4deg);
+  }
+  68% {
+    transform: rotate(1.5deg);
+  }
+  76%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes mark-light {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  62%,
+  100% {
+    opacity: 1;
+  }
+}
+/* Each tentacle stays hidden until it starts to come out, so nothing shows on the shut lid. */
+@keyframes mark-up {
+  0%,
+  30% {
+    opacity: 0;
+  }
+  37% {
+    opacity: 1;
+  }
+  0%,
+  36% {
+    transform: scale(0.12) rotate(-28deg);
+  }
+  74% {
+    transform: scale(1.05) rotate(4deg);
+  }
+  87% {
+    transform: scale(0.98) rotate(-1.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes mark-third {
+  0%,
+  36% {
+    opacity: 0;
+  }
+  43% {
+    opacity: 1;
+  }
+  0%,
+  42% {
+    transform: scale(0.12) rotate(30deg);
+  }
+  80% {
+    transform: scale(1.05) rotate(-4deg);
+  }
+  92% {
+    transform: scale(0.99) rotate(1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes mark-front {
+  0%,
+  40% {
+    opacity: 0;
+  }
+  47% {
+    opacity: 1;
+  }
+  0%,
+  44% {
+    transform: scale(0.1) rotate(-25deg);
+  }
+  82% {
+    transform: scale(1.04) rotate(3deg);
+  }
+  93% {
+    transform: scale(0.99) rotate(-1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+@keyframes mark-idle {
+  0%,
+  100% {
+    transform: rotate(-1.6deg);
+  }
+  50% {
+    transform: rotate(1.6deg);
+  }
+}
+@keyframes mark-idle-slight {
+  0%,
+  100% {
+    transform: rotate(-1.1deg);
+  }
+  50% {
+    transform: rotate(1.1deg);
+  }
+}
+@keyframes mark-hover {
+  0%,
+  100% {
+    transform: rotate(calc(var(--mark-hover-amp) * -1));
+  }
+  50% {
+    transform: rotate(var(--mark-hover-amp));
+  }
+}
+@keyframes mark-hover-half {
+  0%,
+  100% {
+    transform: rotate(calc(var(--mark-hover-amp) * -0.5));
+  }
+  50% {
+    transform: rotate(calc(var(--mark-hover-amp) * 0.5));
+  }
+}

@@ -8,12 +8,13 @@ import type { PostSummary } from './api';
 import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { bylineOf } from './byline';
-import { Mark } from './components/Mark';
+import { Mark, MarkSvg } from './components/Mark';
 import { QuoteCard } from './components/QuoteCard';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
 import { cardImage, IMAGE_CACHE, imagePath, readImagePath } from './images';
+import { MARK_REVEAL_SCRIPT, REVEAL_ATTRIBUTE, REVEAL_KEY } from './mark-motion';
 import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { ACCENT_SOFT, COLORS, contrast } from './palette';
@@ -745,6 +746,44 @@ describe('the palette (R-WEB-11)', () => {
   });
 });
 
+describe('the mark’s reveal (R-WEB-11)', () => {
+  const run = ({ reduce = false, seen = false, storage = true } = {}) => {
+    const stored = new Map<string, string>(seen ? [[REVEAL_KEY, '1']] : []);
+    const attributes = new Map<string, string>();
+    const sessionStorage = {
+      getItem: (key: string) => {
+        if (!storage) throw new Error('blocked');
+        return stored.get(key) ?? null;
+      },
+      setItem: (key: string, value: string) => {
+        if (!storage) throw new Error('blocked');
+        stored.set(key, value);
+      },
+    };
+    const window = { matchMedia: () => ({ matches: reduce }), sessionStorage };
+    const document = {
+      documentElement: {
+        setAttribute: (name: string, value: string) => attributes.set(name, value),
+      },
+    };
+    runInNewContext(MARK_REVEAL_SCRIPT, { window, document });
+    return {
+      revealed: attributes.has(REVEAL_ATTRIBUTE),
+      remembered: stored.get(REVEAL_KEY) === '1',
+    };
+  };
+
+  it('opens the box on a visit’s first page only, and remembers it', () => {
+    expect(run()).toEqual({ revealed: true, remembered: true });
+    expect(run({ seen: true })).toEqual({ revealed: false, remembered: true });
+  });
+
+  it('keeps it still for readers who ask for less motion, and plays it when storage is blocked', () => {
+    expect(run({ reduce: true })).toEqual({ revealed: false, remembered: false });
+    expect(run({ storage: false }).revealed).toBe(true);
+  });
+});
+
 describe('Mark', () => {
   it('gives each mark its own filter and gradient ids, so two on a page don’t borrow each other’s', () => {
     const html = renderToStaticMarkup(
@@ -761,6 +800,31 @@ describe('Mark', () => {
     for (const id of ids) {
       expect(html).toContain(`url(#${id})`);
     }
+  });
+
+  it('draws the same mark alive (the header’s) as still, only wrapped in groups the stylesheet moves', () => {
+    const still = renderToStaticMarkup(createElement(Mark, { size: 46 }));
+    const live = renderToStaticMarkup(createElement(MarkSvg, { size: 46, live: true }));
+    const shapes = (html: string) =>
+      [...html.matchAll(/<(path|circle|polygon|rect|line)\b[^>]*>/g)]
+        .map((match) => match[0])
+        .sort();
+    expect(shapes(live)).toEqual(shapes(still));
+    expect(live).toContain('class="mark-live"');
+    for (const part of [
+      'mark-lid',
+      'mark-light',
+      'mark-up-idle',
+      'mark-third-hover',
+      'mark-front',
+    ]) {
+      expect(live).toContain(part);
+    }
+    expect(still).not.toContain('mark-');
+    // Too small to read the motion: still.
+    expect(renderToStaticMarkup(createElement(MarkSvg, { size: 24, live: true }))).not.toContain(
+      'mark-live',
+    );
   });
 
   it('draws only the rising tentacle when it’s too small for the rest', () => {

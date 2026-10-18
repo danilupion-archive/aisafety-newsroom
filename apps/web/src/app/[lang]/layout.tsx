@@ -10,10 +10,11 @@ import type { Lang } from '@/i18n';
 
 import { getPost, type Translation } from '@/api';
 import { HeaderSearch } from '@/components/HeaderSearch';
-import { Mark } from '@/components/Mark';
+import { LiveMark } from '@/components/LiveMark';
 import { Pending } from '@/components/Pending';
 import { Wordmark } from '@/components/Wordmark';
 import { otherLang, otherLanguageHref, PATH_WORDS, PATHNAME_HEADER, paths, readPath } from '@/i18n';
+import { MARK_REVEAL_SCRIPT } from '@/mark-motion';
 import { pageLang } from '@/params';
 import { PLAUSIBLE_INIT, site } from '@/site';
 import { STRINGS } from '@/strings';
@@ -194,8 +195,11 @@ const RootLayout = async ({ children, params }: Props) => {
   const pathname = (await headers()).get(PATHNAME_HEADER) ?? undefined;
   const otherHref = otherLanguageHref(lang, pathname, await translationOf(lang, pathname));
   return (
-    <html lang={lang}>
+    // The mark's reveal script may mark <html> before React hydrates it (mark-motion.ts).
+    <html lang={lang} suppressHydrationWarning>
       <head>
+        {/* Before the first paint: whether the header's mark opens on this page (R-WEB-11). */}
+        <script dangerouslySetInnerHTML={{ __html: MARK_REVEAL_SCRIPT }} />
         {analytics ? (
           <>
             <script async src={analytics.scriptUrl} />
@@ -209,8 +213,8 @@ const RootLayout = async ({ children, params }: Props) => {
         </a>
         <header className={header}>
           <div className={`${container} ${headerRow}`}>
-            <Link href={paths.home(lang)} className={brand}>
-              <Mark size={46} />
+            <Link href={paths.home(lang)} className={`${brand} mark-host`}>
+              <LiveMark size={46} />
               <Wordmark name={name[lang]} className={brandName} />
               <span className={tagline}>{t.tagline}</span>
               <Pending />
