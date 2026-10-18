@@ -1,6 +1,10 @@
 # aisafety-newsroom · Specification
 
-Status: **draft v0.18** · 2026-10-17 · Owner: Dani
+Status: **draft v0.19** · 2026-10-18 · Owner: Dani
+
+v0.19 changes: the header's mark is animated (R-WEB-11): the box opens and the tentacles
+come out on a visit's first page, sway lightly ever after and more on hover; still with
+reduced motion.
 
 v0.18 changes: the image move is done (D22, step 2b): the database holds no image bytes,
 only their metadata and switches.
@@ -662,6 +666,10 @@ languages, so no post hides behind a page.
   tentacle alone, at icon sizes) and as the bot's avatar; the name with its trailing "IA"
   in a gradient from aquamarine to pink. Taglines "La caja ya está abierta" and "The box
   is already open". No PauseAI colours, typeface or marks: the site is Dani's own (D4).
+  The header's mark is alive: on a visit's first page the box opens and the tentacles come
+  out (about 1.7 s); after that they sway very lightly, a degree or two, and more widely
+  while the logo is hovered or focused; it rests out of view, never moves with
+  prefers-reduced-motion, and every other use of the mark is still.
 - **R-WEB-5** Must: Markdown is rendered to sanitised HTML. No raw HTML from posts.
 - **R-WEB-6** Must: the web app reads posts from the API's public read routes inside the
   cluster, which use `newsroom_public` (P7). It caches each answer for at most 60 s.
