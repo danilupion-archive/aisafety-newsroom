@@ -7,9 +7,9 @@ import { REVEAL_ATTRIBUTE, REVEAL_MS } from '@/mark-motion';
 
 /**
  * The header's mark, alive (R-WEB-11): the stylesheet does the moving (app/globals.css); this only rests it when it's
- * out of view, and, once the first page's reveal has played, takes the page's reveal mark off so a later remount
- * doesn't play it again (unmounted mid-reveal, a remount may replay it: harmless). Every animated group ends where the
- * still mark is, so taking it off changes nothing on screen.
+ * out of view, and, once the page load's reveal has played, takes the page's reveal mark off, so a remount on a move
+ * within the site (a new layout, the other language) doesn't play it again (unmounted mid-reveal, a remount may replay
+ * it: harmless). The reveal's groups end where the still mark is, so taking it off changes nothing on screen.
  */
 export const LiveMark = ({ size, className }: { size: number; className?: string }) => {
   const ref = useRef<SVGSVGElement>(null);

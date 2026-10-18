@@ -23,70 +23,149 @@
 }
 
 /*
- * The header's mark, alive (R-WEB-11; components/Mark.tsx, LiveMark.tsx, mark-motion.ts). Every animated group is the
- * identity at rest, so whatever doesn't run leaves the still mark: no JavaScript, no CSS animation, or
- * prefers-reduced-motion, which keeps all of this off. Transforms and opacity only; pivots in the mark's 120 × 120 box.
+ * The header's mark, alive (R-WEB-11; components/Mark.tsx, LiveMark.tsx, mark-segments.ts, mark-motion.ts). Every
+ * animated group is the identity at rest, so whatever doesn't run leaves the still mark: no JavaScript, no CSS
+ * animation, or prefers-reduced-motion, which keeps all of this off. Transforms and opacity only; pivots in the mark's
+ * 120 × 120 box (the joints' come inline, from the outlines).
  *
- * - The reveal, on the first page of a visit (the page carries data-mark-reveal): the lid shut, a jolt from inside, the
- *   lid swinging open as the pink light comes up, the tentacles growing out of the box from behind its front wall and
- *   the gap, a small settle.
- * - Always after that, a very light sway: a degree or two around each tentacle's root, slow, each its own period.
- * - Hovering or focusing the logo turns up a second, faster sway; its width eases in and out (a registered custom
- *   property's transition), so it never jumps.
+ * - The reveal, on every full page load (the page carries data-mark-reveal): the lid shut, a jolt from inside, the lid
+ *   swinging open as the pink light comes up, the tentacles growing out of the box from behind its front wall and the
+ *   gap, a small settle.
+ * - Always after that, the tentacles bend: each is a chain of three segments turning at its joints, a little at the
+ *   root, more at the tip, each segment a beat behind the one below it, so the bend travels outwards; the tips curl and
+ *   uncurl on a slower beat. The light breathes on two overlapping beats, one in step with the rising tentacle's push,
+ *   and the lid lifts a hair with it.
+ * - Hovering or focusing the logo turns up a second, faster and wider layer of all of it; its strength, --mark-hover, is
+ *   a registered number that eases from 0 to 1 and back, so nothing jumps.
  * - Out of view, it rests (LiveMark adds mark-paused).
  */
-@property --mark-hover-amp {
-  syntax: '<angle>';
+@property --mark-hover {
+  syntax: '<number>';
   inherits: true;
-  initial-value: 0deg;
+  initial-value: 0;
 }
 .mark-live {
-  --mark-hover-amp: 0deg;
-  transition: --mark-hover-amp 0.9s ease-in-out;
+  --mark-hover: 0;
+  transition: --mark-hover 0.9s ease-in-out;
 }
 .mark-host:is(:hover, :focus-visible) .mark-live {
-  --mark-hover-amp: 6.5deg;
+  --mark-hover: 1;
 }
 .mark-live .mark-part {
   transform-box: view-box;
 }
-.mark-live .mark-lid {
+.mark-live :is(.mark-lid, .mark-lid-lift) {
   transform-origin: 11px 71px;
 }
 .mark-live .mark-up {
   transform-origin: 74px 72px;
 }
-.mark-live :is(.mark-up-idle, .mark-up-hover) {
-  transform-origin: 73px 70px;
-}
-.mark-live :is(.mark-third, .mark-third-idle, .mark-third-hover) {
+.mark-live .mark-third {
   transform-origin: 77px 70px;
 }
 .mark-live .mark-front {
   transform-origin: 57px 66px;
 }
-.mark-live :is(.mark-front-idle, .mark-front-hover) {
-  transform-origin: 57px 64px;
+.mark-live .mark-glow {
+  transform-origin: 60px 62px;
+}
+
+/*
+ * Each segment's bend: its width and beat at rest, and on hover. The delays put each segment a beat behind the one
+ * below it (less ahead in its cycle); the tips' beats are slower than the rest, their curl breathing.
+ */
+.mark-live .mark-up-1 {
+  --bend: 2.4deg;
+  --bend-time: 5.6s;
+  --bend-delay: -1.4s;
+  --bend-hover: 4.5deg;
+  --bend-hover-time: 2s;
+  --bend-hover-delay: -0.9s;
+}
+.mark-live .mark-up-2 {
+  --bend: 4deg;
+  --bend-time: 5.6s;
+  --bend-delay: -0.7s;
+  --bend-hover: 7deg;
+  --bend-hover-time: 2s;
+  --bend-hover-delay: -0.6s;
+}
+.mark-live .mark-up-3 {
+  --bend: 6deg;
+  --bend-time: 7.3s;
+  --bend-delay: -0.2s;
+  --bend-hover: 10deg;
+  --bend-hover-time: 2.6s;
+  --bend-hover-delay: -0.3s;
+}
+.mark-live .mark-third-1 {
+  --bend: 2.4deg;
+  --bend-time: 4.8s;
+  --bend-delay: -3.1s;
+  --bend-hover: 5.5deg;
+  --bend-hover-time: 1.7s;
+  --bend-hover-delay: -1.2s;
+}
+.mark-live .mark-third-2 {
+  --bend: 3.8deg;
+  --bend-time: 4.8s;
+  --bend-delay: -2.5s;
+  --bend-hover: 8deg;
+  --bend-hover-time: 1.7s;
+  --bend-hover-delay: -0.95s;
+}
+.mark-live .mark-third-3 {
+  --bend: 5.4deg;
+  --bend-time: 6.1s;
+  --bend-delay: -1.9s;
+  --bend-hover: 10deg;
+  --bend-hover-time: 2.2s;
+  --bend-hover-delay: -0.7s;
+}
+.mark-live .mark-front-1 {
+  --bend: 1.8deg;
+  --bend-time: 6.6s;
+  --bend-delay: -0.7s;
+  --bend-hover: 3.5deg;
+  --bend-hover-time: 2.3s;
+  --bend-hover-delay: -1.1s;
+}
+.mark-live .mark-front-2 {
+  --bend: 3deg;
+  --bend-time: 6.6s;
+  --bend-delay: 0s;
+  --bend-hover: 5.5deg;
+  --bend-hover-time: 2.3s;
+  --bend-hover-delay: -0.75s;
+}
+.mark-live .mark-front-3 {
+  --bend: 4.4deg;
+  --bend-time: 8.4s;
+  --bend-delay: -0.5s;
+  --bend-hover: 8deg;
+  --bend-hover-time: 2.9s;
+  --bend-hover-delay: -0.4s;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .mark-live .mark-up-idle {
-    animation: mark-idle 7.4s ease-in-out -1.9s infinite;
+  .mark-live .mark-bend {
+    animation: mark-bend var(--bend-time) ease-in-out var(--bend-delay) infinite;
   }
-  .mark-live .mark-third-idle {
-    animation: mark-idle 6.3s ease-in-out -4.1s infinite;
+  .mark-live .mark-bend-hover {
+    animation: mark-bend-hover var(--bend-hover-time) ease-in-out var(--bend-hover-delay) infinite;
   }
-  .mark-live .mark-front-idle {
-    animation: mark-idle-slight 8.8s ease-in-out -0.7s infinite;
+  /* In step with the rising tentacle's root: the light flares and the lid lifts as it pushes. */
+  .mark-live .mark-glow-a {
+    animation: mark-glow-a 5.6s ease-in-out -1.4s infinite;
   }
-  .mark-live .mark-up-hover {
-    animation: mark-hover 2.6s ease-in-out infinite;
+  .mark-live .mark-glow-b {
+    animation: mark-glow-b 8.1s ease-in-out -3s infinite;
   }
-  .mark-live .mark-third-hover {
-    animation: mark-hover 2.2s ease-in-out -0.8s infinite;
+  .mark-live .mark-glow-hover {
+    animation: mark-glow-hover 1.9s ease-in-out infinite;
   }
-  .mark-live .mark-front-hover {
-    animation: mark-hover-half 2.9s ease-in-out -1.5s infinite;
+  .mark-live .mark-lid-lift {
+    animation: mark-lid-lift 5.6s ease-in-out -1.4s infinite;
   }
   html[data-mark-reveal] .mark-live .mark-lid {
     animation: mark-lid 1.7s cubic-bezier(0.3, 0.7, 0.3, 1) both;
@@ -208,39 +287,61 @@
     transform: scale(1) rotate(0deg);
   }
 }
-@keyframes mark-idle {
+@keyframes mark-bend {
   0%,
   100% {
-    transform: rotate(-1.6deg);
+    transform: rotate(calc(var(--bend) * -1));
   }
   50% {
-    transform: rotate(1.6deg);
+    transform: rotate(var(--bend));
   }
 }
-@keyframes mark-idle-slight {
+@keyframes mark-bend-hover {
   0%,
   100% {
-    transform: rotate(-1.1deg);
+    transform: rotate(calc(var(--bend-hover) * var(--mark-hover) * -1));
   }
   50% {
-    transform: rotate(1.1deg);
+    transform: rotate(calc(var(--bend-hover) * var(--mark-hover)));
   }
 }
-@keyframes mark-hover {
+@keyframes mark-glow-a {
   0%,
   100% {
-    transform: rotate(calc(var(--mark-hover-amp) * -1));
+    opacity: calc(0.84 + var(--mark-hover) * 0.16);
+    transform: scale(0.97);
   }
   50% {
-    transform: rotate(var(--mark-hover-amp));
+    opacity: 1;
+    transform: scale(calc(1.02 + var(--mark-hover) * 0.04));
   }
 }
-@keyframes mark-hover-half {
+@keyframes mark-glow-b {
   0%,
   100% {
-    transform: rotate(calc(var(--mark-hover-amp) * -0.5));
+    opacity: 1;
+    transform: scale(1);
   }
   50% {
-    transform: rotate(calc(var(--mark-hover-amp) * 0.5));
+    opacity: calc(0.9 + var(--mark-hover) * 0.1);
+    transform: scale(1.015);
+  }
+}
+@keyframes mark-glow-hover {
+  0%,
+  100% {
+    transform: scale(calc(1 + var(--mark-hover) * 0.03));
+  }
+  50% {
+    transform: scale(calc(1 + var(--mark-hover) * 0.1));
+  }
+}
+@keyframes mark-lid-lift {
+  0%,
+  100% {
+    transform: rotate(calc(var(--mark-hover) * -0.4deg));
+  }
+  50% {
+    transform: rotate(calc(-0.7deg - var(--mark-hover) * 1.6deg));
   }
 }

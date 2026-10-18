@@ -80,10 +80,10 @@ const brand = css({
   display: 'flex',
   alignItems: 'center',
   gap: '3',
-  paddingY: '3.5',
+  paddingY: '2.5',
   _hover: { textDecoration: 'none' },
 });
-const brandName = css({ fontSize: { base: '1.625rem', md: '1.875rem' } });
+const brandName = css({ fontSize: { base: '1.75rem', md: '2rem' } });
 const tagline = css({
   display: { base: 'none', sm: 'inline' },
   color: 'muted',
@@ -214,7 +214,7 @@ const RootLayout = async ({ children, params }: Props) => {
         <header className={header}>
           <div className={`${container} ${headerRow}`}>
             <Link href={paths.home(lang)} className={`${brand} mark-host`}>
-              <LiveMark size={46} />
+              <LiveMark size={58} />
               <Wordmark name={name[lang]} className={brandName} />
               <span className={tagline}>{t.tagline}</span>
               <Pending />

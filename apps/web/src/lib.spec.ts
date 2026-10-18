@@ -8,13 +8,15 @@ import type { PostSummary } from './api';
 import nextConfig from '../next.config.js';
 import { splitWordmark } from './brand';
 import { bylineOf } from './byline';
-import { Mark, MarkSvg } from './components/Mark';
+import { LIVE_CHAINS, Mark, MarkSvg } from './components/Mark';
 import { QuoteCard } from './components/QuoteCard';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
 import { cardImage, IMAGE_CACHE, imagePath, readImagePath } from './images';
-import { MARK_REVEAL_SCRIPT, REVEAL_ATTRIBUTE, REVEAL_KEY } from './mark-motion';
+import { MARK_REVEAL_SCRIPT, REVEAL_ATTRIBUTE } from './mark-motion';
+import { insidePolygon, outlineSides, type Point } from './mark-segments';
+import { FRONT_CLIP, FRONT_CLIP_LIVE } from './mark-shapes';
 import { cardTitle } from './og/title';
 import { nextPage, orderHref, readCursor, readOrder } from './paging';
 import { ACCENT_SOFT, COLORS, contrast } from './palette';
@@ -747,40 +749,32 @@ describe('the palette (R-WEB-11)', () => {
 });
 
 describe('the mark’s reveal (R-WEB-11)', () => {
-  const run = ({ reduce = false, seen = false, storage = true } = {}) => {
-    const stored = new Map<string, string>(seen ? [[REVEAL_KEY, '1']] : []);
+  const run = ({ reduce = false, media = true } = {}) => {
     const attributes = new Map<string, string>();
-    const sessionStorage = {
-      getItem: (key: string) => {
-        if (!storage) throw new Error('blocked');
-        return stored.get(key) ?? null;
-      },
-      setItem: (key: string, value: string) => {
-        if (!storage) throw new Error('blocked');
-        stored.set(key, value);
+    const window = {
+      matchMedia: () => {
+        if (!media) throw new Error('unsupported');
+        return { matches: reduce };
       },
     };
-    const window = { matchMedia: () => ({ matches: reduce }), sessionStorage };
     const document = {
       documentElement: {
         setAttribute: (name: string, value: string) => attributes.set(name, value),
       },
     };
     runInNewContext(MARK_REVEAL_SCRIPT, { window, document });
-    return {
-      revealed: attributes.has(REVEAL_ATTRIBUTE),
-      remembered: stored.get(REVEAL_KEY) === '1',
-    };
+    return attributes.has(REVEAL_ATTRIBUTE);
   };
 
-  it('opens the box on a visit’s first page only, and remembers it', () => {
-    expect(run()).toEqual({ revealed: true, remembered: true });
-    expect(run({ seen: true })).toEqual({ revealed: false, remembered: true });
+  it('opens the box on every full page load, reloads included, with nothing to remember', () => {
+    expect(run()).toBe(true);
+    expect(run()).toBe(true);
+    expect(MARK_REVEAL_SCRIPT).not.toMatch(/storage/i);
+    expect(run({ media: false })).toBe(true);
   });
 
-  it('keeps it still for readers who ask for less motion, and plays it when storage is blocked', () => {
-    expect(run({ reduce: true })).toEqual({ revealed: false, remembered: false });
-    expect(run({ storage: false }).revealed).toBe(true);
+  it('keeps it still for readers who ask for less motion', () => {
+    expect(run({ reduce: true })).toBe(false);
   });
 });
 
@@ -792,31 +786,44 @@ describe('Mark', () => {
         null,
         createElement(Mark, { size: 46 }),
         createElement(Mark, { size: 46 }),
+        createElement(MarkSvg, { size: 58, live: true }),
       ),
     );
     const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((match) => match[1]);
-    expect(ids.length).toBe(10);
-    expect(new Set(ids).size).toBe(10);
+    // Five each, and the live one's nine segment clips.
+    expect(ids.length).toBe(24);
+    expect(new Set(ids).size).toBe(24);
     for (const id of ids) {
       expect(html).toContain(`url(#${id})`);
     }
   });
 
-  it('draws the same mark alive (the header’s) as still, only wrapped in groups the stylesheet moves', () => {
-    const still = renderToStaticMarkup(createElement(Mark, { size: 46 }));
-    const live = renderToStaticMarkup(createElement(MarkSvg, { size: 46, live: true }));
-    const shapes = (html: string) =>
-      [...html.matchAll(/<(path|circle|polygon|rect|line)\b[^>]*>/g)]
-        .map((match) => match[0])
-        .sort();
-    expect(shapes(live)).toEqual(shapes(still));
+  it('draws the same mark alive (the header’s) as still, only cut into groups the stylesheet moves', () => {
+    const still = renderToStaticMarkup(createElement(Mark, { size: 58 }));
+    const live = renderToStaticMarkup(createElement(MarkSvg, { size: 58, live: true }));
+    const drawn = (html: string) =>
+      [
+        ...html
+          .replace(/<defs>[\s\S]*<\/defs>/, '')
+          .matchAll(/<(path|circle|polygon|rect|line)\b[^>]*>/g),
+      ].map((match) => match[0]);
+    const unclipped = (shape: string) => shape.replace(/ clip-path="[^"]*"/, '');
+    // Each tentacle is drawn three times, each copy clipped to one segment; everything else, once, as it is.
+    const clipped = drawn(live).filter((shape) => shape.includes('clip-path='));
+    expect(clipped).toHaveLength(9);
+    for (const d of [LIVE_CHAINS.up.d, LIVE_CHAINS.third.d, LIVE_CHAINS.front.d]) {
+      expect(clipped.filter((shape) => shape.includes(`d="${d}"`))).toHaveLength(3);
+    }
+    expect([...new Set(drawn(live).map(unclipped))].sort()).toEqual(drawn(still).sort());
+    expect(drawn(live)).toHaveLength(drawn(still).length + 6);
     expect(live).toContain('class="mark-live"');
     for (const part of [
-      'mark-lid',
-      'mark-light',
-      'mark-up-idle',
-      'mark-third-hover',
-      'mark-front',
+      'mark-lid-lift',
+      'mark-glow-b',
+      'mark-up-3',
+      'mark-third-1',
+      'mark-front-2',
+      'mark-bend-hover',
     ]) {
       expect(live).toContain(part);
     }
@@ -825,6 +832,67 @@ describe('Mark', () => {
     expect(renderToStaticMarkup(createElement(MarkSvg, { size: 24, live: true }))).not.toContain(
       'mark-live',
     );
+  });
+
+  it('cuts each live tentacle into segments that cover it whole and take in nothing of another', () => {
+    const within = (point: Point, k: number, segments: typeof LIVE_CHAINS.up.chain.segments) => {
+      const segment = segments[k as 0 | 1 | 2];
+      return (
+        insidePolygon(point, segment.polygon) ||
+        segment.discs.some(([cx, cy, r]) => Math.hypot(point[0] - cx, point[1] - cy) <= r)
+      );
+    };
+    for (const { d, suckers, chain } of Object.values(LIVE_CHAINS)) {
+      const { up, down } = outlineSides(d);
+      for (const point of [...up, ...down]) {
+        const own = chain.segmentOf(point);
+        expect([0, 1, 2].some((k) => within(point, k, chain.segments))).toBe(true);
+        // The base never reaches the tip's outline nor the tip the base's, however the tentacle curls.
+        if (own !== 1) {
+          expect(within(point, 2 - own, chain.segments)).toBe(false);
+        }
+      }
+      for (const [cx, cy] of suckers) {
+        expect(within([cx, cy], chain.segmentOf([cx, cy]), chain.segments)).toBe(true);
+      }
+    }
+  });
+
+  it('hides the draped tentacle’s root alive as still, in a window that leaves the hanging part free', () => {
+    // The clip's second subpath, the window it cuts.
+    const window = (clip: string): Point[] => {
+      const points: Point[] = [];
+      let [x, y] = [0, 0];
+      for (const [, command, args = ''] of clip
+        .slice(clip.lastIndexOf('M'))
+        .matchAll(/([MLHVZ])([^MLHVZ]*)/g)) {
+        const n = args
+          .trim()
+          .split(/[\s,]+/)
+          .filter(Boolean)
+          .map(Number);
+        if (command === 'M' || command === 'L') {
+          [x, y] = [n[0] ?? x, n[1] ?? y];
+        } else if (command === 'H') {
+          x = n[0] ?? x;
+        } else if (command === 'V') {
+          y = n[0] ?? y;
+        } else {
+          continue;
+        }
+        points.push([x, y]);
+      }
+      return points;
+    };
+    const { d, suckers } = LIVE_CHAINS.front;
+    const { up, down } = outlineSides(d);
+    const points: Point[] = [...up, ...down, ...suckers.map(([cx, cy]): Point => [cx, cy])];
+    expect(points.some((point) => insidePolygon(point, window(FRONT_CLIP)))).toBe(true);
+    for (const point of points) {
+      expect(insidePolygon(point, window(FRONT_CLIP_LIVE))).toBe(
+        insidePolygon(point, window(FRONT_CLIP)),
+      );
+    }
   });
 
   it('draws only the rising tentacle when it’s too small for the rest', () => {
