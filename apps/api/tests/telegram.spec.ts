@@ -351,7 +351,7 @@ describe('commands (R-CAP-8)', () => {
     expect(texts()).toEqual([
       'Usage: /discard <id> [reason]',
       'Usage: /note <id> <text>',
-      'Usage: /restore <id>, /restore <post>, or /restore image <post> [lead|<source number>]',
+      'Usage: /restore <id>, /restore <post>, /restore image <post> [lead|<source number>], or /restore entity <id>',
       // Not an item's number: a post's name (R-CAP-11).
       'No post x',
       'No item #99',
@@ -365,6 +365,7 @@ describe('commands (R-CAP-8)', () => {
     await deliver(command('/start'));
     expect(texts()).toHaveLength(2);
     expect(texts()[0]).toContain('/pending');
+    expect(texts()[0]).toContain('/takedown entity <id>');
   });
 
   it('runs a redelivered command once', async () => {
@@ -552,6 +553,39 @@ describe('the site’s switches (R-CAP-10, R-CAP-11)', () => {
     await deliver(command('/restore image es/informe-ficticio'));
     expect(await removed()).toEqual([]);
     // The posts themselves were never touched.
+    expect(await takenDown()).toEqual([]);
+  });
+
+  it('/takedown entity hides an entity at once, by its id or its page’s address, and /restore entity brings it back (R-CAP-12)', async () => {
+    await asSuperuser(
+      `INSERT INTO app.entities (id, type, name, description_es, description_en, content_ref)
+       VALUES ('example-lab', 'organisation', 'Example Lab', 'Un laboratorio ficticio.', 'A fictional lab.', '{}')`,
+    );
+    const hidden = async () =>
+      (
+        await asSuperuser<{ id: string }>(
+          'SELECT id FROM app.entities WHERE taken_down_at IS NOT NULL ORDER BY id',
+        )
+      ).map((row) => row.id);
+    await deliver(command('/takedown entity https://pandoria.example/en/who/example-lab'));
+    expect(await hidden()).toEqual(['example-lab']);
+    expect(texts().at(-1)).toContain('Hidden: “Example Lab” (example-lab).');
+    await deliver(command('/takedown entity example-lab'));
+    expect(texts().at(-1)).toBe(
+      '“Example Lab” (example-lab) is already hidden. /restore entity example-lab brings it back.',
+    );
+    await deliver(command('/restore entity /quien/example-lab'));
+    expect(await hidden()).toEqual([]);
+    expect(texts().at(-1)).toContain('Restored: “Example Lab” (example-lab).');
+    await deliver(command('/restore entity example-lab'));
+    expect(texts().at(-1)).toBe('“Example Lab” (example-lab) isn’t hidden.');
+    await deliver(command('/takedown entity no-such-lab'));
+    expect(texts().at(-1)).toBe('No entity no-such-lab');
+    await deliver(command('/takedown entity'));
+    expect(texts().at(-1)).toBe('Usage: /takedown entity <id>');
+    await deliver(command('/restore entity Not An Id'));
+    expect(texts().at(-1)).toBe('Name the entity by its id, or its page’s address on the site');
+    // The posts were never touched.
     expect(await takenDown()).toEqual([]);
   });
 

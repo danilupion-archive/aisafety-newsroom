@@ -2,6 +2,8 @@ import { type Lang, LANGS, PATH_WORDS, RESERVED_SLUGS } from '@aisafety-newsroom
 import { wordCount } from '@aisafety-newsroom/domain/markdown';
 import { z } from 'zod';
 
+import { contentRef } from '../content-ref.js';
+import { entityId } from '../entities/schemas.js';
 import { tag } from '../inbox/schemas.js';
 
 export type { Lang };
@@ -86,6 +88,12 @@ const fields = z.strictObject({
   body_md: z.string().min(1).max(200_000),
   sources: z.array(source).max(50),
   tags: z.array(tag).max(10),
+  /**
+   * Who and what it's about (D23): entities of the registry, pushed before it (R-API-6), in order, each once. Each
+   * version of a story names its own, and aisafety-media gives both the same; a page names none. A client older than
+   * entities sends none.
+   */
+  entities: z.array(entityId).max(10).default([]),
   published_at: z.union([z.iso.datetime({ offset: true }), z.iso.date()]),
   /**
    * The day the story happened, as its original source dates it (R-WEB-13): a calendar day. A page never has one. A
@@ -109,13 +117,7 @@ const fields = z.strictObject({
    * answers 410 again and its translation can name it. Any other push publishes.
    */
   unpublished: z.boolean().default(false),
-  content_ref: z.strictObject({
-    path: z
-      .string()
-      .max(300)
-      .regex(/^[\w./-]+\.md$/, 'content_ref.path is a Markdown file’s path in aisafety-media'),
-    commit: z.string().regex(/^[0-9a-f]{7,40}$/, 'content_ref.commit is a git commit'),
-  }),
+  content_ref: contentRef,
 });
 
 const bodyIn = (language: Lang) =>
@@ -132,6 +134,13 @@ const bodyIn = (language: Lang) =>
     }
     if (post.type === 'page' && post.quotes.length > 0) {
       context.addIssue({ code: 'custom', path: ['quotes'], message: 'a page has no quotations' });
+    }
+    if (post.type === 'page' && post.entities.length > 0) {
+      context.addIssue({ code: 'custom', path: ['entities'], message: 'a page names no entities' });
+    }
+    const twice = post.entities.find((id, index) => post.entities.indexOf(id) !== index);
+    if (twice !== undefined) {
+      context.addIssue({ code: 'custom', path: ['entities'], message: `${twice} is listed twice` });
     }
     if (post.type === 'page' && post.news_date !== undefined) {
       context.addIssue({
@@ -190,6 +199,8 @@ export const publicListQuery = z
   .object({
     lang,
     tag: tag.optional(),
+    /** An entity's posts (R-WEB-20), like a tag's. */
+    entity: entityId.optional(),
     limit: z.coerce.number().int().min(1).max(500).default(20),
     /**
      * `posted` (the default): latest published first. `news`: by the day each story happened, newest first, then as
@@ -220,6 +231,10 @@ export const publicListQuery = z
   );
 
 export const publicTagsQuery = z.object({ lang });
+
+/** One language's entities, or one of them (R-WEB-20). */
+export const publicEntitiesQuery = z.object({ lang });
+export const publicEntityAddress = z.strictObject({ id: entityId });
 
 /**
  * A reader's search (R-WEB-18): words in the search engines' own syntax (quoted phrases, `OR`, a minus), up to 100

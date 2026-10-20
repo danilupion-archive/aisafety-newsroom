@@ -9,7 +9,10 @@ import { type ImageStore, SHA256 } from '../images/store.js';
 import { parse } from '../parse.js';
 import { newsDate, translationOf } from '../posts/data.js';
 import {
+  type Lang,
   postAddress,
+  publicEntitiesQuery,
+  publicEntityAddress,
   publicListQuery,
   publicSearchQuery,
   publicTagsQuery,
@@ -75,6 +78,8 @@ export const publicRoutes =
           // Who wrote it when a person did, and a translation's original writer (R-WEB-3, D19).
           'author',
           'original_author',
+          // Who and what it's about, in its language, without those the bot hid (R-WEB-20, R-CAP-12).
+          'entities',
         ])
         .select(newsDate())
         .select(sql<number>`jsonb_array_length(sources)`.as('source_count'))
@@ -91,9 +96,9 @@ export const publicRoutes =
         );
 
     /**
-     * One language's posts, latest first, without their body: for its home page, a tag's page, the feed and the
-     * sitemap. No pages. How many sources each has (the list says so), not the sources themselves. In news order, by
-     * the day each story happened, newest first, then as posted (R-WEB-13).
+     * One language's posts, latest first, without their body: for its home page, a tag's or an entity's page, the feed
+     * and the sitemap. No pages. How many sources each has (the list says so), not the sources themselves. In news
+     * order, by the day each story happened, newest first, then as posted (R-WEB-13).
      */
     app.get('/public/posts', async (request, reply) => {
       const query = parse(publicListQuery, request.query, reply);
@@ -110,6 +115,12 @@ export const publicRoutes =
       select = select.orderBy('published_at', 'desc').orderBy('slug');
       if (query.tag !== undefined) {
         select = select.where(sql<boolean>`${query.tag} = ANY(tags)`);
+      }
+      if (query.entity !== undefined) {
+        // As the view gives them out: an entity the bot hid names no post (R-CAP-12).
+        select = select.where(
+          sql<boolean>`entities @> ${JSON.stringify([{ id: query.entity }])}::jsonb`,
+        );
       }
       if (query.before !== undefined || query.before_date !== undefined) {
         // Compared at the millisecond, the precision the cursor came out with.
@@ -279,6 +290,35 @@ export const publicRoutes =
         return reply.type('image/webp').send(bytes);
       },
     );
+
+    /**
+     * Every entity a published story in one language names (R-WEB-20), its name and description in that language, with
+     * how many stories name it: for the index and the sitemap. One the bot hid isn't there (R-CAP-12).
+     */
+    const entities = (lang: Lang) =>
+      db
+        .selectFrom('app.public_entities')
+        .select(['id', 'type', 'name', 'description', 'wikidata', 'posts'])
+        .where('lang', '=', lang);
+
+    app.get('/public/entities', async (request, reply) => {
+      const query = parse(publicEntitiesQuery, request.query, reply);
+      if (!query) {
+        return reply;
+      }
+      return entities(query.lang).orderBy('id').execute();
+    });
+
+    /** One of them, for its page; 404 for any other, so the page answers 404 too, like a tag no story carries. */
+    app.get<{ Params: { id: string } }>('/public/entities/:id', async (request, reply) => {
+      const address = parse(publicEntityAddress, request.params, reply);
+      const query = address && parse(publicEntitiesQuery, request.query, reply);
+      if (!address || !query) {
+        return reply;
+      }
+      const entity = await entities(query.lang).where('id', '=', address.id).executeTakeFirst();
+      return entity ?? reply.code(404).send({ error: `No entity ${address.id}` });
+    });
 
     /** Every tag in one language with its count of published posts, for the tag pages. */
     app.get('/public/tags', async (request, reply) => {

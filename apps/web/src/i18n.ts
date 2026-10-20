@@ -1,3 +1,4 @@
+import { isEntityId } from '@aisafety-newsroom/domain/entities';
 import { isLang, type Lang, PATH_WORDS } from '@aisafety-newsroom/domain/languages';
 
 import { isSlug, TAG } from './tags';
@@ -25,6 +26,9 @@ export const paths = {
   topics: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].topics}`,
   about: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].about}`,
   search: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].search}`,
+  /** An entity's page, and the entities' index, under one word (R-WEB-20). */
+  entity: (lang: Lang, id: string) => `${prefix(lang)}/${PATH_WORDS[lang].who}/${id}`,
+  entities: (lang: Lang) => `${prefix(lang)}/${PATH_WORDS[lang].who}`,
   feed: (lang: Lang) => `${prefix(lang)}/feed.xml`,
   /** A page's share card (R-WEB-14): its language's home's, or a post's own. */
   shareCard: (lang: Lang, slug?: string) =>
@@ -80,9 +84,11 @@ export type Route =
       post: { lang: Lang; slug: string } | undefined;
       /** A tag's page's tag, for the proxy to check that it exists. */
       tag: string | undefined;
+      /** An entity's page's id, for the proxy to check that a published story names it (R-WEB-20). */
+      entity: string | undefined;
       /**
        * Whether the address is in the shape of one of the site's pages: the home, the topics, the about page, the feed,
-       * a post, a tag's page. One that isn't is missing for certain (404), without asking the API.
+       * a post, a tag's page, an entity's. One that isn't is missing for certain (404), without asking the API.
        */
       known: boolean;
     };
@@ -112,6 +118,10 @@ export const route = (pathname: string): Route => {
     TAG.test(rest[0])
       ? rest[0]
       : undefined;
+  const entity =
+    slug === PATH_WORDS[path.lang].who && rest.length === 1 && isEntityId(rest[0])
+      ? rest[0]
+      : undefined;
   return {
     kind: 'page',
     lang: path.lang,
@@ -119,11 +129,14 @@ export const route = (pathname: string): Route => {
       path.lang === DEFAULT_LANG ? `/${DEFAULT_LANG}${pathname === '/' ? '' : pathname}` : pathname,
     post,
     tag,
-    // A slug's shape is a page's (a post's, the topics' or the about page's), but never the tag word alone.
+    entity,
+    // A slug's shape is a page's (a post's, the topics', the entities' index or the about page's), but never the tag
+    // word alone.
     known:
       slug === undefined ||
       (slug === 'feed.xml' && rest.length === 0) ||
       tag !== undefined ||
+      entity !== undefined ||
       (post !== undefined && slug !== PATH_WORDS[path.lang].tag),
   };
 };
@@ -132,9 +145,9 @@ export const route = (pathname: string): Route => {
 export const PATHNAME_HEADER = 'x-site-pathname';
 
 /**
- * The same page in the other language, for the header's switch: the home, the topics, the about page, the search and a
- * tag's page in that language's words; a post's translation when it has one. That language's home for anything else, a post with
- * no translation included.
+ * The same page in the other language, for the header's switch: the home, the topics, the about page, the search, the
+ * entities' index, a tag's page and an entity's in that language's words; a post's translation when it has one. That
+ * language's home for anything else, a post with no translation included.
  */
 export const otherLanguageHref = (
   lang: Lang,
@@ -149,7 +162,12 @@ export const otherLanguageHref = (
   const [first = '', second] = path.segments;
   const words = PATH_WORDS[lang];
   if (second !== undefined) {
-    return first === words.tag && TAG.test(second) ? paths.tag(other, second) : paths.home(other);
+    if (first === words.tag && TAG.test(second)) {
+      return paths.tag(other, second);
+    }
+    return first === words.who && isEntityId(second)
+      ? paths.entity(other, second)
+      : paths.home(other);
   }
   if (first === words.topics) {
     return paths.topics(other);
@@ -159,6 +177,9 @@ export const otherLanguageHref = (
   }
   if (first === words.search) {
     return paths.search(other);
+  }
+  if (first === words.who) {
+    return paths.entities(other);
   }
   return translation?.lang === other ? paths.post(other, translation.slug) : paths.home(other);
 };

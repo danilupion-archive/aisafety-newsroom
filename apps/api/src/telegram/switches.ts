@@ -1,6 +1,6 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 
-import { type Lang } from '@aisafety-newsroom/domain/languages';
+import { type Lang, PATH_WORDS } from '@aisafety-newsroom/domain/languages';
 import { sql } from 'kysely';
 
 import { markRemoved } from '../images/data.js';
@@ -256,16 +256,80 @@ const imagesAction = async (db: Database, args: string, remove: boolean): Promis
     : `Restored:\n${list}`;
 };
 
-/** `/takedown …`: a post, or with `image`, its images. */
+/**
+ * An entity as Dani names it (D23): its id, or its page's address copied from the site, `https://<site>/quien/<id>` or
+ * `…/en/who/<id>`, whose path alone counts.
+ */
+const ENTITY_PATH = new RegExp(
+  `^/?(?:(?:en/)?(?:${PATH_WORDS.es.who}|${PATH_WORDS.en.who})/)?([a-z0-9]+(?:-[a-z0-9]+)*)/?$`,
+);
+
+const findEntity = async (
+  db: Database,
+  reference: string,
+): Promise<{ id: string; name: string; taken_down_at: Date | null } | string> => {
+  const id = ENTITY_PATH.exec(postPath(reference))?.[1];
+  if (id === undefined) {
+    return 'Name the entity by its id, or its page’s address on the site';
+  }
+  const entity = await db
+    .selectFrom('app.entities')
+    .select(['id', 'name', 'taken_down_at'])
+    .where('id', '=', id)
+    .executeTakeFirst();
+  return entity ?? `No entity ${id}`;
+};
+
+/**
+ * `/takedown entity <id>` and `/restore entity <id>` (R-CAP-12): an entity's page, and its name on every post, leave
+ * the site or come back. The stories themselves stay. A push never undoes it.
+ */
+const entityAction = async (db: Database, args: string, hide: boolean): Promise<string> => {
+  if (args === '') {
+    return `Usage: /${hide ? 'takedown' : 'restore'} entity <id>`;
+  }
+  const entity = await findEntity(db, args);
+  if (typeof entity === 'string') {
+    return entity;
+  }
+  const named = `“${entity.name}” (${entity.id})`;
+  if ((entity.taken_down_at !== null) === hide) {
+    return hide
+      ? `${named} is already hidden. /restore entity ${entity.id} brings it back.`
+      : `${named} isn’t hidden.`;
+  }
+  await db
+    .updateTable('app.entities')
+    .set({ taken_down_at: hide ? sql<Date>`now()` : null })
+    .where('id', '=', entity.id)
+    .execute();
+  return hide
+    ? [
+        `Hidden: ${named}. Its page answers 404 now; posts stop naming it within a minute.`,
+        `/restore entity ${entity.id} brings it back.`,
+      ].join('\n')
+    : `Restored: ${named}. Its page shows again while a published story names it.`;
+};
+
+/** `/takedown …`: a post, or with `image`, its images, or with `entity`, an entity. */
 export const takedownCommand = async (db: Database, args: string): Promise<string> => {
   if (args === '') {
-    return 'Usage: /takedown <post>, or /takedown image <post> [lead|<source number>]';
+    return 'Usage: /takedown <post>, /takedown image <post> [lead|<source number>], or /takedown entity <id>';
   }
   const [first = '', ...rest] = args.split(/\s+/);
-  return first.toLowerCase() === 'image'
-    ? imagesAction(db, rest.join(' '), true)
-    : takeDown(db, args);
+  switch (first.toLowerCase()) {
+    case 'image':
+      return imagesAction(db, rest.join(' '), true);
+    case 'entity':
+      return entityAction(db, rest.join(' '), true);
+    default:
+      return takeDown(db, args);
+  }
 };
+
+/** `/restore entity …`, the entities' half of `/restore`. */
+export const restoreEntity = (db: Database, args: string): Promise<string> =>
+  entityAction(db, args, false);
 
 /** `/restore image …`, the images' half of `/restore` (the bot's restore of an inbox item stays as it was). */
 export const restoreImages = (db: Database, args: string): Promise<string> =>

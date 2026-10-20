@@ -90,7 +90,8 @@ export const HELP = [
   '/images [on|licensed|off]: show every image, licensed ones only (no previews), or none',
   '/takedown <post>: hide a story, both languages (es/<slug>, en/<slug>, its slug or its address)',
   '/takedown image <post> [lead|<n>]: hide a post’s images, its lead image, or source n’s preview',
-  '/restore <post> · /restore image <post> [lead|<n>]: undo either',
+  '/takedown entity <id>: hide an entity’s page (a person, organisation or law) and its name on posts',
+  '/restore <post> · /restore image <post> [lead|<n>] · /restore entity <id>: undo any of them',
   '',
   '/help: this message',
 ].join('\n');

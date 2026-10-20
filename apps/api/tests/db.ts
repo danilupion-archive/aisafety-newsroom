@@ -27,7 +27,7 @@ export const asSuperuser = async <T extends pg.QueryResultRow>(
 
 export const emptyTables = async (): Promise<void> => {
   await asSuperuser(
-    'TRUNCATE app.inbox_items, app.telegram_updates, app.posts, app.images, app.notifications RESTART IDENTITY CASCADE',
+    'TRUNCATE app.inbox_items, app.telegram_updates, app.posts, app.entities, app.images, app.notifications RESTART IDENTITY CASCADE',
   );
   // One settings row, every image shown: as the migration leaves it.
   await asSuperuser(

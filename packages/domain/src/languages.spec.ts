@@ -13,15 +13,19 @@ describe('languages (D10)', () => {
       'healthz',
       'img',
       'og',
+      'quien',
       'search',
       'sobre',
       'tag',
       'temas',
       'topics',
+      'who',
     ]);
     expect(PATH_WORDS.es.about).toBe('sobre');
     // The search page's words (R-WEB-18): `/buscar`, `/en/search`.
     expect([PATH_WORDS.es.search, PATH_WORDS.en.search]).toEqual(['buscar', 'search']);
+    // The entities' words (R-WEB-20): `/quien/<id>` and its index `/quien`, `/en/who/<id>` and `/en/who`.
+    expect([PATH_WORDS.es.who, PATH_WORDS.en.who]).toEqual(['quien', 'who']);
   });
 
   it('reserves what shares the root with Spanish posts: the language prefixes, the health check, the files', () => {

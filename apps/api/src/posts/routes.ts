@@ -1,6 +1,7 @@
 import type { Database } from '@aisafety-newsroom/db/client';
 import type { FastifyPluginAsync } from 'fastify';
 
+import { unknownEntities } from '../entities/data.js';
 import { missingImages } from '../images/data.js';
 import { parse } from '../parse.js';
 import { listPosts, unpublishPost, upsertPost } from './data.js';
@@ -26,11 +27,20 @@ export const postsRoutes =
         if (reserved !== undefined) {
           return reply.code(400).send({ error: reserved });
         }
-        // The images first, then the post that names them (R-API-5).
+        // The images first, then the post that names them (R-API-5); and the entities (R-API-6).
         const [missing] = await missingImages(db, imagesOf(body));
         if (missing !== undefined) {
           return reply.code(400).send({
             error: `Image ${missing} isn’t uploaded: PUT /api/v1/images/${missing} first`,
+          });
+        }
+        const [unknown, ...more] = await unknownEntities(db, body.entities);
+        if (unknown !== undefined) {
+          return reply.code(400).send({
+            error:
+              more.length === 0
+                ? `Entity ${unknown} isn’t in the registry: PUT /api/v1/entities/${unknown} first`
+                : `Entities ${[unknown, ...more].join(', ')} aren’t in the registry: PUT /api/v1/entities/<id> first`,
           });
         }
         const { created, post } = await upsertPost(db, address, body);

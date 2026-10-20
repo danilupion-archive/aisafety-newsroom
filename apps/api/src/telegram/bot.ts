@@ -33,7 +33,13 @@ import {
   wasProcessed,
 } from './capture.js';
 import { HELP, label, LOG_ONLY, pendingList } from './replies.js';
-import { imagesCommand, restoreImages, restorePost, takedownCommand } from './switches.js';
+import {
+  imagesCommand,
+  restoreEntity,
+  restoreImages,
+  restorePost,
+  takedownCommand,
+} from './switches.js';
 
 /** The parts of a Bot API `Update` this system reads: messages only, as the webhook asks for (R-CAP-2). */
 export interface TelegramUpdate {
@@ -143,7 +149,8 @@ const runCommand = async (
             (item) => `Discarded ${label(item)}`,
           );
     case 'restore':
-      // An item's number brings it back to the inbox; `image …` or a post's name undoes a takedown (R-CAP-11).
+      // An item's number brings it back to the inbox; `image …`, `entity …` or a post's name undoes a takedown
+      // (R-CAP-11, R-CAP-12).
       if (id !== undefined && rest === '') {
         return outcomeReply(
           await restore(db, id),
@@ -153,8 +160,11 @@ const runCommand = async (
       if (/^image(?:\s|$)/i.test(command.args)) {
         return restoreImages(db, command.args.replace(/^image\s*/i, ''));
       }
+      if (/^entity(?:\s|$)/i.test(command.args)) {
+        return restoreEntity(db, command.args.replace(/^entity\s*/i, ''));
+      }
       return command.args === ''
-        ? 'Usage: /restore <id>, /restore <post>, or /restore image <post> [lead|<source number>]'
+        ? 'Usage: /restore <id>, /restore <post>, /restore image <post> [lead|<source number>], or /restore entity <id>'
         : restorePost(db, command.args);
     case 'images':
       return imagesCommand(db, command.args);

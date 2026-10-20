@@ -8,11 +8,17 @@ export type Lang = (typeof LANGS)[number];
 export const isLang = (value: unknown): value is Lang =>
   typeof value === 'string' && (LANGS as readonly string[]).includes(value);
 
-/** Each language's words for the site's own pages: `/etiqueta/<tag>`, `/en/topics`, `/sobre`, `/buscar`. */
+/**
+ * Each language's words for the site's own pages: `/etiqueta/<tag>`, `/en/topics`, `/sobre`, `/buscar`, and the
+ * entities' (D23), `/quien/<id>` with its index `/quien`.
+ */
 export const PATH_WORDS = {
-  es: { tag: 'etiqueta', topics: 'temas', about: 'sobre', search: 'buscar' },
-  en: { tag: 'tag', topics: 'topics', about: 'about', search: 'search' },
-} as const satisfies Record<Lang, { tag: string; topics: string; about: string; search: string }>;
+  es: { tag: 'etiqueta', topics: 'temas', about: 'sobre', search: 'buscar', who: 'quien' },
+  en: { tag: 'tag', topics: 'topics', about: 'about', search: 'search', who: 'who' },
+} as const satisfies Record<
+  Lang,
+  { tag: string; topics: string; about: string; search: string; who: string }
+>;
 
 /**
  * What else shares the root with Spanish posts: the languages' prefixes (`/en` is English's home, `/es` redirects to

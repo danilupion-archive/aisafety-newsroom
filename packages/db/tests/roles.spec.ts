@@ -8,6 +8,9 @@ import { failure, inRolledBackTransaction, RUNTIME_ROLES } from './db.js';
  */
 const EXPECTED_GRANTS: Record<(typeof RUNTIME_ROLES)[number], string[]> = {
   newsroom_app: [
+    'app.entities: INSERT',
+    'app.entities: SELECT',
+    'app.entities: UPDATE',
     'app.images: INSERT',
     'app.images: SELECT',
     'app.images: UPDATE',
@@ -24,8 +27,10 @@ const EXPECTED_GRANTS: Record<(typeof RUNTIME_ROLES)[number], string[]> = {
     'app.telegram_updates: INSERT',
     'app.telegram_updates: SELECT',
   ],
-  // Published posts and the images they show only, through views; never the tables (SPEC §7, §13).
+  // Published posts, the images they show and the entities they name only, through views; never the tables (SPEC §7,
+  // §13).
   newsroom_public: [
+    'app.public_entities: SELECT',
     'app.public_images: SELECT',
     'app.published_posts: SELECT',
     'app.unpublished_posts: SELECT',
@@ -112,6 +117,17 @@ describe('runtime roles', () => {
         await failure(client, 'INSERT INTO app.telegram_updates (update_id) VALUES (1)'),
       ).toBeNull();
       expect(await failure(client, 'DELETE FROM app.telegram_updates')).toEqual({ code: '42501' });
+    });
+  });
+
+  it('newsroom_app never deletes an entity, and newsroom_public reads only what the views let through', async () => {
+    await inRolledBackTransaction(async (client) => {
+      await client.query('SET LOCAL ROLE newsroom_app');
+      expect(await failure(client, 'DELETE FROM app.entities')).toEqual({ code: '42501' });
+      await client.query('RESET ROLE');
+      await client.query('SET LOCAL ROLE newsroom_public');
+      expect(await failure(client, 'SELECT FROM app.entities')).toEqual({ code: '42501' });
+      expect(await failure(client, 'SELECT FROM app.public_entities')).toBeNull();
     });
   });
 

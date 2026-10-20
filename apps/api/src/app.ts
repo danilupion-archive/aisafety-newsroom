@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastif
 import type { ImageStore } from './images/store.js';
 import type { TelegramApi } from './telegram/api.js';
 
+import { entitiesRoutes } from './entities/routes.js';
 import { imagesRoutes } from './images/routes.js';
 import { inboxRoutes } from './inbox/routes.js';
 import { notifyRoutes } from './notify/routes.js';
@@ -59,7 +60,7 @@ const constraintOf = (error: unknown): string | undefined =>
     ? error.constraint
     : undefined;
 
-/** The database's rules a request can break, as conflicts (409) that say which rule: R-DB-1, R-WEB-10. */
+/** The database's rules a request can break, as conflicts (409) that say which rule: R-DB-1, R-WEB-10, R-API-6. */
 const CONFLICTS: Readonly<Record<string, string>> = {
   inbox_items_transition: 'That item can’t make that move',
   posts_translation_of_fkey: 'The post it translates hasn’t been pushed: push that one first',
@@ -68,6 +69,9 @@ const CONFLICTS: Readonly<Record<string, string>> = {
   posts_translated_is_original: 'This post has translations, so it can’t be a translation itself',
   posts_page_has_no_news_date: 'A page has no news date',
   posts_page_has_no_image: 'A page has no image',
+  // The API checks first and names what's wrong; the database's own check only meets a push and a deletion at once.
+  posts_entities_known:
+    'A post names only entities in the registry, and an entity a post names can’t be deleted: try again',
 };
 
 export const buildApp = ({
@@ -105,6 +109,7 @@ export const buildApp = ({
   if (db) {
     void app.register(inboxRoutes(db));
     void app.register(postsRoutes(db));
+    void app.register(entitiesRoutes(db));
     void app.register(imagesRoutes(db, imageStore));
     // Dani's private chat with the bot has Dani's user id: the first allowed user's (R-CAP-1, D20).
     const chatId = bot?.allowedUserIds[0];

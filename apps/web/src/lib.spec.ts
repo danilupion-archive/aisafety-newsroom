@@ -10,6 +10,7 @@ import { splitWordmark } from './brand';
 import { bylineOf } from './byline';
 import { LIVE_CHAINS, Mark, MarkSvg } from './components/Mark';
 import { QuoteCard } from './components/QuoteCard';
+import { groupEntities } from './entities';
 import { atomFeed, xml } from './feed';
 import { calendarDate, calendarParts, dateParts, longDate, madridDay, newsNote } from './format';
 import { missingPage, otherLanguageHref, PATHNAME_HEADER, paths, readPath, route } from './i18n';
@@ -24,6 +25,7 @@ import { platformOf } from './quotes';
 import { contentSecurityPolicy, gonePage } from './security';
 import { PLAUSIBLE_INIT, readSite } from './site';
 import { STRINGS } from './strings';
+import { entityStructuredData, jsonLd, postStructuredData } from './structured-data';
 import { namedTags, tagLabel } from './tags';
 import { videoOf, youtubeEmbed } from './video';
 
@@ -96,6 +98,12 @@ describe('languages (D10)', () => {
     expect([paths.topics('es'), paths.topics('en')]).toEqual(['/temas', '/en/topics']);
     expect([paths.about('es'), paths.about('en')]).toEqual(['/sobre', '/en/about']);
     expect([paths.feed('es'), paths.feed('en')]).toEqual(['/feed.xml', '/en/feed.xml']);
+    // The entities (R-WEB-20): a page each, and their index, under one word.
+    expect([paths.entity('es', 'example-lab'), paths.entity('en', 'example-lab')]).toEqual([
+      '/quien/example-lab',
+      '/en/who/example-lab',
+    ]);
+    expect([paths.entities('es'), paths.entities('en')]).toEqual(['/quien', '/en/who']);
   });
 
   it('reads a public address’s language and the rest of its path', () => {
@@ -132,6 +140,7 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       internal: '/es',
       post: undefined,
       tag: undefined,
+      entity: undefined,
       known: true,
     });
     expect(route('/temas')).toMatchObject({ kind: 'page', internal: '/es/temas', known: true });
@@ -146,6 +155,22 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       internal: '/es/etiqueta/evals',
       post: undefined,
       tag: 'evals',
+      entity: undefined,
+      known: true,
+    });
+    expect(route('/quien/example-lab')).toEqual({
+      kind: 'page',
+      lang: 'es',
+      internal: '/es/quien/example-lab',
+      post: undefined,
+      tag: undefined,
+      entity: 'example-lab',
+      known: true,
+    });
+    // The index is a page of its own word, in the shape of a post's address.
+    expect(route('/quien')).toMatchObject({
+      internal: '/es/quien',
+      entity: undefined,
       known: true,
     });
   });
@@ -153,6 +178,11 @@ describe('the proxy’s routes (D10, AC-11)', () => {
   it('serves English as it is', () => {
     expect(route('/en')).toMatchObject({ kind: 'page', lang: 'en', internal: '/en', known: true });
     expect(route('/en/topics')).toMatchObject({ kind: 'page', internal: '/en/topics' });
+    expect(route('/en/who/example-lab')).toMatchObject({
+      internal: '/en/who/example-lab',
+      entity: 'example-lab',
+      known: true,
+    });
   });
 
   it('knows a post’s address in either language, for the 410 of an unpublished one', () => {
@@ -162,6 +192,7 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       internal: '/es/informe-de-ejemplo',
       post: { lang: 'es', slug: 'informe-de-ejemplo' },
       tag: undefined,
+      entity: undefined,
       known: true,
     });
     expect(route('/en/example-report')).toMatchObject({
@@ -182,6 +213,11 @@ describe('the proxy’s routes (D10, AC-11)', () => {
       '/etiqueta',
       '/etiqueta/Evals',
       '/en/tag/a/b',
+      '/quien/Example-Lab',
+      '/quien/a/b',
+      `/quien/${'a'.repeat(61)}`,
+      '/en/quien/example-lab',
+      '/who/example-lab',
     ]) {
       expect(route(address), address).toMatchObject({ kind: 'page', known: false });
     }
@@ -234,6 +270,131 @@ describe('the proxy’s routes (D10, AC-11)', () => {
 });
 
 const SHA = 'f'.repeat(64);
+
+describe('entities (D23, R-WEB-20)', () => {
+  const entity = (id: string, type: 'person' | 'organisation' | 'law', name: string) => ({
+    id,
+    type,
+    name,
+    description: `Descripción de ${name}.`,
+    wikidata: null,
+    posts: 1,
+  });
+
+  it('groups the index into people, organisations and laws, each by name in the page’s language', () => {
+    const groups = groupEntities('es', [
+      entity('zeta-lab', 'organisation', 'Zeta Lab'),
+      entity('ley-de-ejemplo', 'law', 'Ley de Ejemplo'),
+      entity('alvaro-ejemplo', 'person', 'Álvaro Ejemplo'),
+      entity('ana-ejemplo', 'person', 'Ana Ejemplo'),
+      entity('beta-lab', 'organisation', 'Beta Lab'),
+    ]);
+    expect(groups.map((group) => [group.type, group.entities.map((each) => each.id)])).toEqual([
+      ['person', ['alvaro-ejemplo', 'ana-ejemplo']],
+      ['organisation', ['beta-lab', 'zeta-lab']],
+      ['law', ['ley-de-ejemplo']],
+    ]);
+    // A group with no one in it isn't shown.
+    expect(groupEntities('en', [entity('beta-lab', 'organisation', 'Beta Lab')])).toHaveLength(1);
+  });
+
+  it('names each type and group in each language', () => {
+    expect(STRINGS.es.entityTypes).toEqual({
+      person: 'Persona',
+      organisation: 'Organización',
+      law: 'Ley',
+    });
+    expect(STRINGS.en.entityGroups).toEqual({
+      person: 'People',
+      organisation: 'Organisations',
+      law: 'Laws',
+    });
+    expect([STRINGS.es.who, STRINGS.en.who]).toEqual(['Quién es quién', 'Who’s who']);
+  });
+});
+
+describe('structured data (R-WEB-21)', () => {
+  const lab = {
+    id: 'example-lab',
+    type: 'organisation' as const,
+    name: 'Laboratorio de Ejemplo',
+    wikidata: 'Q999999999',
+  };
+  const person = {
+    id: 'ana-ejemplo',
+    type: 'person' as const,
+    name: 'Ana Ejemplo',
+    wikidata: null,
+  };
+  const law = { id: 'example-act', type: 'law' as const, name: 'Ley de Ejemplo', wikidata: 'Q1' };
+
+  it('says a breve is a news article about its entities, each with its Wikidata item', () => {
+    expect(
+      postStructuredData(
+        { ...POST, entities: [lab, person, law] },
+        'https://example.com/informe-de-ejemplo',
+      ),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: POST.title,
+      description: POST.summary,
+      inLanguage: 'es',
+      url: 'https://example.com/informe-de-ejemplo',
+      datePublished: POST.published_at,
+      dateModified: POST.updated_at,
+      about: [
+        {
+          '@type': 'Organization',
+          name: 'Laboratorio de Ejemplo',
+          sameAs: 'https://www.wikidata.org/wiki/Q999999999',
+        },
+        { '@type': 'Person', name: 'Ana Ejemplo' },
+        {
+          '@type': 'Legislation',
+          name: 'Ley de Ejemplo',
+          sameAs: 'https://www.wikidata.org/wiki/Q1',
+        },
+      ],
+    });
+    // An article is an Article; one about no one says nothing of it, and an API older than entities sends none.
+    const article = postStructuredData(
+      { ...POST, type: 'article', summary: '' },
+      'https://x.test/a',
+    );
+    expect(article).toMatchObject({ '@type': 'Article' });
+    expect(article).not.toHaveProperty('about');
+    expect(article).not.toHaveProperty('description');
+  });
+
+  it('describes an entity’s page by the entity itself', () => {
+    expect(
+      entityStructuredData(
+        'en',
+        { ...lab, name: 'Example Lab', description: 'A fictional example lab.', posts: 2 },
+        'https://example.com/en/who/example-lab',
+      ),
+    ).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      name: 'Example Lab',
+      inLanguage: 'en',
+      url: 'https://example.com/en/who/example-lab',
+      mainEntity: {
+        '@type': 'Organization',
+        name: 'Example Lab',
+        description: 'A fictional example lab.',
+        sameAs: 'https://www.wikidata.org/wiki/Q999999999',
+      },
+    });
+  });
+
+  it('keeps the data inside its script: nothing in it can close the tag', () => {
+    const text = jsonLd({ name: '</script><script>alert(1)</script>' });
+    expect(text).not.toContain('<');
+    expect(JSON.parse(text)).toEqual({ name: '</script><script>alert(1)</script>' });
+  });
+});
 
 describe('bylineOf (R-WEB-3, D19)', () => {
   it('reads a post as AI-written, a person’s, or an AI translation of a person’s', () => {
@@ -672,6 +833,9 @@ describe('the link to the other language', () => {
     expect(otherLanguageHref('es', '/sobre')).toBe('/en/about');
     expect(otherLanguageHref('es', '/etiqueta/evals')).toBe('/en/tag/evals');
     expect(otherLanguageHref('en', '/en/tag/evals')).toBe('/etiqueta/evals');
+    expect(otherLanguageHref('es', '/quien/example-lab')).toBe('/en/who/example-lab');
+    expect(otherLanguageHref('en', '/en/who/example-lab')).toBe('/quien/example-lab');
+    expect(otherLanguageHref('en', '/en/who')).toBe('/quien');
   });
 
   it('goes to a post’s translation when it has one, and to the other home when it doesn’t', () => {
@@ -683,6 +847,7 @@ describe('the link to the other language', () => {
   it('goes to the other home from anything else', () => {
     expect(otherLanguageHref('es', undefined)).toBe('/en');
     expect(otherLanguageHref('es', '/etiqueta/Not a tag')).toBe('/en');
+    expect(otherLanguageHref('es', '/quien/Not-An-Id')).toBe('/en');
     expect(otherLanguageHref('es', '/a/b/c')).toBe('/en');
     // Another language's path is no page of this one.
     expect(otherLanguageHref('es', '/en/topics')).toBe('/en');

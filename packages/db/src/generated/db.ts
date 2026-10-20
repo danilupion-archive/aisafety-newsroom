@@ -5,6 +5,8 @@
 
 import type { ColumnType } from 'kysely';
 
+export type AppEntityType = 'law' | 'organisation' | 'person';
+
 export type AppFetchStatus = 'failed' | 'ok' | 'pending' | 'skipped';
 
 export type AppInboxIntent = 'log' | 'post';
@@ -35,6 +37,22 @@ export type JsonPrimitive = boolean | number | string | null;
 export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface AppEntities {
+  content_ref: Json;
+  created_at: Generated<Timestamp>;
+  deleted_at: Timestamp | null;
+  description_en: string;
+  description_es: string;
+  id: string;
+  name: string;
+  name_en: string | null;
+  name_es: string | null;
+  taken_down_at: Timestamp | null;
+  type: AppEntityType;
+  updated_at: Generated<Timestamp>;
+  wikidata: string | null;
+}
 
 export interface AppImages {
   created_at: Generated<Timestamp>;
@@ -91,6 +109,7 @@ export interface AppPosts {
   body_md: string;
   content_ref: Json;
   created_at: Generated<Timestamp>;
+  entities: Generated<string[]>;
   image: Json | null;
   lang: AppPostLang;
   news_date: Timestamp | null;
@@ -109,6 +128,16 @@ export interface AppPosts {
   updated_at: Generated<Timestamp>;
 }
 
+export interface AppPublicEntities {
+  description: string | null;
+  id: string | null;
+  lang: AppPostLang | null;
+  name: string | null;
+  posts: number | null;
+  type: AppEntityType | null;
+  wikidata: string | null;
+}
+
 export interface AppPublicImages {
   height: number | null;
   kind: string | null;
@@ -119,6 +148,7 @@ export interface AppPublicImages {
 export interface AppPublishedPosts {
   author: string | null;
   body_md: string | null;
+  entities: Json | null;
   image: Json | null;
   lang: AppPostLang | null;
   news_date: Timestamp | null;
@@ -154,10 +184,12 @@ export interface AppUnpublishedPosts {
 }
 
 export interface DB {
+  'app.entities': AppEntities;
   'app.images': AppImages;
   'app.inbox_items': AppInboxItems;
   'app.notifications': AppNotifications;
   'app.posts': AppPosts;
+  'app.public_entities': AppPublicEntities;
   'app.public_images': AppPublicImages;
   'app.published_posts': AppPublishedPosts;
   'app.site_settings': AppSiteSettings;

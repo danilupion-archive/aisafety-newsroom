@@ -45,6 +45,7 @@ export const ContinuousTimeline = ({
   path,
   order,
   tag,
+  entity,
   initial,
   more: initialMore,
   featureFirst,
@@ -53,6 +54,8 @@ export const ContinuousTimeline = ({
   path: string;
   order: Order;
   tag?: string;
+  /** An entity's timeline (R-WEB-20), as a tag's. */
+  entity?: string;
   initial: readonly PostSummary[];
   more: boolean;
   featureFirst: boolean;
@@ -84,6 +87,7 @@ export const ContinuousTimeline = ({
           lang,
           order,
           tag,
+          entity,
           after: cursorAfter(last, order),
           limit: count + 1,
         });
@@ -110,7 +114,7 @@ export const ContinuousTimeline = ({
         setLoading(false);
       }
     },
-    [lang, order, tag, path, t],
+    [lang, order, tag, entity, path, t],
   );
 
   // Back to an address that says the reader had more posts than the page brought: fetch the rest, then put them back

@@ -106,6 +106,8 @@ const navList = css({
   fontWeight: '500',
 });
 const navLink = css({ display: 'inline-block', paddingY: '3' });
+// Who's who (R-WEB-20) would push a phone's language switch onto a row of its own: there, the footer links it.
+const wideOnly = css({ display: { base: 'none', sm: 'list-item' } });
 const languages = css({
   display: 'flex',
   padding: '3px',
@@ -183,8 +185,9 @@ const translationOf = async (
 };
 
 /**
- * Every page in one language (R-WEB-4): the mark, the name and its tagline; the topics, the about page (R-WEB-3) and
- * the feed; the switch to the same page in the other language, labelled in that language; who writes it.
+ * Every page in one language (R-WEB-4): the mark, the name and its tagline; the topics, who's who (R-WEB-20), the about
+ * page (R-WEB-3) and the feed; the switch to the same page in the other language, labelled in that language; who writes
+ * it.
  */
 const RootLayout = async ({ children, params }: Props) => {
   await connection();
@@ -234,6 +237,12 @@ const RootLayout = async ({ children, params }: Props) => {
                   <li>
                     <Link href={paths.topics(lang)} className={navLink}>
                       {t.topics}
+                      <Pending />
+                    </Link>
+                  </li>
+                  <li className={wideOnly}>
+                    <Link href={paths.entities(lang)} className={navLink}>
+                      {t.who}
                       <Pending />
                     </Link>
                   </li>
@@ -290,6 +299,9 @@ const RootLayout = async ({ children, params }: Props) => {
             <ul className={footerLinks}>
               <li>
                 <Link href={paths.about(lang)}>{t.aboutSite(name[lang])}</Link>
+              </li>
+              <li>
+                <Link href={paths.entities(lang)}>{t.who}</Link>
               </li>
               <li>
                 {/* oxlint-disable-next-line next/no-html-link-for-pages */}

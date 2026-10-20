@@ -88,6 +88,24 @@ export const authorPill = css({
   fontSize: '0.875rem',
   fontWeight: '600',
 });
+/**
+ * An entity a post names (R-WEB-20): outlined in the accent, in its own case, so a name reads apart from a topic's
+ * filled, uppercase pill.
+ */
+export const entityPill = css({
+  display: 'inline-flex',
+  alignItems: 'center',
+  minHeight: '32px',
+  paddingX: '3',
+  borderRadius: 'full',
+  borderWidth: '1px',
+  borderStyle: 'solid',
+  borderColor: 'accent',
+  color: 'accent',
+  fontSize: '0.9375rem',
+  fontWeight: '600',
+  _hover: { textDecoration: 'none', bg: 'accentSoft' },
+});
 /** A rounded button: aquamarine with navy text, or outlined. At least 44 px tall, for a finger. */
 export const button = css({
   display: 'inline-flex',

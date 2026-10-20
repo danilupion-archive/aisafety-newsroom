@@ -15,7 +15,8 @@ import { site } from './site';
  * asked again 10 s later.
  *
  * A missing address answers 404 with the not-found page of its language, its text in the page itself: an address that
- * is no page's shape, a post's that the API doesn't have, a tag no published post carries. A page's own notFound()
+ * is no page's shape, a post's that the API doesn't have, a tag no published post carries, an entity none names (or
+ * the bot hid, R-CAP-12). A page's own notFound()
  * would answer 404 too, but Next draws that page in the browser only. If the API can't say, the page decides.
  */
 
@@ -107,6 +108,26 @@ const tagExists = async (apiUrl: string, lang: Lang, tag: string): Promise<boole
   }
 };
 
+/**
+ * Whether a published post in the language names the entity, and the bot hasn't hid it (R-WEB-20, R-CAP-12), or
+ * undefined if the API can't say. Asked on every entity's page, never remembered, so a hidden one answers 404 at once.
+ */
+const entityExists = async (
+  apiUrl: string,
+  lang: Lang,
+  id: string,
+): Promise<boolean | undefined> => {
+  try {
+    const response = await fetch(`${apiUrl}/public/entities/${id}?lang=${lang}`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    return response.ok ? true : response.status === 404 ? false : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 /** The proxy's own page, which loads nothing: the site's policy, without analytics. */
 const html = (body: string, status: number): NextResponse =>
   new NextResponse(body, {
@@ -153,23 +174,26 @@ export const proxy = async (request: NextRequest): Promise<NextResponse> => {
   const headers = new Headers(request.headers);
   headers.set(PATHNAME_HEADER, pathname);
   const init = { request: { headers } };
-  // A post's address, unless it's one of the language's own pages: the topics, the search (R-WEB-18), and the about page
-  // (a page of its own, whatever the API has).
+  // A post's address, unless it's one of the language's own pages: the topics, the search (R-WEB-18), the entities' index
+  // (R-WEB-20), and the about page (a page of its own, whatever the API has).
   const words = PATH_WORDS[target.lang];
   const post =
     target.post &&
     target.post.slug !== words.topics &&
     target.post.slug !== words.about &&
-    target.post.slug !== words.search
+    target.post.slug !== words.search &&
+    target.post.slug !== words.who
       ? target.post
       : undefined;
   const exists = !target.known
     ? false
     : post
       ? await postExists(config.apiUrl, post)
-      : target.tag === undefined
-        ? true
-        : await tagExists(config.apiUrl, target.lang, target.tag);
+      : target.tag !== undefined
+        ? await tagExists(config.apiUrl, target.lang, target.tag)
+        : target.entity !== undefined
+          ? await entityExists(config.apiUrl, target.lang, target.entity)
+          : true;
   if (exists === 'gone') {
     return html(gonePage(target.lang, config.name[target.lang]), 410);
   }

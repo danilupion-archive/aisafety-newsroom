@@ -10,6 +10,8 @@ import type { Lang } from '@/i18n';
 
 import { getPost, type Post } from '@/api';
 import { bylineOf } from '@/byline';
+import { Entities } from '@/components/Entities';
+import { JsonLd } from '@/components/JsonLd';
 import { LeadImage } from '@/components/LeadImage';
 import { QuoteCard } from '@/components/QuoteCard';
 import { Sources } from '@/components/Sources';
@@ -21,6 +23,7 @@ import { paths } from '@/i18n';
 import { alternates, pageLang } from '@/params';
 import { site } from '@/site';
 import { STRINGS } from '@/strings';
+import { postStructuredData } from '@/structured-data';
 import { column, label, pageTitle, prose, tagPill } from '@/styles';
 import { isSlug, tagLabel } from '@/tags';
 import { postVideo } from '@/video';
@@ -116,8 +119,9 @@ export const generateMetadata = async (props: Props): Promise<Metadata> => {
 };
 
 /**
- * A breve or an article: its text, rendered safely (R-WEB-5), its sources with their access dates, its tags (R-WEB-1),
- * and its version in the other language (R-WEB-10), labelled in that language.
+ * A breve or an article: its text, rendered safely (R-WEB-5), its sources with their access dates, who and what it's
+ * about (R-WEB-20), its tags (R-WEB-1), and its version in the other language (R-WEB-10), labelled in that language;
+ * and for search engines, what it is and whom it's about (R-WEB-21).
  */
 const PostPage = async (props: Props) => {
   await connection();
@@ -195,10 +199,14 @@ const PostPage = async (props: Props) => {
               : undefined
         }
       />
+      <Entities lang={lang} entities={post.entities ?? []} />
       <footer className={endRow}>
         <Translations translations={post.translations} />
         <Tags lang={lang} tags={post.tags} />
       </footer>
+      {post.type === 'page' ? null : (
+        <JsonLd data={postStructuredData(post, `${site().url}${paths.post(lang, post.slug)}`)} />
+      )}
     </article>
   );
 };

@@ -1,3 +1,5 @@
+import type { EntityType } from '@aisafety-newsroom/domain/entities';
+
 import type { Lang } from './i18n';
 
 /**
@@ -40,6 +42,19 @@ export interface Strings {
   noOlder: string;
   noTopics: string;
   topic: (label: string) => string;
+  /** The entities' index (R-WEB-20): its name, also in the header, and its first line. */
+  who: string;
+  whoIntro: string;
+  noEntities: string;
+  /** An entity's type on its page, and the index's group of each type. */
+  entityTypes: Record<EntityType, string>;
+  entityGroups: Record<EntityType, string>;
+  /** How many posts name an entity, on its page and in the index. */
+  postCount: (count: number) => string;
+  /** The link from an entity's page to its Wikidata item. */
+  wikidata: string;
+  /** Above a post's entities, each a link to its page. */
+  inThisStory: string;
   sources: string;
   /** How many sources a listed post has. */
   sourceCount: (count: number) => string;
@@ -144,6 +159,14 @@ export const STRINGS: Record<Lang, Strings> = {
     noOlder: 'No hay publicaciones anteriores.',
     noTopics: 'Todavía no hay temas.',
     topic: (label) => `Tema: ${label}`,
+    who: 'Quién es quién',
+    whoIntro: 'Las personas, organizaciones y leyes de las que hablan las noticias.',
+    noEntities: 'Todavía no hay nadie aquí.',
+    entityTypes: { person: 'Persona', organisation: 'Organización', law: 'Ley' },
+    entityGroups: { person: 'Personas', organisation: 'Organizaciones', law: 'Leyes' },
+    postCount: (count) => (count === 1 ? '1 publicación' : `${count} publicaciones`),
+    wikidata: 'Ficha en Wikidata',
+    inThisStory: 'En esta historia',
     sources: 'Fuentes',
     sourceCount: (count) => (count === 1 ? '1 fuente' : `${count} fuentes`),
     read: 'Leer',
@@ -225,6 +248,14 @@ export const STRINGS: Record<Lang, Strings> = {
     noOlder: 'No older posts.',
     noTopics: 'No topics yet.',
     topic: (label) => `Topic: ${label}`,
+    who: 'Who’s who',
+    whoIntro: 'The people, organisations and laws the news is about.',
+    noEntities: 'No one here yet.',
+    entityTypes: { person: 'Person', organisation: 'Organisation', law: 'Law' },
+    entityGroups: { person: 'People', organisation: 'Organisations', law: 'Laws' },
+    postCount: (count) => (count === 1 ? '1 post' : `${count} posts`),
+    wikidata: 'Wikidata entry',
+    inThisStory: 'In this story',
     sources: 'Sources',
     sourceCount: (count) => (count === 1 ? '1 source' : `${count} sources`),
     read: 'Read',

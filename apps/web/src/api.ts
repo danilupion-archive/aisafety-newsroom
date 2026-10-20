@@ -1,3 +1,5 @@
+import type { EntityType } from '@aisafety-newsroom/domain/entities';
+
 import { cache } from 'react';
 
 import type { Lang } from './i18n';
@@ -26,6 +28,21 @@ export interface PostImage {
   height: number;
 }
 
+/** An entity a post names (D23, R-WEB-20), its name in the post's language. */
+export interface EntityRef {
+  id: string;
+  type: EntityType;
+  name: string;
+  wikidata: string | null;
+}
+
+/** An entity a published story names, as its page and the index show it, in their language. */
+export interface Entity extends EntityRef {
+  description: string;
+  /** How many of the language's published posts name it. */
+  posts: number;
+}
+
 export interface PostSummary {
   lang: Lang;
   slug: string;
@@ -47,6 +64,8 @@ export interface PostSummary {
   author?: string | null;
   /** A translation's original writer, when a person wrote the original (D19). */
   original_author?: string | null;
+  /** Who and what it's about (R-WEB-20); absent from an API older than entities. */
+  entities?: EntityRef[];
 }
 
 /** A piece of a search result's excerpt (R-WEB-18): plain text, matched or not; the site escapes and marks it. */
@@ -116,11 +135,14 @@ const json = async <T>(path: string): Promise<T> => {
 
 export const latestPosts = (
   lang: Lang,
-  options: { tag?: string; after?: Cursor; limit?: number; order?: Order } = {},
+  options: { tag?: string; entity?: string; after?: Cursor; limit?: number; order?: Order } = {},
 ) => {
   const query = new URLSearchParams({ lang });
   if (options.tag !== undefined) {
     query.set('tag', options.tag);
+  }
+  if (options.entity !== undefined) {
+    query.set('entity', options.entity);
   }
   if (options.order === 'news') {
     query.set('order', 'news');
@@ -179,6 +201,24 @@ export const getPost = cache(
 );
 
 export const tagCounts = (lang: Lang) => json<TagCount[]>(`/public/tags?lang=${lang}`);
+
+/** Every entity a published story in the language names (R-WEB-20): the index and the sitemap. */
+export const entityList = (lang: Lang) => json<Entity[]>(`/public/entities?lang=${lang}`);
+
+/**
+ * One entity in a language, or undefined when no published story there names it (or the bot hid it): its page answers
+ * 404 then. Asked once per request: the page's metadata and the page share the answer.
+ */
+export const getEntity = cache(async (lang: Lang, id: string): Promise<Entity | undefined> => {
+  const answer = await read(`/public/entities/${encodeURIComponent(id)}?lang=${lang}`);
+  if (answer.status === 404 || answer.status === 400) {
+    return undefined;
+  }
+  if (answer.status < 200 || answer.status >= 300) {
+    throw new Error(`The API answered ${answer.status} for an entity`);
+  }
+  return JSON.parse(answer.body) as Entity;
+});
 
 /**
  * A reader's search in one language (R-WEB-18): a page of results from `from` on, and where the next starts (null at

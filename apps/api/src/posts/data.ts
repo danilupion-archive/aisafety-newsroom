@@ -20,6 +20,8 @@ export interface Post {
   body_md: string;
   sources: unknown;
   tags: string[];
+  /** Who and what it's about (D23): ids of the registry, in order. */
+  entities: string[];
   published_at: Date;
   /** The day its story happened (R-WEB-13), `YYYY-MM-DD`; null for a page. */
   news_date: string | null;
@@ -91,6 +93,7 @@ export const upsertPost = async (
     body_md: body.body_md,
     sources: JSON.stringify(body.sources),
     tags: body.tags,
+    entities: body.entities,
     published_at: publishedAt(body.published_at),
     news_date: body.type === 'page' ? null : (body.news_date ?? postedDay(body.published_at)),
     translation_of_lang: body.translation_of?.lang ?? null,
@@ -168,6 +171,7 @@ export const listPosts = async (db: Database) => {
       'translation_of_lang',
       'translation_of_slug',
       'content_ref',
+      'entities',
       'taken_down_at',
       newsDate(),
     ])

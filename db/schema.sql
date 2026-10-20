@@ -38,6 +38,19 @@ CREATE SCHEMA private;
 ALTER SCHEMA private OWNER TO newsroom_owner;
 
 --
+-- Name: entity_type; Type: TYPE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TYPE app.entity_type AS ENUM (
+    'person',
+    'organisation',
+    'law'
+);
+
+
+ALTER TYPE app.entity_type OWNER TO newsroom_owner;
+
+--
 -- Name: fetch_status; Type: TYPE; Schema: app; Owner: newsroom_owner
 --
 
@@ -104,6 +117,33 @@ CREATE TYPE app.post_type AS ENUM (
 ALTER TYPE app.post_type OWNER TO newsroom_owner;
 
 --
+-- Name: entities_named(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.entities_named() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  naming text;
+BEGIN
+  IF NEW.deleted_at IS NULL OR OLD.deleted_at IS NOT NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT string_agg(post.lang || '/' || post.slug, ', ' ORDER BY post.lang, post.slug) INTO naming
+  FROM app.posts post
+  WHERE post.entities @> ARRAY[NEW.id];
+  IF naming IS NOT NULL THEN
+    RAISE EXCEPTION 'entity % is named by %', NEW.id, naming
+      USING ERRCODE = 'foreign_key_violation', CONSTRAINT = 'posts_entities_known';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+ALTER FUNCTION private.entities_named() OWNER TO newsroom_owner;
+
+--
 -- Name: inbox_items_transition(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
 --
 
@@ -142,6 +182,34 @@ $$;
 
 
 ALTER FUNCTION private.page_published_on(stated text) OWNER TO newsroom_owner;
+
+--
+-- Name: posts_entities_known(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
+--
+
+CREATE FUNCTION private.posts_entities_known() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  unknown text;
+BEGIN
+  IF cardinality(NEW.entities) = 0 THEN
+    RETURN NEW;
+  END IF;
+  PERFORM FROM app.entities WHERE id = ANY (NEW.entities) AND deleted_at IS NULL FOR SHARE;
+  SELECT string_agg(listed.id, ', ' ORDER BY listed.position) INTO unknown
+  FROM unnest(NEW.entities) WITH ORDINALITY AS listed (id, position)
+  WHERE NOT EXISTS (SELECT FROM app.entities entity WHERE entity.id = listed.id AND entity.deleted_at IS NULL);
+  IF unknown IS NOT NULL THEN
+    RAISE EXCEPTION 'post %/% names entities the registry doesn''t have: %', NEW.lang, NEW.slug, unknown
+      USING ERRCODE = 'foreign_key_violation', CONSTRAINT = 'posts_entities_known';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+
+ALTER FUNCTION private.posts_entities_known() OWNER TO newsroom_owner;
 
 --
 -- Name: posts_translation(); Type: FUNCTION; Schema: private; Owner: newsroom_owner
@@ -194,6 +262,37 @@ ALTER FUNCTION private.touch_updated_at() OWNER TO newsroom_owner;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: entities; Type: TABLE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TABLE app.entities (
+    id text NOT NULL,
+    type app.entity_type NOT NULL,
+    name text NOT NULL,
+    name_es text,
+    name_en text,
+    description_es text NOT NULL,
+    description_en text NOT NULL,
+    wikidata text,
+    content_ref jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    taken_down_at timestamp with time zone,
+    CONSTRAINT entities_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
+    CONSTRAINT entities_description_en_length CHECK (((char_length(description_en) >= 1) AND (char_length(description_en) <= 160))),
+    CONSTRAINT entities_description_es_length CHECK (((char_length(description_es) >= 1) AND (char_length(description_es) <= 160))),
+    CONSTRAINT entities_id_format CHECK (((id ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text) AND (char_length(id) <= 60))),
+    CONSTRAINT entities_name_en_length CHECK (((char_length(name_en) >= 1) AND (char_length(name_en) <= 200))),
+    CONSTRAINT entities_name_es_length CHECK (((char_length(name_es) >= 1) AND (char_length(name_es) <= 200))),
+    CONSTRAINT entities_name_length CHECK (((char_length(name) >= 1) AND (char_length(name) <= 200))),
+    CONSTRAINT entities_wikidata_format CHECK ((wikidata ~ '^Q[1-9][0-9]{0,10}$'::text))
+);
+
+
+ALTER TABLE app.entities OWNER TO newsroom_owner;
 
 --
 -- Name: images; Type: TABLE; Schema: app; Owner: newsroom_owner
@@ -321,10 +420,13 @@ CREATE TABLE app.posts (
     taken_down_at timestamp with time zone,
     author text,
     quotes jsonb DEFAULT '[]'::jsonb NOT NULL,
+    entities text[] DEFAULT '{}'::text[] NOT NULL,
     CONSTRAINT posts_author_format CHECK (((author IS NULL) OR (((char_length(author) >= 1) AND (char_length(author) <= 100)) AND (author = btrim(author))))),
     CONSTRAINT posts_body_length CHECK (((char_length(body_md) >= 1) AND (char_length(body_md) <= 200000))),
     CONSTRAINT posts_content_ref_object CHECK ((jsonb_typeof(content_ref) = 'object'::text)),
+    CONSTRAINT posts_entities_list CHECK (((cardinality(entities) <= 10) AND (array_position(entities, NULL::text) IS NULL))),
     CONSTRAINT posts_image_object CHECK (((image IS NULL) OR (jsonb_typeof(image) = 'object'::text))),
+    CONSTRAINT posts_page_has_no_entities CHECK (((type <> 'page'::app.post_type) OR (entities = '{}'::text[]))),
     CONSTRAINT posts_page_has_no_image CHECK (((type <> 'page'::app.post_type) OR (image IS NULL))),
     CONSTRAINT posts_page_has_no_news_date CHECK (((type <> 'page'::app.post_type) OR (news_date IS NULL))),
     CONSTRAINT posts_page_has_no_quotes CHECK (((type <> 'page'::app.post_type) OR (quotes = '[]'::jsonb))),
@@ -339,6 +441,23 @@ CREATE TABLE app.posts (
 
 
 ALTER TABLE app.posts OWNER TO newsroom_owner;
+
+--
+-- Name: public_entities; Type: VIEW; Schema: app; Owner: newsroom_owner
+--
+
+CREATE VIEW app.public_entities AS
+SELECT
+    NULL::app.post_lang AS lang,
+    NULL::text AS id,
+    NULL::app.entity_type AS type,
+    NULL::text AS name,
+    NULL::text AS description,
+    NULL::text AS wikidata,
+    NULL::integer AS posts;
+
+
+ALTER VIEW app.public_entities OWNER TO newsroom_owner;
 
 --
 -- Name: site_settings; Type: TABLE; Schema: app; Owner: newsroom_owner
@@ -395,7 +514,15 @@ CREATE VIEW app.published_posts WITH (security_barrier='true') AS
             WHEN (post.translation_of_lang IS NOT NULL) THEN other.author
             ELSE NULL::text
         END AS original_author,
-    post.quotes
+    post.quotes,
+    ( SELECT COALESCE(jsonb_agg(jsonb_build_object('id', entity.id, 'type', entity.type, 'name',
+                CASE post.lang
+                    WHEN 'es'::app.post_lang THEN COALESCE(entity.name_es, entity.name)
+                    ELSE COALESCE(entity.name_en, entity.name)
+                END, 'wikidata', entity.wikidata) ORDER BY listed."position"), '[]'::jsonb) AS "coalesce"
+           FROM (unnest(post.entities) WITH ORDINALITY listed(id, "position")
+             JOIN app.entities entity ON ((entity.id = listed.id)))
+          WHERE ((entity.taken_down_at IS NULL) AND (entity.deleted_at IS NULL))) AS entities
    FROM ((app.posts post
      LEFT JOIN app.site_settings settings ON (true))
      JOIN app.posts other ON ((((other.lang = post.translation_of_lang) AND (other.slug = post.translation_of_slug)) OR ((other.translation_of_lang = post.lang) AND (other.translation_of_slug = post.slug)))))
@@ -466,6 +593,14 @@ CREATE TABLE public.schema_migrations (
 
 
 ALTER TABLE public.schema_migrations OWNER TO newsroom_owner;
+
+--
+-- Name: entities entities_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
+--
+
+ALTER TABLE ONLY app.entities
+    ADD CONSTRAINT entities_pkey PRIMARY KEY (id);
+
 
 --
 -- Name: images images_pkey; Type: CONSTRAINT; Schema: app; Owner: newsroom_owner
@@ -559,6 +694,13 @@ CREATE INDEX notifications_sent_at ON app.notifications USING btree (sent_at);
 
 
 --
+-- Name: posts_entities; Type: INDEX; Schema: app; Owner: newsroom_owner
+--
+
+CREATE INDEX posts_entities ON app.posts USING gin (entities);
+
+
+--
 -- Name: posts_published; Type: INDEX; Schema: app; Owner: newsroom_owner
 --
 
@@ -573,6 +715,45 @@ CREATE INDEX posts_tags ON app.posts USING gin (tags) WHERE (unpublished_at IS N
 
 
 --
+-- Name: public_entities _RETURN; Type: RULE; Schema: app; Owner: newsroom_owner
+--
+
+CREATE OR REPLACE VIEW app.public_entities WITH (security_barrier='true') AS
+ SELECT post.lang,
+    entity.id,
+    entity.type,
+        CASE post.lang
+            WHEN 'es'::app.post_lang THEN COALESCE(entity.name_es, entity.name)
+            ELSE COALESCE(entity.name_en, entity.name)
+        END AS name,
+        CASE post.lang
+            WHEN 'es'::app.post_lang THEN entity.description_es
+            ELSE entity.description_en
+        END AS description,
+    entity.wikidata,
+    (count(*))::integer AS posts
+   FROM ((app.published_posts post
+     CROSS JOIN LATERAL jsonb_array_elements(post.entities) listed(value))
+     JOIN app.entities entity ON ((entity.id = (listed.value ->> 'id'::text))))
+  WHERE (post.type <> 'page'::app.post_type)
+  GROUP BY post.lang, entity.id;
+
+
+--
+-- Name: entities entities_named; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER entities_named BEFORE UPDATE OF deleted_at ON app.entities FOR EACH ROW EXECUTE FUNCTION private.entities_named();
+
+
+--
+-- Name: entities entities_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER entities_touch_updated_at BEFORE UPDATE ON app.entities FOR EACH ROW EXECUTE FUNCTION private.touch_updated_at();
+
+
+--
 -- Name: inbox_items inbox_items_touch_updated_at; Type: TRIGGER; Schema: app; Owner: newsroom_owner
 --
 
@@ -584,6 +765,13 @@ CREATE TRIGGER inbox_items_touch_updated_at BEFORE UPDATE ON app.inbox_items FOR
 --
 
 CREATE TRIGGER inbox_items_transition BEFORE UPDATE OF status ON app.inbox_items FOR EACH ROW EXECUTE FUNCTION private.inbox_items_transition();
+
+
+--
+-- Name: posts posts_entities_known; Type: TRIGGER; Schema: app; Owner: newsroom_owner
+--
+
+CREATE TRIGGER posts_entities_known BEFORE INSERT OR UPDATE OF entities ON app.posts FOR EACH ROW EXECUTE FUNCTION private.posts_entities_known();
 
 
 --
@@ -639,6 +827,13 @@ REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 
 
 --
+-- Name: FUNCTION entities_named(); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.entities_named() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION inbox_items_transition(); Type: ACL; Schema: private; Owner: newsroom_owner
 --
 
@@ -654,6 +849,13 @@ GRANT ALL ON FUNCTION private.page_published_on(stated text) TO newsroom_app;
 
 
 --
+-- Name: FUNCTION posts_entities_known(); Type: ACL; Schema: private; Owner: newsroom_owner
+--
+
+REVOKE ALL ON FUNCTION private.posts_entities_known() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION posts_translation(); Type: ACL; Schema: private; Owner: newsroom_owner
 --
 
@@ -665,6 +867,13 @@ REVOKE ALL ON FUNCTION private.posts_translation() FROM PUBLIC;
 --
 
 REVOKE ALL ON FUNCTION private.touch_updated_at() FROM PUBLIC;
+
+
+--
+-- Name: TABLE entities; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE app.entities TO newsroom_app;
 
 
 --
@@ -693,6 +902,13 @@ GRANT SELECT,INSERT ON TABLE app.notifications TO newsroom_app;
 --
 
 GRANT SELECT,INSERT,UPDATE ON TABLE app.posts TO newsroom_app;
+
+
+--
+-- Name: TABLE public_entities; Type: ACL; Schema: app; Owner: newsroom_owner
+--
+
+GRANT SELECT ON TABLE app.public_entities TO newsroom_public;
 
 
 --
