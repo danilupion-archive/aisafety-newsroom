@@ -23,8 +23,8 @@ site in Spanish and English, on Dani's Kubernetes cluster. The stack follows aio
   public internet (R-FET-4).
 - **Tokens are never logged** or put in a URL; errors name the variable, never echo it.
 - **Git:** no commit, push or branch operations without explicit permission. History stays flat: rebase, never merge.
-  Each release (started by hand, `gh workflow run release.yml`) pushes commits to `main`, so always `git pull --rebase`
-  before pushing;
+  A push to `main` is a deployment: once CI passes on it, the release builds and deploys it (or start one by hand,
+  `gh workflow run release.yml`). Each release pushes commits to `main`, so always `git pull --rebase` before pushing;
   branches are rebased onto `main` and merged with GitHub's "Rebase and merge" (or fast-forwarded), never with a merge
   commit.
 
@@ -37,8 +37,8 @@ site in Spanish and English, on Dani's Kubernetes cluster. The stack follows aio
 - `db/migrations/*.sql` (dbmate) and `db/schema.sql` (generated dump, review it in every PR)
 - `helm-charts/aisafety-newsroom`: umbrella chart (subcharts in `apps/api/helm-chart`, `db/helm-chart`); the release
   workflow writes image tags into its `values.yaml`
-- `.github/workflows`: CI (every job on GitHub-hosted runners) and the release (started by hand; it builds on the
-  self-hosted runner, which refuses every other job)
+- `.github/workflows`: CI (every job on GitHub-hosted runners) and the release (after CI on `main`, or by hand; it
+  builds on the self-hosted runner, which takes only `main`'s workflows, never a pull request)
 - `scripts/`: sealing secrets into gitops, the release plan, and the checks CI and the pre-push hook run
 - `docs/runbooks/`: operations, starting with the first deploy
 
@@ -46,16 +46,16 @@ site in Spanish and English, on Dani's Kubernetes cluster. The stack follows aio
 
 Copy `.env.example` to `.env` for local database URLs. Local Postgres listens on 5433 (aiontheballot's uses 5432).
 
-| Command                                                    | What it does                                                                |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `pnpm install` · `pnpm dev` · `pnpm build`                 | Install, run locally, build                                                 |
-| `pnpm lint` · `pnpm format`                                | oxlint (type-aware) and markdownlint · Prettier                             |
-| `pnpm build:check` · `pnpm test`                           | Type check · unit tests (Vitest)                                            |
-| `pnpm test:db`                                             | Database tests (rebuilds `newsroom_test` from the migrations)               |
-| `pnpm db:up` · `pnpm db:down`                              | Start or stop local Postgres 18 (Docker, roles as in production)            |
-| `pnpm db:migrate` · `pnpm db:new <name>` · `pnpm db:types` | Apply migrations (refreshes `db/schema.sql`) · new migration · Kysely types |
-| `pnpm release:note`                                        | Add a changeset (pre-push requires one)                                     |
-| `gh workflow run release.yml`                              | Release `main` once CI has passed on it (`docs/runbooks/release.md`)        |
+| Command                                                    | What it does                                                                              |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `pnpm install` · `pnpm dev` · `pnpm build`                 | Install, run locally, build                                                               |
+| `pnpm lint` · `pnpm format`                                | oxlint (type-aware) and markdownlint · Prettier                                           |
+| `pnpm build:check` · `pnpm test`                           | Type check · unit tests (Vitest)                                                          |
+| `pnpm test:db`                                             | Database tests (rebuilds `newsroom_test` from the migrations)                             |
+| `pnpm db:up` · `pnpm db:down`                              | Start or stop local Postgres 18 (Docker, roles as in production)                          |
+| `pnpm db:migrate` · `pnpm db:new <name>` · `pnpm db:types` | Apply migrations (refreshes `db/schema.sql`) · new migration · Kysely types               |
+| `pnpm release:note`                                        | Add a changeset (pre-push requires one)                                                   |
+| `gh workflow run release.yml`                              | Release by hand; a push to `main` is released once CI passes (`docs/runbooks/release.md`) |
 
 ## Conventions
 

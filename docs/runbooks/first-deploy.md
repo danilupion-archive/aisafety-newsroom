@@ -2,8 +2,8 @@
 
 Brings aisafety-newsroom up on the cluster for the first time (SPEC M0). Already done in gitops: the Argo CD
 Application, the `newsroom` database and its roles, the sealed secrets (`scripts/seal-gitops-secrets.sh`), and this
-repo's self-hosted runner, with the job-started hook that limits it to releases started by hand
-(`docs/runbooks/release.md`).
+repo's self-hosted runner, with the organisation runners' job-started hook, which takes only workflows as they are on
+`main`, never a pull request (`docs/runbooks/release.md`).
 
 The commands read the infrastructure's names from `scripts/ops.env` (keys in `scripts/ops.env.example`):
 
@@ -24,7 +24,7 @@ CI (checks and database tests) runs on GitHub-hosted runners.
 
 ## 2. Release
 
-Once CI has passed on `main`, start the release by hand:
+Once CI has passed on your push to `main`, the release starts on its own. To start it by hand:
 
 ```sh
 gh workflow run release.yml

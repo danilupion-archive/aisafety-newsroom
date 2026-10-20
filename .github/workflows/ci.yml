@@ -20,7 +20,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Runners (SPEC §15): every job here runs on a GitHub-hosted runner, whoever opened the pull request. The self-hosted
-# runner only builds releases, and only when started by hand (release.yml); it refuses every other job itself.
+# runner only builds releases (release.yml), after CI on its owner's push to main or by hand; its own guard refuses
+# every pull request.
 jobs:
   checks:
     name: Checks

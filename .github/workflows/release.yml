@@ -1,13 +1,18 @@
 name: 📦 Release
 
-# Started by hand on main (`gh workflow run release.yml`), after CI passes there (SPEC §15):
-#   1. tested: find the newest commit on main that CI passed on, on a GitHub-hosted runner.
+# After CI passes on its owner's push to main, as aiontheballot releases, or by hand (`gh workflow run release.yml`)
+# once CI has passed there (SPEC §15):
+#   1. tested: the commit CI passed on (by hand, the newest on main), on a GitHub-hosted runner.
 #   2. version: apply the changesets (versions and changelogs) and commit the result.
 #   3. deploy: build and push the image of every deployable whose version is ahead of the umbrella chart, then write
 #      the new tags into the chart. Argo CD deploys main to production.
-# version and deploy run on the self-hosted runner, which takes only jobs its owner started by hand from main's
-# workflows. Both work on the commit CI tested, never on whatever main points to by the time they start.
+# version and deploy run on the self-hosted runner, which takes only workflows as they are on main, never a pull
+# request. Both work on the commit CI tested, never on whatever main points to by the time they start.
 on:
+  workflow_run:
+    workflows: ['🧪 CI']
+    branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 env:
@@ -23,6 +28,16 @@ concurrency:
 jobs:
   tested:
     name: Tested commit
+    # After CI: only a passed run of its owner's push to main, in this repository. A pull request whose head branch is
+    # called main passes the branches filter too, and CI on any pull request, a fork's included, completes on main's
+    # workflow: this condition is what keeps those from releasing. Anyone else's push (a merge by Renovate, one day)
+    # waits for a release by hand.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.triggering_actor.login == github.repository_owner)
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -30,17 +45,23 @@ jobs:
     outputs:
       sha: ${{ steps.find.outputs.sha }}
     steps:
-      - name: Find the newest commit on main that CI passed on
+      - name: Find the commit CI passed on
         id: find
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::Releases start from main, not $GITHUB_REF"
             exit 1
           fi
-          # A push to main or a run started by hand there (`gh workflow run ci.yml`), from this repository: a fork's pull
-          # request from a branch it calls main also matches branch=main.
+          # After CI: the commit that run tested.
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            echo "sha=$RUN_SHA" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # By hand: the newest commit on main CI passed on, in a push's run or one started by hand there (`gh workflow
+          # run ci.yml`), from this repository: a fork's pull request from a branch it calls main also matches branch=main.
           sha="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=30" \
             --jq ".workflow_runs[] | select((.event == \"push\" or .event == \"workflow_dispatch\")
               and .head_repository.full_name == \"$GITHUB_REPOSITORY\") | .head_sha" | head -n 1)"
