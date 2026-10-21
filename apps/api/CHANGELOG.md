@@ -1,5 +1,11 @@
 # @aisafety-newsroom/api
 
+## 0.15.1
+
+### Patch Changes
+
+- 40db32c: Node.js 26.12.1 (images on node:26.12.1-alpine), the October 21 security release.
+
 ## 0.15.0
 
 ### Minor Changes
